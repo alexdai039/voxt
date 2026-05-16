@@ -70,12 +70,6 @@ extension ModelSettingsView {
         DispatchQueue.main.async {
             refreshModelInstallStateIfNeeded()
         }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(800))
-            mlxModelManager.prefetchAllModelSizes()
-            whisperModelManager.prefetchAllModelSizes()
-            customLLMManager.prefetchAllModelSizes()
-        }
     }
 
     func syncTranslationFallbackProvider() {

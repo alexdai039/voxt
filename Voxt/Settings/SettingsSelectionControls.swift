@@ -244,7 +244,7 @@ private final class SettingsMenuHostView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         popupMenu.autoenablesItems = false
-        popupMenu.showsStateColumn = false
+        popupMenu.showsStateColumn = true
 
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.font = .systemFont(ofSize: 13, weight: .medium)
@@ -297,26 +297,15 @@ private final class SettingsMenuHostView: NSView {
                 let item = NSMenuItem(title: title, action: #selector(selectMenuItem(_:)), keyEquivalent: "")
                 item.target = self
                 item.tag = index
-                item.view = SettingsPopupMenuItemView(
-                    title: title,
-                    width: menuWidth,
-                    isSelected: index == selectedIndex
-                )
+                item.state = index == selectedIndex ? .on : .off
                 popupMenu.addItem(item)
             }
             currentMenuWidth = menuWidth
         }
 
         self.selectedIndex = selectedIndex
-        if !needsRebuild {
-            for item in popupMenu.items {
-                let isSelected = item.tag == selectedIndex
-                (item.view as? SettingsPopupMenuItemView)?.update(
-                    title: item.title,
-                    width: menuWidth,
-                    isSelected: isSelected
-                )
-            }
+        for item in popupMenu.items {
+            item.state = item.tag == selectedIndex ? .on : .off
         }
 
         popupMenu.minimumWidth = menuWidth
@@ -334,124 +323,5 @@ private final class SettingsMenuHostView: NSView {
     @objc
     private func selectMenuItem(_ sender: NSMenuItem) {
         onSelectIndex?(sender.tag)
-    }
-}
-
-private final class SettingsPopupMenuItemView: NSView {
-    private static let itemHeight: CGFloat = 34
-    private let checkView = NSImageView()
-    private let titleField = NSTextField(labelWithString: "")
-    private var itemWidth: CGFloat
-    private var isSelected: Bool
-    private var isHighlighted = false
-
-    override var isFlipped: Bool {
-        true
-    }
-
-    init(title: String, width: CGFloat, isSelected: Bool) {
-        self.itemWidth = width
-        self.isSelected = isSelected
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: Self.itemHeight))
-        wantsLayer = true
-
-        checkView.translatesAutoresizingMaskIntoConstraints = false
-        checkView.imageScaling = .scaleProportionallyDown
-
-        titleField.translatesAutoresizingMaskIntoConstraints = false
-        titleField.lineBreakMode = .byTruncatingTail
-        titleField.maximumNumberOfLines = 1
-        titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        addSubview(checkView)
-        addSubview(titleField)
-
-        NSLayoutConstraint.activate([
-            checkView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            checkView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            checkView.widthAnchor.constraint(equalToConstant: 12),
-            checkView.heightAnchor.constraint(equalToConstant: 12),
-            titleField.leadingAnchor.constraint(equalTo: checkView.trailingAnchor, constant: 10),
-            titleField.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            titleField.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-
-        update(title: title, width: width, isSelected: isSelected)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: itemWidth, height: Self.itemHeight)
-    }
-
-    override func viewWillDraw() {
-        syncAppearance(force: false)
-        super.viewWillDraw()
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        if isHighlighted {
-            NSColor.controlAccentColor.setFill()
-            NSBezierPath(
-                roundedRect: bounds.insetBy(dx: 6, dy: 2),
-                xRadius: 10,
-                yRadius: 10
-            ).fill()
-        }
-        super.draw(dirtyRect)
-    }
-
-    func update(title: String, width: CGFloat, isSelected: Bool) {
-        var needsDisplayRefresh = false
-
-        if abs(itemWidth - width) > 0.5 {
-            itemWidth = width
-            if abs(frame.width - width) > 0.5 || abs(frame.height - Self.itemHeight) > 0.5 {
-                setFrameSize(NSSize(width: width, height: Self.itemHeight))
-            }
-            invalidateIntrinsicContentSize()
-            needsDisplayRefresh = true
-        }
-
-        if self.isSelected != isSelected {
-            self.isSelected = isSelected
-            syncAppearance(force: true)
-            needsDisplayRefresh = true
-        }
-
-        if titleField.stringValue != title {
-            titleField.stringValue = title
-            needsDisplayRefresh = true
-        }
-
-        if needsDisplayRefresh {
-            needsDisplay = true
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard SettingsMenuInteraction.performSelection(for: enclosingMenuItem) else {
-            super.mouseDown(with: event)
-            return
-        }
-    }
-
-    private func syncAppearance(force: Bool) {
-        let highlighted = enclosingMenuItem?.isHighlighted ?? false
-        guard force || highlighted != isHighlighted else { return }
-
-        isHighlighted = highlighted
-        let textColor = highlighted ? NSColor.white : NSColor.labelColor
-        titleField.font = .systemFont(ofSize: 13, weight: isSelected ? .semibold : .medium)
-        titleField.textColor = textColor
-        checkView.image = isSelected
-            ? NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
-            : nil
-        checkView.contentTintColor = textColor
     }
 }

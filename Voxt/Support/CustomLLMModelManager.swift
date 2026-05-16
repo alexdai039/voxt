@@ -172,6 +172,11 @@ class CustomLLMModelManager: ObservableObject {
         }
     }
 
+    func releaseLoadedModelIfIdle(reason: String) {
+        guard isMemoryOptimizationEnabled else { return }
+        unloadInferenceContainerIfIdle(expectedRepo: inferenceModelRepo, reason: reason)
+    }
+
     func isModelLoaded(repo: String) -> Bool {
         let canonicalRepo = Self.canonicalModelRepo(repo)
         return inferenceContainer != nil && inferenceModelRepo == canonicalRepo
@@ -1495,7 +1500,7 @@ class CustomLLMModelManager: ObservableObject {
             }
             guard let self else { return }
             await MainActor.run {
-                self.unloadInferenceContainerIfIdle(expectedRepo: expectedRepo)
+                self.unloadInferenceContainerIfIdle(expectedRepo: expectedRepo, reason: "idle-timeout")
             }
         }
     }
@@ -1574,11 +1579,11 @@ class CustomLLMModelManager: ObservableObject {
         }
     }
 
-    private func unloadInferenceContainerIfIdle(expectedRepo: String?) {
+    private func unloadInferenceContainerIfIdle(expectedRepo: String?, reason: String) {
         guard activeInferenceCount == 0 else { return }
         guard inferenceContainer != nil, inferenceModelRepo == expectedRepo else { return }
 
         releaseInferenceResources(resetActiveInferenceCount: false)
-        VoxtLog.info("Custom LLM model released after idle period.", verbose: true)
+        VoxtLog.info("Custom LLM model released. reason=\(reason)", verbose: true)
     }
 }

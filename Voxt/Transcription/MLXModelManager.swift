@@ -146,6 +146,11 @@ class MLXModelManager: ObservableObject {
         }
     }
 
+    func releaseLoadedModelIfIdle(reason: String) {
+        guard isMemoryOptimizationEnabled else { return }
+        unloadLoadedModelIfIdle(expectedRepo: loadedRepo, reason: reason)
+    }
+
     func displayTitle(for repo: String) -> String {
         MLXModelCatalog.displayTitle(for: repo)
     }
@@ -1360,7 +1365,7 @@ class MLXModelManager: ObservableObject {
             }
             guard let self else { return }
             await MainActor.run {
-                self.unloadLoadedModelIfIdle(expectedRepo: expectedRepo)
+                self.unloadLoadedModelIfIdle(expectedRepo: expectedRepo, reason: "idle-timeout")
             }
         }
     }
@@ -1370,7 +1375,7 @@ class MLXModelManager: ObservableObject {
         idleUnloadTask = nil
     }
 
-    private func unloadLoadedModelIfIdle(expectedRepo: String?) {
+    private func unloadLoadedModelIfIdle(expectedRepo: String?, reason: String) {
         guard activeUseCount == 0 else { return }
         guard loadedModel != nil, loadedRepo == expectedRepo else { return }
 
@@ -1379,7 +1384,7 @@ class MLXModelManager: ObservableObject {
         idleUnloadTask = nil
         Memory.clearCache()
         checkExistingModel()
-        VoxtLog.info("MLX Audio model released after idle period.", verbose: true)
+        VoxtLog.info("MLX Audio model released. reason=\(reason)", verbose: true)
     }
 
     private func clearHubCache(for repo: String) {

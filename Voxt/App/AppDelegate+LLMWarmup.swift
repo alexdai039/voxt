@@ -78,6 +78,16 @@ extension AppDelegate {
         cancelLLMWarmupTasks(except: [])
     }
 
+    func releaseIdleLocalModelResources(reason: String) {
+        guard localModelMemoryOptimizationEnabled else { return }
+        cancelLLMWarmupTasks(except: [])
+        mlxModelManager.releaseLoadedModelIfIdle(reason: reason)
+        customLLMManager.releaseLoadedModelIfIdle(reason: reason)
+        Task { @MainActor [weak self] in
+            await self?.whisperModelManager.releaseLoadedModelIfIdle(reason: reason)
+        }
+    }
+
     private func customLLMWarmupReposForIdle() -> Set<String> {
         var repos = Set<String>()
 

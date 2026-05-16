@@ -146,6 +146,22 @@ final class WhisperKitModelManager: ObservableObject {
         }
     }
 
+    func releaseLoadedModelIfIdle(reason: String) async {
+        guard isMemoryOptimizationEnabled else { return }
+        guard activeUseCount == 0 else { return }
+        guard loadedWhisper != nil else {
+            cancelIdleUnloadTask()
+            return
+        }
+
+        cancelIdleUnloadTask()
+        await loadedWhisper?.unloadModels()
+        loadedWhisper = nil
+        loadedModelID = nil
+        checkExistingModel()
+        VoxtLog.info("Whisper model released. reason=\(reason)", verbose: true)
+    }
+
     func beginActiveUse() {
         activeUseCount += 1
         cancelIdleUnloadTask()
@@ -1158,10 +1174,7 @@ final class WhisperKitModelManager: ObservableObject {
                 return
             }
             guard !Task.isCancelled else { return }
-            await loadedWhisper?.unloadModels()
-            loadedWhisper = nil
-            loadedModelID = nil
-            checkExistingModel()
+            await releaseLoadedModelIfIdle(reason: "idle-timeout")
         }
     }
 
