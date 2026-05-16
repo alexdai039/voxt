@@ -867,13 +867,19 @@ jobs:
           set -euo pipefail
           API_BASE="${VOXT_UPDATE_API_BASE%/}"
           ZIP_NAME="Voxt-${VERSION}-macOS.zip"
+          DMG_NAME="Voxt-${VERSION}.dmg"
           ZIP_PATH="build/${ZIP_NAME}"
+          DMG_PATH="build/${DMG_NAME}"
           SHA_PATH="build/${ZIP_NAME}.sha256"
           SIG_ENV_FILE="build/sparkle-signature.env"
           RELEASE_NOTES_BY_LOCALE_FILE="build/release-notes-by-locale.json"
 
           if [ ! -f "$ZIP_PATH" ]; then
             echo "::error::Zip file missing: $ZIP_PATH"
+            exit 1
+          fi
+          if [ ! -f "$DMG_PATH" ]; then
+            echo "::error::DMG file missing: $DMG_PATH"
             exit 1
           fi
           if [ ! -f "$SHA_PATH" ]; then
@@ -950,6 +956,7 @@ jobs:
             -F "releaseURL=${RELEASE_URL}"
             -F "publishedAt=${PUBLISHED_AT}"
             -F "file=@${ZIP_PATH};type=application/zip"
+            -F "dmgFile=@${DMG_PATH};type=application/x-apple-diskimage"
           )
           if [ -n "${RELEASE_NOTES_BY_LOCALE}" ] && [ "${RELEASE_NOTES_BY_LOCALE}" != "{}" ]; then
             update_args+=(--form-string "releaseNotesByLocale=${RELEASE_NOTES_BY_LOCALE}")
