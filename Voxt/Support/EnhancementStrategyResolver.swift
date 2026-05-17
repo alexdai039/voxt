@@ -153,7 +153,13 @@ enum TaskLLMStrategyResolver {
         let coverageRatio = Double(outputCount) / Double(max(1, originalCount))
         let isSuspiciousPrefix = normalizedOriginal.hasPrefix(normalizedOutput) &&
             coverageRatio < policy.prefixCoverageRatio
-        let isSuspiciouslyShort = outputCount < minimumCoverage
+        let isSuspiciouslyShort = outputCount < minimumCoverage ||
+            isSuspiciousSameScriptTranslation(
+                original: normalizedOriginal,
+                output: normalizedOutput,
+                coverageRatio: coverageRatio,
+                strategy: strategy
+            )
 
         guard isSuspiciousPrefix || isSuspiciouslyShort else {
             return (outputText, false, nil)
@@ -190,6 +196,62 @@ enum TaskLLMStrategyResolver {
                 absoluteSlack: 24
             )
         }
+    }
+
+    private static func isSuspiciousSameScriptTranslation(
+        original: String,
+        output: String,
+        coverageRatio: Double,
+        strategy: TaskLLMExecutionStrategy
+    ) -> Bool {
+        guard strategy.taskKind == .translation,
+              coverageRatio < 0.35
+        else {
+            return false
+        }
+
+        let originalScript = dominantScript(in: original)
+        guard originalScript != .other else { return false }
+        return originalScript == dominantScript(in: output)
+    }
+
+    private enum DominantScript {
+        case latin
+        case han
+        case kana
+        case other
+    }
+
+    private static func dominantScript(in text: String) -> DominantScript {
+        var latinCount = 0
+        var hanCount = 0
+        var kanaCount = 0
+
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x0041...0x005A, 0x0061...0x007A:
+                latinCount += 1
+            case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF:
+                hanCount += 1
+            case 0x3040...0x309F, 0x30A0...0x30FF:
+                kanaCount += 1
+            default:
+                continue
+            }
+        }
+
+        let ranked = [
+            (DominantScript.latin, latinCount),
+            (DominantScript.han, hanCount),
+            (DominantScript.kana, kanaCount)
+        ].max { lhs, rhs in
+            lhs.1 < rhs.1
+        }
+
+        guard let ranked, ranked.1 > 0 else {
+            return .other
+        }
+        return ranked.0
     }
 
     private static func normalizedCharacterCount(_ text: String) -> Int {
