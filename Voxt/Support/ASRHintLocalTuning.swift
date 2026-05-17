@@ -220,9 +220,12 @@ enum MLXLocalTuningSettingsStore {
     }
 
     static func sanitized(_ settings: MLXLocalTuningSettings) -> MLXLocalTuningSettings {
-        MLXLocalTuningSettings(
+        let qwenContextBias = settings.qwenContextBias.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MLXLocalTuningSettings(
             preset: settings.preset,
-            qwenContextBias: settings.qwenContextBias.trimmingCharacters(in: .whitespacesAndNewlines),
+            qwenContextBias: AppPromptDefaults.matchesKnownDefault(qwenContextBias, kind: .qwenASRContextBias)
+                ? ""
+                : qwenContextBias,
             granitePromptBias: settings.granitePromptBias.trimmingCharacters(in: .whitespacesAndNewlines),
             senseVoiceUseITN: settings.senseVoiceUseITN
         )

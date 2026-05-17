@@ -15,7 +15,11 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
         case beta
     }
 
-    private lazy var updaterController: SPUStandardUpdaterController? = {
+    private var updaterControllerStorage: SPUStandardUpdaterController?
+    private var updaterController: SPUStandardUpdaterController? {
+        if let updaterControllerStorage {
+            return updaterControllerStorage
+        }
         guard sparkleIsAvailable else { return nil }
         let controller = SPUStandardUpdaterController(
             startingUpdater: true,
@@ -23,8 +27,9 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
             userDriverDelegate: self
         )
         configureUpdaterRequestContext(controller.updater, shouldClearLegacyFeedURL: true)
+        updaterControllerStorage = controller
         return controller
-    }()
+    }
 
     static let stableFeedURLString = "https://voxt.actnow.dev/updates/stable/appcast.xml"
     static let betaFeedURLString = "https://voxt.actnow.dev/updates/beta/appcast.xml"
@@ -43,6 +48,11 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     var onUpdatePresentationDidEnd: (() -> Void)?
     private lazy var sparkleIsAvailable: Bool = {
         let bundle = Bundle.main
+        let bundleIdentifier = bundle.bundleIdentifier
+        guard Self.shouldEnableSparkle(bundleIdentifier: bundleIdentifier) else {
+            VoxtLog.info("Sparkle disabled for development or test bundle. bundleID=\(bundleIdentifier ?? "nil")")
+            return false
+        }
         let shortVersion = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let buildVersion = (bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)?
@@ -76,6 +86,7 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
     }
 
     func syncAutomaticallyChecksForUpdates(_ newValue: Bool) {
+        guard newValue || sparkleIsAvailable || updaterControllerStorage != nil else { return }
         guard automaticallyChecksForUpdates != newValue else { return }
         automaticallyChecksForUpdates = newValue
     }
@@ -555,6 +566,16 @@ final class AppUpdateManager: NSObject, ObservableObject, SPUStandardUserDriverD
             ),
             interfaceLanguage: interfaceLanguage
         )
+    }
+
+    static func shouldEnableSparkle(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !bundleIdentifier.isEmpty
+        else {
+            return true
+        }
+
+        return !bundleIdentifier.hasSuffix(".dev") && !bundleIdentifier.hasSuffix(".testhost")
     }
 
     private static func canUseBetaFeed(environment: [String: String]) -> Bool {

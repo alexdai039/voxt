@@ -40,6 +40,7 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
     var onTranscriptionFinished: ((String) -> Void)?
     var onStartFailure: ((String) -> Void)?
     var onRuntimeFailure: ((String) -> Void)?
+    var dictionaryEntryProvider: (() -> [DictionaryEntry])?
     var doubaoDictionaryEntryProvider: (() -> [DictionaryEntry])?
 
     private var recorder: AVAudioRecorder?
@@ -525,8 +526,37 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             target: ASRHintTarget.from(engine: .remote, remoteProvider: provider),
             settings: settings,
             userLanguageCodes: userLanguageCodes,
-            mlxModelRepo: configuration.model
+            mlxModelRepo: configuration.model,
+            dictionaryTerms: resolvedDictionaryTermsTemplateValue()
         )
+    }
+
+    private func resolvedDictionaryTermsTemplateValue() -> String {
+        let entries = dictionaryEntryProvider?() ?? []
+        var seen = Set<String>()
+        var terms: [String] = []
+        var totalCharacters = 0
+
+        for entry in entries {
+            guard entry.groupID == nil else { continue }
+            guard entry.replacementTerms.isEmpty else { continue }
+            let trimmed = entry.term.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let normalized = DictionaryStore.normalizeTerm(trimmed)
+            guard seen.insert(normalized).inserted else { continue }
+            let projectedCharacters = totalCharacters + trimmed.count + (terms.isEmpty ? 0 : 1)
+            if !terms.isEmpty && projectedCharacters > 320 {
+                break
+            }
+
+            terms.append(trimmed)
+            totalCharacters = projectedCharacters
+
+            if terms.count >= 24 || totalCharacters >= 320 {
+                break
+            }
+        }
+        return terms.joined(separator: "\n")
     }
 
     private func doubaoRequestPayload(

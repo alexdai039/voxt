@@ -305,17 +305,7 @@ extension ModelSettingsView {
 
 private struct MLXASRConfigurationSheetView: View {
     private static let contentMaxHeight: CGFloat = 520
-    private static let asrLanguageVariables = [
-        PromptTemplateVariableDescriptor(
-            token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
-            tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
-        ),
-        PromptTemplateVariableDescriptor(
-            token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
-            tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
-        )
-    ]
-    private static let qwenContextVariables = asrLanguageVariables + [
+    private static let dictionaryTermsVariable = [
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
             tipKey: "Template tip {{DICTIONARY_TERMS}}"
@@ -396,7 +386,7 @@ private struct MLXASRConfigurationSheetView: View {
                     if family.supportsContextBias {
                         Text(localized("Recognition Context"))
                             .font(.subheadline.weight(.medium))
-                        PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.qwenContextVariables)
+                        PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.dictionaryTermsVariable)
                         Text(localized("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -405,7 +395,7 @@ private struct MLXASRConfigurationSheetView: View {
                     if family.supportsPromptBias {
                         Text(localized("Recognition Prompt"))
                             .font(.subheadline.weight(.medium))
-                        PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.asrLanguageVariables)
+                        PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.dictionaryTermsVariable)
                         Text(localized("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -465,17 +455,7 @@ private struct MLXASRConfigurationSheetView: View {
 
 private struct WhisperASRConfigurationSheetView: View {
     private static let contentMaxHeight: CGFloat = 520
-    private static let asrLanguageVariables = [
-        PromptTemplateVariableDescriptor(
-            token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
-            tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
-        ),
-        PromptTemplateVariableDescriptor(
-            token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
-            tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
-        )
-    ]
-    private static let whisperPromptVariables = asrLanguageVariables + [
+    private static let dictionaryTermsVariable = [
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
             tipKey: "Template tip {{DICTIONARY_TERMS}}"
@@ -548,7 +528,7 @@ private struct WhisperASRConfigurationSheetView: View {
 
                     Text(localized("Recognition Prompt"))
                         .font(.subheadline.weight(.medium))
-                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.whisperPromptVariables)
+                    PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.dictionaryTermsVariable)
                     Text(localized("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise."))
                         .font(.caption)
                         .foregroundStyle(.secondary)

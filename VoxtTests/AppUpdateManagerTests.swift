@@ -105,4 +105,15 @@ final class AppUpdateManagerTests: XCTestCase {
 
         XCTAssertEqual(headers["Accept-Language"], "en")
     }
+
+    @MainActor
+    func testSparkleIsDisabledForDevelopmentAndTestHostBundles() {
+        XCTAssertFalse(AppUpdateManager.shouldEnableSparkle(bundleIdentifier: "com.voxt.Voxt.dev"))
+        XCTAssertFalse(AppUpdateManager.shouldEnableSparkle(bundleIdentifier: "com.voxt.Voxt.testhost"))
+    }
+
+    @MainActor
+    func testSparkleIsEnabledForReleaseBundle() {
+        XCTAssertTrue(AppUpdateManager.shouldEnableSparkle(bundleIdentifier: "com.voxt.Voxt"))
+    }
 }

@@ -167,8 +167,9 @@ enum AppPreferenceKey {
            - Present phone numbers and similar numbers in their actual normalized format.
         6. Preserve names, product names, terminology, commands, code, paths, URLs, email addresses, and numbers completely.
         7. Preserve the original mixed-language structure. Do not translate, summarize, expand, explain, or change the writing style. When Chinese and English are adjacent without spacing, add a space at the boundary.
-        8. If the content contains ordered-list wording, format it as a numbered list. If it contains a clear non-ordered parallel relationship, format it as an unordered list using "-".
-        9. If no meaningful content remains after cleanup, return an empty string.
+        8. If the content contains ordered-list wording, format it as a numbered list. If it contains a clear non-ordered parallel relationship, format it as an unordered list using "-". If there is a sublist, use Markdown nested-list formatting with 4 leading spaces or 1 tab before child items.
+        9. Add line breaks in appropriate places so the content is clear and well structured.
+        10. If no meaningful content remains after cleanup, return an empty string.
 
         Examples:
         - Input: "Um, buy apples and bananas, uh, and sugarcane. Ah no no, no sugarcane, get some loquats."
@@ -187,6 +188,15 @@ enum AppPreferenceKey {
           Output: "Please put the file under (D drive) in the [data] folder."
         - Input: "The braces user braces in the code need to be replaced with the actual username."
           Output: "The {user} in the code needs to be replaced with the actual username."
+        - Input: "The task has three steps: first prepare materials, including pens and paper; then organize the content, specifically categorizing information and marking key points; finally submit the report."
+          Output: "The task has three steps:
+        1. Prepare materials, including:
+            - Pens
+            - Paper
+        2. Organize the content, specifically:
+            - Categorize information
+            - Mark key points
+        3. Submit the report"
 
         Output:
         Return only the adjusted text, with no extra explanation.
@@ -213,9 +223,10 @@ enum AppPreferenceKey {
            - Present phone numbers and similar numbers in their actual normalized format.
         6. Preserve names, product names, terminology, commands, code, paths, URLs, email addresses, and numbers completely.
         7. Preserve the original mixed-language structure during cleanup. Do not summarize, expand, explain, or change the writing style. When Chinese and English are adjacent without spacing, add a space at the boundary before translation.
-        8. If the content contains ordered-list wording, format it as a numbered list. If it contains a clear non-ordered parallel relationship, format it as an unordered list using "-".
-        9. Translate the cleaned content into {{TARGET_LANGUAGE}} accurately, preserving the original meaning without arbitrary additions or omissions.
-        10. If no meaningful content remains after cleanup, return an empty string.
+        8. If the content contains ordered-list wording, format it as a numbered list. If it contains a clear non-ordered parallel relationship, format it as an unordered list using "-". If there is a sublist, use Markdown nested-list formatting with 4 leading spaces or 1 tab before child items.
+        9. Add line breaks in appropriate places so the content is clear and well structured.
+        10. Translate the cleaned content into {{TARGET_LANGUAGE}} accurately, preserving the original meaning without arbitrary additions or omissions.
+        11. If no meaningful content remains after cleanup, return an empty string.
 
         Examples:
         - Input: "Um, buy apples and bananas, uh, and sugarcane. Ah no no, no sugarcane, get some loquats."
@@ -234,6 +245,15 @@ enum AppPreferenceKey {
           Cleaned meaning: "Please put the file under (D drive) in the [data] folder."
         - Input: "The braces user braces in the code need to be replaced with the actual username."
           Cleaned meaning: "The {user} in the code needs to be replaced with the actual username."
+        - Input: "The task has three steps: first prepare materials, including pens and paper; then organize the content, specifically categorizing information and marking key points; finally submit the report."
+          Cleaned meaning: "The task has three steps:
+        1. Prepare materials, including:
+            - Pens
+            - Paper
+        2. Organize the content, specifically:
+            - Categorize information
+            - Mark key points
+        3. Submit the report"
 
         Output:
         Return only the cleaned and translated text, with no extra explanation.
@@ -313,11 +333,11 @@ enum AppPreferenceKey {
     static let asrDictionaryTermsTemplateVariable = "{{DICTIONARY_TERMS}}"
 
     static let defaultOpenAIASRHintPrompt = """
-        The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Prioritize accurate transcription in that language while preserving mixed-language words, names, product terms, URLs, and code-like text exactly as spoken.
+        {{DICTIONARY_TERMS}}
         """
 
     static let defaultGLMASRHintPrompt = """
-        The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Prioritize accurate recognition in that language. Preserve names, terminology, mixed-language content, and code-like text exactly as spoken.
+        {{DICTIONARY_TERMS}}
         """
 
     static let legacyDefaultWhisperASRHintPrompt = """
@@ -325,9 +345,6 @@ enum AppPreferenceKey {
         """
 
     static let defaultWhisperASRHintPrompt = """
-        The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Prioritize accurate transcription in that language while preserving mixed-language words, names, product terms, URLs, and code-like text exactly as spoken.
-
-        Prefer these dictionary terms when they match the audio:
         {{DICTIONARY_TERMS}}
         """
 }

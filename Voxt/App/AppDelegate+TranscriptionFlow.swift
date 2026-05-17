@@ -184,7 +184,7 @@ extension AppDelegate {
         )
         if guarded.didFallback {
             VoxtLog.warning(
-                "Enhancement truncation guard restored raw text. inputChars=\(text.count), outputChars=\(enhanced.count), strategy=\(strategy.logLabel)"
+                "Enhancement truncation guard restored raw text. inputChars=\(text.count), outputChars=\(enhanced.count), reason=\(guarded.reason ?? "unknown"), strategy=\(strategy.logLabel)"
             )
         }
         return guarded.text

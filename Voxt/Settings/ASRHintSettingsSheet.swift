@@ -51,27 +51,12 @@ struct ASRHintSettingsSheet: View {
     }
 
     private var promptVariables: [PromptTemplateVariableDescriptor] {
-        var variables = [
+        [
             PromptTemplateVariableDescriptor(
-                token: AppPreferenceKey.asrUserMainLanguageTemplateVariable,
-                tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
-            ),
-            PromptTemplateVariableDescriptor(
-                token: AppPreferenceKey.asrUserOtherLanguagesTemplateVariable,
-                tipKey: "Template tip {{USER_OTHER_LANGUAGES}}"
+                token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
+                tipKey: "Template tip {{DICTIONARY_TERMS}}"
             )
         ]
-
-        if target == .whisperKit {
-            variables.append(
-                PromptTemplateVariableDescriptor(
-                    token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
-                    tipKey: "Template tip {{DICTIONARY_TERMS}}"
-                )
-            )
-        }
-
-        return variables
     }
 
     private var languagePreview: String {

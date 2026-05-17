@@ -22,6 +22,7 @@ final class ASRHintSettingsTests: XCTestCase {
 
         XCTAssertTrue(settings.followsUserMainLanguage)
         XCTAssertEqual(settings.promptTemplate, AppPromptDefaults.text(for: .glmASRHint))
+        XCTAssertEqual(settings.promptTemplate, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
     }
 
     func testResolveOpenAIUsesBaseLanguageAndResolvedPrompt() {
@@ -57,6 +58,7 @@ final class ASRHintSettingsTests: XCTestCase {
 
         XCTAssertTrue(settings.followsUserMainLanguage)
         XCTAssertEqual(settings.promptTemplate, AppPromptDefaults.text(for: .whisperASRHint))
+        XCTAssertEqual(settings.promptTemplate, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
     }
 
     func testSanitizedWhisperLegacyDefaultPromptMigratesToEmpty() {
@@ -69,6 +71,32 @@ final class ASRHintSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(settings.promptTemplate, "")
+    }
+
+    func testDefaultASRPromptResolvesToDictionaryTermsOnly() {
+        let payload = ASRHintResolver.resolve(
+            target: .openAIWhisper,
+            settings: ASRHintSettingsStore.resolvedSettings(for: .openAIWhisper, rawValue: nil),
+            userLanguageCodes: ["zh-Hans", "en"],
+            dictionaryTerms: "Codex\nVoxt"
+        )
+
+        XCTAssertEqual(payload.language, nil)
+        XCTAssertEqual(payload.prompt, "Codex\nVoxt")
+    }
+
+    func testDefaultASRPromptDoesNotAutoAppendLanguageContext() {
+        let payload = ASRHintResolver.resolve(
+            target: .glmASR,
+            settings: ASRHintSettings(
+                followsUserMainLanguage: true,
+                promptTemplate: ""
+            ),
+            userLanguageCodes: ["zh-Hans", "en"],
+            dictionaryTerms: ""
+        )
+
+        XCTAssertNil(payload.prompt)
     }
 
     func testResolveDoubaoUsesVariantMappingForTraditionalChinese() {
@@ -103,6 +131,81 @@ final class ASRHintSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(payload.language, "Traditional Chinese")
+    }
+
+    func testQwenLocalTuningDefaultsToDictionaryTermsOnly() {
+        let settings = MLXLocalTuningSettingsStore.resolvedSettings(
+            for: "mlx-community/Qwen3-ASR-1.7B-4bit",
+            rawValue: nil
+        )
+
+        XCTAssertEqual(settings.qwenContextBias, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
+    }
+
+    func testQwenLocalTuningMigratesLegacyDefaultContextBiasToDictionaryTermsOnly() throws {
+        let legacyDefault = AppPromptDefaults.text(for: .qwenASRContextBias, language: .chineseSimplified)
+        XCTAssertEqual(legacyDefault, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
+
+        let rawStoredSettings = [
+            MLXLocalTuningSettingsStore.familyKey(for: "mlx-community/Qwen3-ASR-1.7B-4bit"): MLXLocalTuningSettings(
+                qwenContextBias: """
+                说话者的主要语言是 {{USER_MAIN_LANGUAGE}}，其他常用语言是 {{USER_OTHER_LANGUAGES}}。
+
+                请将识别偏向于人名、产品名、技术术语和混合语言内容的正确拼写，并保持与原始发音一致，不要翻译。
+
+                当音频中确实出现这些词时，请优先参考下列词典词汇：
+                {{DICTIONARY_TERMS}}
+                """
+            )
+        ]
+        let data = try JSONEncoder().encode(rawStoredSettings)
+        let stored = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+        let settings = MLXLocalTuningSettingsStore.resolvedSettings(
+            for: "mlx-community/Qwen3-ASR-1.7B-4bit",
+            rawValue: stored
+        )
+
+        XCTAssertEqual(settings.qwenContextBias, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
+    }
+
+    func testQwenLocalTuningMigratesResolvedLegacyContextBiasToDictionaryTermsOnly() throws {
+        let rawStoredSettings = [
+            MLXLocalTuningSettingsStore.familyKey(for: "mlx-community/Qwen3-ASR-1.7B-4bit"): MLXLocalTuningSettings(
+                qwenContextBias: """
+                说话者的主要语言是 Simplified Chinese，其他常用语言是 None specified。
+
+                请将识别偏向于人名、产品名、技术术语和混合语言内容的正确拼写，并保持与原始发音一致，不要翻译。
+
+                当音频中确实出现这些词时，请优先参考下列词典词汇：
+                """
+            )
+        ]
+        let data = try JSONEncoder().encode(rawStoredSettings)
+        let stored = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+        let settings = MLXLocalTuningSettingsStore.resolvedSettings(
+            for: "mlx-community/Qwen3-ASR-1.7B-4bit",
+            rawValue: stored
+        )
+
+        XCTAssertEqual(settings.qwenContextBias, AppPreferenceKey.asrDictionaryTermsTemplateVariable)
+    }
+
+    func testKnownQwenContextLeakageIsRemovedFromASROutput() {
+        let leaked = "说话者的主要语言是 Simplified Chinese，其他常用语言是 None specified。"
+
+        XCTAssertEqual(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: leaked), "")
+
+        let mixed = """
+        说话者的主要语言是 Simplified Chinese，其他常用语言是 None specified。
+        今天要整理 Codex 体验。
+        """
+
+        XCTAssertEqual(
+            MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: mixed),
+            "今天要整理 Codex 体验。"
+        )
     }
 
     func testMLXModelFamilyRecognizesCohereTranscribe() {

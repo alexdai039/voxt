@@ -123,6 +123,42 @@ enum MLXTranscriptionPlanning {
         }
     }
 
+    static func removingKnownASRContextLeakage(from text: String) -> String {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .filter { !isKnownASRContextLeakageLine($0) }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isKnownASRContextLeakageLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let lowercased = trimmed.lowercased()
+        return (
+            trimmed.contains("说话者的主要语言") && trimmed.contains("其他常用语言")
+        ) || (
+            trimmed.contains("请将识别偏向于") && trimmed.contains("不要翻译")
+        ) || (
+            trimmed.contains("当音频中确实出现这些词") && trimmed.contains("词典词汇")
+        ) || (
+            lowercased.contains("the speaker's primary language is")
+                && lowercased.contains("other commonly used languages")
+        ) || (
+            lowercased.contains("bias recognition toward correct spelling")
+                && lowercased.contains("do not translate")
+        ) || (
+            lowercased.contains("prefer these dictionary terms")
+                && lowercased.contains("match the audio")
+        ) || (
+            trimmed.contains("話者の主要言語") && trimmed.contains("その他のよく使う言語")
+        ) || (
+            trimmed.contains("認識を寄せてください") && trimmed.contains("翻訳はしないでください")
+        ) || (
+            trimmed.contains("音声内で実際に一致する場合") && trimmed.contains("辞書語")
+        )
+    }
+
     static func mergedHiddenPostStopPreview(base: String, candidate: String) -> String {
         let stableBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
         let stableCandidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -713,7 +749,13 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             try Task.checkCancellation()
             let inferenceElapsedMs = Int(Date().timeIntervalSince(inferenceStartedAt) * 1000)
 
-            let candidate = normalizeText(finalOutput?.text ?? streamedText)
+            let rawCandidate = normalizeText(finalOutput?.text ?? streamedText)
+            let candidate = normalizeText(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: rawCandidate))
+            if candidate != rawCandidate {
+                VoxtLog.warning(
+                    "MLX ASR context leakage removed. repo=\(repo), stage=\(stageLabel(for: stage)), rawChars=\(rawCandidate.count), outputChars=\(candidate.count)"
+                )
+            }
             guard !candidate.isEmpty else { return nil }
             applyCandidate(candidate, stage: stage)
             let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
@@ -1314,7 +1356,13 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 audioSamples: audioSamples,
                 inferenceConfiguration: inferenceConfiguration
             )
-            let candidate = normalizeText(finalOutput?.text ?? streamedText)
+            let rawCandidate = normalizeText(finalOutput?.text ?? streamedText)
+            let candidate = normalizeText(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: rawCandidate))
+            if candidate != rawCandidate {
+                VoxtLog.warning(
+                    "MLX ASR context leakage removed. repo=\(modelManager.currentModelRepo), stage=structured, rawChars=\(rawCandidate.count), outputChars=\(candidate.count)"
+                )
+            }
             return candidate.isEmpty ? nil : candidate
         } catch {
             isModelInitializing = false

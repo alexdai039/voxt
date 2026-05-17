@@ -77,6 +77,25 @@ enum AppPromptDefaults {
             return true
         }
 
+        if kind == .enhancement,
+           matchesRecentEnhancementDefaultBeforeNestedListRefresh(trimmedText) {
+            return true
+        }
+
+        if kind == .translation,
+           matchesRecentTranslationDefaultBeforeNestedListRefresh(trimmedText) {
+            return true
+        }
+
+        if kind == .qwenASRContextBias,
+           matchesLegacyQwenASRContextBiasText(trimmedText) {
+            return true
+        }
+
+        if matchesLegacyASRLanguagePromptText(trimmedText, kind: kind) {
+            return true
+        }
+
         if kind == .whisperASRHint {
             return trimmedText == AppPreferenceKey.legacyDefaultWhisperASRHintPrompt
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -127,8 +146,162 @@ enum AppPromptDefaults {
                 legacyChineseSimplifiedRewriteText(),
                 legacyJapaneseRewriteText()
             ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        case .qwenASRContextBias:
+            return [
+                legacyEnglishQwenASRContextBiasText(),
+                legacyChineseSimplifiedQwenASRContextBiasText(),
+                legacyJapaneseQwenASRContextBiasText()
+            ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         default:
             return []
+        }
+    }
+
+    private static func matchesRecentEnhancementDefaultBeforeNestedListRefresh(_ text: String) -> Bool {
+        let markerSets = [
+            [
+                "You are Voxt's transcription cleanup assistant",
+                "Return only the adjusted text",
+                "If the content contains ordered-list wording",
+                "format it as an unordered list",
+                "The {user} in the code needs to be replaced"
+            ],
+            [
+                "你是 Voxt 的转写清理助手",
+                "{{USER_MAIN_LANGUAGE}}",
+                "请直接输出调整后的文本",
+                "若内容中有顺序列表相关表述",
+                "使用无序列表",
+                "代码里的{user}需要替换成实际用户名"
+            ],
+            [
+                "あなたは Voxt の文字起こしクリーンアップアシスタントです",
+                "{{USER_MAIN_LANGUAGE}}",
+                "調整後のテキストだけを返し",
+                "内容に順序付きリストに関する表現",
+                "箇条書き",
+                "コード内の{user}は実際のユーザー名"
+            ]
+        ]
+
+        return markerSets.contains { markers in
+            markers.allSatisfy { text.contains($0) }
+        }
+    }
+
+    private static func legacyEnglishQwenASRContextBiasText() -> String {
+        """
+        The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Other commonly used languages: {{USER_OTHER_LANGUAGES}}.
+
+        Bias recognition toward correct spelling of names, product terms, technical terminology, and mixed-language content exactly as spoken. Do not translate.
+
+        Prefer these dictionary terms when they match the audio:
+        {{DICTIONARY_TERMS}}
+        """
+    }
+
+    private static func legacyChineseSimplifiedQwenASRContextBiasText() -> String {
+        """
+        说话者的主要语言是 {{USER_MAIN_LANGUAGE}}，其他常用语言是 {{USER_OTHER_LANGUAGES}}。
+
+        请将识别偏向于人名、产品名、技术术语和混合语言内容的正确拼写，并保持与原始发音一致，不要翻译。
+
+        当音频中确实出现这些词时，请优先参考下列词典词汇：
+        {{DICTIONARY_TERMS}}
+        """
+    }
+
+    private static func legacyJapaneseQwenASRContextBiasText() -> String {
+        """
+        話者の主要言語は {{USER_MAIN_LANGUAGE}}、その他のよく使う言語は {{USER_OTHER_LANGUAGES}} です。
+
+        人名、製品名、技術用語、混在言語の内容について、発話どおりの正しい綴りに認識を寄せてください。翻訳はしないでください。
+
+        音声内で実際に一致する場合は、次の辞書語を優先して参考にしてください：
+        {{DICTIONARY_TERMS}}
+        """
+    }
+
+    private static func matchesLegacyQwenASRContextBiasText(_ text: String) -> Bool {
+        let markerSets = [
+            [
+                "The speaker's primary language is",
+                "Other commonly used languages",
+                "Bias recognition toward correct spelling",
+                "Prefer these dictionary terms"
+            ],
+            [
+                "说话者的主要语言",
+                "其他常用语言",
+                "请将识别偏向于",
+                "词典词汇"
+            ],
+            [
+                "話者の主要言語",
+                "その他のよく使う言語",
+                "認識を寄せてください",
+                "辞書語"
+            ]
+        ]
+
+        return markerSets.contains { markers in
+            markers.allSatisfy { text.contains($0) }
+        }
+    }
+
+    private static func matchesLegacyASRLanguagePromptText(_ text: String, kind: AppPromptKind) -> Bool {
+        guard [.openAIASRHint, .glmASRHint, .whisperASRHint].contains(kind) else { return false }
+        let markerSets = [
+            [
+                "The speaker's primary language is",
+                "Preserve",
+                "exactly as spoken"
+            ],
+            [
+                "说话者的主要语言",
+                "按原样保留"
+            ],
+            [
+                "話者の主要言語",
+                "発話どおり"
+            ]
+        ]
+
+        return markerSets.contains { markers in
+            markers.allSatisfy { text.contains($0) }
+        }
+    }
+
+    private static func matchesRecentTranslationDefaultBeforeNestedListRefresh(_ text: String) -> Bool {
+        let markerSets = [
+            [
+                "You are Voxt's content cleanup and translation assistant",
+                "{{TARGET_LANGUAGE}}",
+                "Return only the cleaned and translated text",
+                "If the content contains ordered-list wording",
+                "format it as an unordered list",
+                "The {user} in the code needs to be replaced"
+            ],
+            [
+                "你是 Voxt 的内容整理翻译助手",
+                "{{TARGET_LANGUAGE}}",
+                "请直接输出整理并翻译后的文本",
+                "若内容中有顺序列表相关表述",
+                "使用无序列表",
+                "代码里的{user}需要替换成实际用户名"
+            ],
+            [
+                "あなたは Voxt の内容整理・翻訳アシスタントです",
+                "{{TARGET_LANGUAGE}}",
+                "整理して翻訳したテキストだけを返し",
+                "内容に順序付きリストに関する表現",
+                "箇条書き",
+                "コード内の{user}は実際のユーザー名"
+            ]
+        ]
+
+        return markerSets.contains { markers in
+            markers.allSatisfy { text.contains($0) }
         }
     }
 
@@ -218,14 +391,7 @@ enum AppPromptDefaults {
         case .dictionaryAutoLearning:
             return AppPreferenceKey.defaultAutomaticDictionaryLearningPrompt
         case .qwenASRContextBias:
-            return """
-            The speaker's primary language is {{USER_MAIN_LANGUAGE}}. Other commonly used languages: {{USER_OTHER_LANGUAGES}}.
-
-            Bias recognition toward correct spelling of names, product terms, technical terminology, and mixed-language content exactly as spoken. Do not translate.
-
-            Prefer these dictionary terms when they match the audio:
-            {{DICTIONARY_TERMS}}
-            """
+            return AppPreferenceKey.asrDictionaryTermsTemplateVariable
         case .openAIASRHint:
             return AppPreferenceKey.defaultOpenAIASRHintPrompt
         case .glmASRHint:
@@ -256,8 +422,9 @@ enum AppPromptDefaults {
                - 手机号等号码按实际格式规范呈现。
             6. 完整保留人名、产品名、术语、命令、代码、路径、URL、邮箱和数字。
             7. 保持原文语言混合结构，不翻译、总结、扩写、解释或改写风格。中文与英文连续且无空格时，在连接处补充空格。
-            8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示。
-            9. 若清理后无有效内容，返回空字符串。
+            8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示；若存在子列表，采用 Markdown 嵌套列表格式（子列表前加 4 个空格或 1 个制表符）。
+            9. 适当位置增加换行间隔，使内容清晰有条理。
+            10. 若清理后无有效内容，返回空字符串。
 
             示例：
             - 原句：“嗯，你帮我买一些水果吧，比如苹果、香蕉、梨，嗯，还有一些甘蔗。啊啊，不不不，甘蔗不用了，帮我带一点枇杷。”
@@ -276,6 +443,15 @@ enum AppPromptDefaults {
               输出：“请把文件放在（D盘）下的【资料】文件夹里”
             - 原句：“代码里的大括号user大括号需要替换成实际用户名”
               输出：“代码里的{user}需要替换成实际用户名”
+            - 原句：“任务分三步：首先准备材料，包括笔、纸；然后整理内容，具体是：分类信息、标注重点；最后提交报告。”
+              输出：“任务分三步：
+            1. 准备材料，包括：
+                - 笔
+                - 纸
+            2. 整理内容，具体是：
+                - 分类信息
+                - 标注重点
+            3. 提交报告”
 
             输出：
             请直接输出调整后的文本，无需额外说明。
@@ -302,8 +478,10 @@ enum AppPromptDefaults {
                - 手机号等号码按实际格式规范呈现。
             6. 完整保留人名、产品名、术语、命令、代码、路径、URL、邮箱和数字。
             7. 保持原文语言混合结构，不翻译、总结、扩写、解释或改写风格。中文与英文连续且无空格时，在连接处补充空格。
-            8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示。
-            9. 若清理后无有效内容，返回空字符串。
+            8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示；若存在子列表，采用 Markdown 嵌套列表格式（子列表前加 4 个空格或 1 个制表符）。
+            9. 适当位置增加换行间隔，使内容清晰有条理。
+            10. 将整理后的内容准确翻译为 {{TARGET_LANGUAGE}}，保留原意，不得擅自增删信息。
+            11. 若清理后无有效内容，返回空字符串。
 
             示例：
             - 原句：“嗯，你帮我买一些水果吧，比如苹果、香蕉、梨，嗯，还有一些甘蔗。啊啊，不不不，甘蔗不用了，帮我带一点枇杷。”
@@ -322,6 +500,15 @@ enum AppPromptDefaults {
               输出：“请把文件放在（D盘）下的【资料】文件夹里”
             - 原句：“代码里的大括号user大括号需要替换成实际用户名”
               输出：“代码里的{user}需要替换成实际用户名”
+            - 原句：“任务分三步：首先准备材料，包括笔、纸；然后整理内容，具体是：分类信息、标注重点；最后提交报告。”
+              输出：“任务分三步：
+            1. 准备材料，包括：
+                - 笔
+                - 纸
+            2. 整理内容，具体是：
+                - 分类信息
+                - 标注重点
+            3. 提交报告”
 
             输出：
             请直接输出整理并翻译后的文本，无需额外说明。
@@ -501,25 +688,13 @@ enum AppPromptDefaults {
             [{"term":"示例"}]
             """
         case .qwenASRContextBias:
-            return """
-            说话者的主要语言是 {{USER_MAIN_LANGUAGE}}，其他常用语言是 {{USER_OTHER_LANGUAGES}}。
-
-            请将识别偏向于人名、产品名、技术术语和混合语言内容的正确拼写，并保持与原始发音一致，不要翻译。
-
-            当音频中确实出现这些词时，请优先参考下列词典词汇：
-            {{DICTIONARY_TERMS}}
-            """
+            return AppPreferenceKey.asrDictionaryTermsTemplateVariable
         case .openAIASRHint:
-            return "说话者的主要语言是 {{USER_MAIN_LANGUAGE}}。请优先保证该语言的识别准确性，同时按原样保留混合语言词汇、人名、产品术语、URL 和类似代码的文本。"
+            return AppPreferenceKey.defaultOpenAIASRHintPrompt
         case .glmASRHint:
-            return "说话者的主要语言是 {{USER_MAIN_LANGUAGE}}。请优先保证该语言的识别准确性，并按原样保留人名、术语、混合语言内容和类似代码的文本。"
+            return AppPreferenceKey.defaultGLMASRHintPrompt
         case .whisperASRHint:
-            return """
-            说话者的主要语言是 {{USER_MAIN_LANGUAGE}}。请优先保证该语言的识别准确性，同时按原样保留混合语言词汇、人名、产品术语、URL 和类似代码的文本。
-
-            当音频中确实出现这些词时，请优先参考下列词典词汇：
-            {{DICTIONARY_TERMS}}
-            """
+            return AppPreferenceKey.defaultWhisperASRHintPrompt
         }
     }
 
@@ -544,8 +719,9 @@ enum AppPromptDefaults {
                - 携帯電話番号などの番号は実際の標準形式で示す。
             6. 人名、製品名、専門用語、コマンド、コード、パス、URL、メールアドレス、数字は完全に保持してください。
             7. 原文の混在言語構造を保持し、翻訳、要約、拡張、説明、文体変更をしないでください。中国語と英語が空白なしで連続している場合は、境界に空白を追加してください。
-            8. 内容に順序付きリストに関する表現がある場合は、番号付きリストとして整理してください。明確な並列関係で順序を持たない内容がある場合は、「-」の箇条書きで表してください。
-            9. 整理後に有効な内容が残らない場合は、空文字列を返してください。
+            8. 内容に順序付きリストに関する表現がある場合は、番号付きリストとして整理してください。明確な並列関係で順序を持たない内容がある場合は、「-」の箇条書きで表してください。サブリストがある場合は、子項目の前に半角スペース4個またはタブ1個を入れる Markdown のネストリスト形式を使用してください。
+            9. 内容が明確で構造化されるように、適切な位置に改行を追加してください。
+            10. 整理後に有効な内容が残らない場合は、空文字列を返してください。
 
             例：
             - 入力：「ええと、りんごとバナナ、それからサトウキビを買って。いやいや、サトウキビはいらない、びわを少し買って。」
@@ -564,6 +740,15 @@ enum AppPromptDefaults {
               出力：「ファイルを（Dドライブ）の下の【資料】フォルダに置いてください」
             - 入力：「コード内の波括弧user波括弧は実際のユーザー名に置き換える必要があります」
               出力：「コード内の{user}は実際のユーザー名に置き換える必要があります」
+            - 入力：「タスクは三つの手順です。まず材料を準備します。内容はペンと紙です。次に内容を整理します。具体的には情報の分類と重点のマーキングです。最後にレポートを提出します。」
+              出力：「タスクは三つの手順です：
+            1. 材料を準備します。内容：
+                - ペン
+                - 紙
+            2. 内容を整理します。具体的には：
+                - 情報の分類
+                - 重点のマーキング
+            3. レポートを提出します」
 
             出力：
             調整後のテキストだけを返し、追加説明は不要です。
@@ -590,9 +775,10 @@ enum AppPromptDefaults {
                - 携帯電話番号などの番号は実際の標準形式で示す。
             6. 人名、製品名、専門用語、コマンド、コード、パス、URL、メールアドレス、数字は完全に保持してください。
             7. 整理時は原文の混在言語構造を保持し、要約、拡張、説明、文体変更をしないでください。中国語と英語が空白なしで連続している場合は、翻訳前に境界へ空白を追加してください。
-            8. 内容に順序付きリストに関する表現がある場合は、番号付きリストとして整理してください。明確な並列関係で順序を持たない内容がある場合は、「-」の箇条書きで表してください。
-            9. 整理後の内容を {{TARGET_LANGUAGE}} へ正確に翻訳し、原意を保ち、情報を勝手に追加・削除しないでください。
-            10. 整理後に有効な内容が残らない場合は、空文字列を返してください。
+            8. 内容に順序付きリストに関する表現がある場合は、番号付きリストとして整理してください。明確な並列関係で順序を持たない内容がある場合は、「-」の箇条書きで表してください。サブリストがある場合は、子項目の前に半角スペース4個またはタブ1個を入れる Markdown のネストリスト形式を使用してください。
+            9. 内容が明確で構造化されるように、適切な位置に改行を追加してください。
+            10. 整理後の内容を {{TARGET_LANGUAGE}} へ正確に翻訳し、原意を保ち、情報を勝手に追加・削除しないでください。
+            11. 整理後に有効な内容が残らない場合は、空文字列を返してください。
 
             例：
             - 入力：「ええと、りんごとバナナ、それからサトウキビを買って。いやいや、サトウキビはいらない、びわを少し買って。」
@@ -611,6 +797,15 @@ enum AppPromptDefaults {
               整理後の意味：「ファイルを（Dドライブ）の下の【資料】フォルダに置いてください」
             - 入力：「コード内の波括弧user波括弧は実際のユーザー名に置き換える必要があります」
               整理後の意味：「コード内の{user}は実際のユーザー名に置き換える必要があります」
+            - 入力：「タスクは三つの手順です。まず材料を準備します。内容はペンと紙です。次に内容を整理します。具体的には情報の分類と重点のマーキングです。最後にレポートを提出します。」
+              整理後の意味：「タスクは三つの手順です：
+            1. 材料を準備します。内容：
+                - ペン
+                - 紙
+            2. 内容を整理します。具体的には：
+                - 情報の分類
+                - 重点のマーキング
+            3. レポートを提出します」
 
             出力：
             整理して翻訳したテキストだけを返し、追加説明は不要です。
@@ -788,25 +983,13 @@ enum AppPromptDefaults {
             [{"term":"Example"}]
             """
         case .qwenASRContextBias:
-            return """
-            話者の主要言語は {{USER_MAIN_LANGUAGE}}、その他のよく使う言語は {{USER_OTHER_LANGUAGES}} です。
-
-            人名、製品名、技術用語、混在言語の内容について、発話どおりの正しい綴りに認識を寄せてください。翻訳はしないでください。
-
-            音声内で実際に一致する場合は、次の辞書語を優先して参考にしてください：
-            {{DICTIONARY_TERMS}}
-            """
+            return AppPreferenceKey.asrDictionaryTermsTemplateVariable
         case .openAIASRHint:
-            return "話者の主要言語は {{USER_MAIN_LANGUAGE}} です。その言語での認識精度を優先しつつ、混在言語の語句、人名、製品用語、URL、コード風テキストは発話どおりに保持してください。"
+            return AppPreferenceKey.defaultOpenAIASRHintPrompt
         case .glmASRHint:
-            return "話者の主要言語は {{USER_MAIN_LANGUAGE}} です。その言語での認識精度を優先し、人名、用語、混在言語の内容、コード風テキストは発話どおりに保持してください。"
+            return AppPreferenceKey.defaultGLMASRHintPrompt
         case .whisperASRHint:
-            return """
-            話者の主要言語は {{USER_MAIN_LANGUAGE}} です。その言語での認識精度を優先しつつ、混在言語の語句、人名、製品用語、URL、コード風テキストは発話どおりに保持してください。
-
-            音声内で実際に一致する場合は、次の辞書語を優先して参考にしてください：
-            {{DICTIONARY_TERMS}}
-            """
+            return AppPreferenceKey.defaultWhisperASRHintPrompt
         }
     }
 

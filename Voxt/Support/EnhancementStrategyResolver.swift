@@ -121,12 +121,7 @@ enum TaskLLMStrategyResolver {
             outputTokenBudgetHint: outputTokenBudgetHint,
             segmentationCharacterLimit: mode == .segmented ? max(longTextThreshold, 280) : nil,
             truncationGuard: isLongText
-                ? TaskLLMTruncationGuardPolicy(
-                    isEnabled: true,
-                    minimumCoverageRatio: 0.72,
-                    prefixCoverageRatio: 0.90,
-                    absoluteSlack: 24
-                )
+                ? truncationGuardPolicy(for: taskKind)
                 : .disabled
         )
     }
@@ -135,21 +130,23 @@ enum TaskLLMStrategyResolver {
         outputText: String,
         originalText: String,
         strategy: TaskLLMExecutionStrategy
-    ) -> (text: String, didFallback: Bool) {
+    ) -> (text: String, didFallback: Bool, reason: String?) {
         let policy = strategy.truncationGuard
         guard policy.isEnabled else {
-            return (outputText, false)
+            return (outputText, false, nil)
         }
 
         let normalizedOriginal = normalizedComparableText(originalText)
         let normalizedOutput = normalizedComparableText(outputText)
         guard !normalizedOriginal.isEmpty, !normalizedOutput.isEmpty else {
-            return (originalText, true)
+            return (originalText, true, "emptyComparableText")
         }
 
         let originalCount = normalizedOriginal.count
         let outputCount = normalizedOutput.count
-        let minimumCoverage = max(
+        // Accept either proportional coverage or a small absolute drop; cleanup can
+        // legitimately remove many filler tokens without being truncated.
+        let minimumCoverage = min(
             Int((Double(originalCount) * policy.minimumCoverageRatio).rounded(.down)),
             originalCount - policy.absoluteSlack
         )
@@ -159,10 +156,18 @@ enum TaskLLMStrategyResolver {
         let isSuspiciouslyShort = outputCount < minimumCoverage
 
         guard isSuspiciousPrefix || isSuspiciouslyShort else {
-            return (outputText, false)
+            return (outputText, false, nil)
         }
 
-        return (originalText, true)
+        let reason = [
+            "normalizedInputChars=\(originalCount)",
+            "normalizedOutputChars=\(outputCount)",
+            "minimumCoverage=\(minimumCoverage)",
+            "coverageRatio=\(String(format: "%.3f", coverageRatio))",
+            "prefix=\(isSuspiciousPrefix)",
+            "short=\(isSuspiciouslyShort)"
+        ].joined(separator: ",")
+        return (originalText, true, reason)
     }
 
     private static func estimatedOutputTokens(
@@ -171,6 +176,20 @@ enum TaskLLMStrategyResolver {
     ) -> Int {
         let safeCharacters = max(1, rawTextCharacterCount)
         return Int((Double(safeCharacters) * taskKind.outputTokenMultiplier).rounded(.up))
+    }
+
+    private static func truncationGuardPolicy(for taskKind: TaskLLMKind) -> TaskLLMTruncationGuardPolicy {
+        switch taskKind {
+        case .transcriptionEnhancement:
+            return .disabled
+        case .translation, .rewrite:
+            return TaskLLMTruncationGuardPolicy(
+                isEnabled: true,
+                minimumCoverageRatio: 0,
+                prefixCoverageRatio: 0.90,
+                absoluteSlack: 24
+            )
+        }
     }
 
     private static func normalizedCharacterCount(_ text: String) -> Int {

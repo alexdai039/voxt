@@ -130,11 +130,17 @@ extension AppDelegate {
             return text
         }
         let translated = try await executeLLMExecutionPlan(plan)
-        return TaskLLMStrategyResolver.applyTruncationGuard(
+        let guarded = TaskLLMStrategyResolver.applyTruncationGuard(
             outputText: translated,
             originalText: text,
             strategy: strategy
-        ).text
+        )
+        if guarded.didFallback {
+            VoxtLog.warning(
+                "Translation truncation guard restored source text. inputChars=\(text.count), outputChars=\(translated.count), reason=\(guarded.reason ?? "unknown"), strategy=\(strategy.logLabel)"
+            )
+        }
+        return guarded.text
     }
 
     func rewriteText(
@@ -280,11 +286,17 @@ extension AppDelegate {
         let originalText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? dictatedPrompt
             : sourceText
-        return TaskLLMStrategyResolver.applyTruncationGuard(
+        let guarded = TaskLLMStrategyResolver.applyTruncationGuard(
             outputText: rewritten,
             originalText: originalText,
             strategy: strategy
-        ).text
+        )
+        if guarded.didFallback {
+            VoxtLog.warning(
+                "Rewrite truncation guard restored source text. inputChars=\(originalText.count), outputChars=\(rewritten.count), reason=\(guarded.reason ?? "unknown"), strategy=\(strategy.logLabel)"
+            )
+        }
+        return guarded.text
     }
 
     func translateTextStrict(
@@ -356,11 +368,17 @@ extension AppDelegate {
             return text
         }
         let translated = try await executeLLMExecutionPlan(plan)
-        return TaskLLMStrategyResolver.applyTruncationGuard(
+        let guarded = TaskLLMStrategyResolver.applyTruncationGuard(
             outputText: translated,
             originalText: text,
             strategy: strategy
-        ).text
+        )
+        if guarded.didFallback {
+            VoxtLog.warning(
+                "Strict translation truncation guard restored source text. inputChars=\(text.count), outputChars=\(translated.count), reason=\(guarded.reason ?? "unknown"), strategy=\(strategy.logLabel)"
+            )
+        }
+        return guarded.text
     }
 
     static func effectiveTranslationTargetLanguage(

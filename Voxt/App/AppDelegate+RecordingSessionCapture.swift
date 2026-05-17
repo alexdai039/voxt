@@ -177,6 +177,13 @@ extension AppDelegate {
 
             self.overlayState.statusMessage = ""
             let sessionID = self.activeRecordingSessionID
+            self.remoteASRTranscriber.dictionaryEntryProvider = { [weak self] in
+                guard let self else { return [] }
+                return self.dictionaryStore.activeEntriesForRemoteRequest(
+                    activeGroupID: self.activeDictionaryGroupID(),
+                    limit: 64
+                )
+            }
             self.remoteASRTranscriber.transcribedText = ""
             self.remoteASRTranscriber.sessionAllowsRealtimeTextDisplay = self.transcriptionCapturePipeline.usesLiveDisplay
             self.remoteASRTranscriber.onTranscriptionFinished = { [weak self] text in
