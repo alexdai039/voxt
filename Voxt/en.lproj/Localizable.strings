@@ -687,6 +687,7 @@
 "Create Dictionary Term" = "Create Dictionary Term";
 "Edit Dictionary Term" = "Edit Dictionary Term";
 "Dictionary Term" = "Dictionary Term";
+"Confirm and Continue" = "Confirm and Continue";
 "Replacement Match Terms" = "Replacement Match Terms";
 " (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)" = " (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)";
 "Replacement Match Term" = "Replacement Match Term";
@@ -774,6 +775,14 @@
 "Dictionary exported successfully." = "Dictionary exported successfully.";
 "Dictionary export failed: %@" = "Dictionary export failed: %@";
 "Imported %d terms and skipped %d duplicates." = "Imported %d terms and skipped %d duplicates.";
+"Project vocabulary imported from %@. Added %d, reinforced %d, skipped %d." = "Project vocabulary imported from %@. Added %d, reinforced %d, skipped %d.";
+"No project vocabulary source was found for %@." = "No project vocabulary source was found for %@.";
+"No project vocabulary terms were found for %@." = "No project vocabulary terms were found for %@.";
+"Reinforced existing dictionary term: %@." = "Reinforced existing dictionary term: %@.";
+"Reinforced existing dictionary term: %@" = "Reinforced existing dictionary term: %@";
+"Reinforced %d existing dictionary terms: %@" = "Reinforced %d existing dictionary terms: %@";
+"Added %d corrected terms and reinforced %d existing dictionary terms: %@" = "Added %d corrected terms and reinforced %d existing dictionary terms: %@";
+"Claude" = "Claude";
 "Dictionary import failed: %@" = "Dictionary import failed: %@";
 "User Main Language" = "User Main Language";
 "Languages" = "Languages";
@@ -1548,6 +1557,8 @@
 "Choose Codex auth.json" = "Choose Codex auth.json";
 "Selected Codex auth file. Clear to return to the default path." = "Selected Codex auth file. Clear to return to the default path.";
 "Failed to update Codex auth path: %@" = "Failed to update Codex auth path: %@";
+"Fast Mode" = "Fast Mode";
+"Requests Codex with priority service tier when the backend supports Fast mode." = "Requests Codex with priority service tier when the backend supports Fast mode.";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials.";
 "Codex auth not found at %@. Run `codex login` first." = "Codex auth not found at %@. Run `codex login` first.";
 "Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access." = "Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access.";

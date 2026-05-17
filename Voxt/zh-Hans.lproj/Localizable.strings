@@ -684,6 +684,7 @@
 "Create Dictionary Term" = "创建词典词汇";
 "Edit Dictionary Term" = "编辑词典词汇";
 "Dictionary Term" = "词典词汇";
+"Confirm and Continue" = "确认并继续";
 "Replacement Match Terms" = "替换匹配词";
 " (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)" = "（可选；即使不添加，Voxt 仍会使用常规词典匹配和高置信纠偏）";
 "Replacement Match Term" = "替换匹配词";
@@ -774,6 +775,14 @@
 "Dictionary exported successfully." = "词典导出成功。";
 "Dictionary export failed: %@" = "词典导出失败：%@";
 "Imported %d terms and skipped %d duplicates." = "已导入 %d 个词汇，跳过 %d 个重复项。";
+"Project vocabulary imported from %@. Added %d, reinforced %d, skipped %d." = "已从 %@ 导入项目词汇。新增 %d 个，增强 %d 个，跳过 %d 个。";
+"No project vocabulary source was found for %@." = "未找到 %@ 的项目词汇来源。";
+"No project vocabulary terms were found for %@." = "未从 %@ 找到可导入的项目词汇。";
+"Reinforced existing dictionary term: %@." = "已增强已有词典词汇：%@。";
+"Reinforced existing dictionary term: %@" = "已增强已有词典词汇：%@";
+"Reinforced %d existing dictionary terms: %@" = "已增强 %d 个已有词典词汇：%@";
+"Added %d corrected terms and reinforced %d existing dictionary terms: %@" = "已新增 %d 个纠错词，并增强 %d 个已有词典词汇：%@";
+"Claude" = "Claude";
 "Dictionary import failed: %@" = "词典导入失败：%@";
 "User Main Language" = "用户主语言";
 "Languages" = "语言";
@@ -1550,6 +1559,8 @@
 "Choose Codex auth.json" = "选择 Codex auth.json";
 "Selected Codex auth file. Clear to return to the default path." = "已选择 Codex auth 文件。清除后会恢复默认路径。";
 "Failed to update Codex auth path: %@" = "更新 Codex auth 路径失败：%@";
+"Fast Mode" = "Fast 模式";
+"Requests Codex with priority service tier when the backend supports Fast mode." = "当后端支持 Fast 模式时，使用 priority 服务等级请求 Codex。";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex 使用 ChatGPT 订阅后端和本地 Codex OAuth 凭证。";
 "Codex auth not found at %@. Run `codex login` first." = "未在 %@ 找到 Codex auth。请先运行 `codex login`。";
 "Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access." = "没有权限读取 %@。请点击“选择”并选择 auth.json，以授权 Voxt 访问。";

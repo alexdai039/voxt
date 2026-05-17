@@ -231,7 +231,7 @@ final class ASRDebugViewModel: ObservableObject {
         mlxTranscriber.dictionaryEntryProvider = {
             appDelegate.dictionaryStore.activeEntriesForRemoteRequest(
                 activeGroupID: appDelegate.activeDictionaryGroupID(),
-                limit: 64
+                limit: DictionaryEntryCollection.asrPromptTermLimit
             )
         }
         remoteTranscriber.doubaoDictionaryEntryProvider = {

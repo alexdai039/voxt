@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import Combine
-import QuartzCore
 
 /// A borderless, non-activating floating panel that sits at the bottom-center
 /// of the main screen and hosts the WaveformView.
@@ -84,7 +83,8 @@ class RecordingOverlayWindow: NSPanel {
             hostingView.rootView = content
         } else {
             let hosting = NSHostingView(rootView: content)
-            hosting.translatesAutoresizingMaskIntoConstraints = false
+            hosting.translatesAutoresizingMaskIntoConstraints = true
+            hosting.autoresizingMask = [.width, .height]
             contentView = hosting
             self.hostingView = hosting
         }
@@ -176,20 +176,18 @@ class RecordingOverlayWindow: NSPanel {
             }
     }
 
-    private func updateAppearance(for state: OverlayState, animated: Bool) {
+    private func updateAppearance(for state: OverlayState, animated _: Bool) {
         updateMouseInteraction(for: state)
         let targetFrame = frame(for: panelSize(for: state), position: currentPosition)
 
         guard !targetFrame.isEmpty else { return }
-        if animated, isVisible {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                animator().setFrame(targetFrame, display: true)
-            }
-        } else {
-            setFrame(targetFrame, display: true)
+        guard !frame.isApproximatelyEqual(to: targetFrame) else {
+            return
         }
+        // Keep window geometry changes outside AppKit's animation/layout transaction.
+        // macOS 26 can re-enter SwiftUI DesignLibrary layout while the overlay view is
+        // rebuilding after a hotkey transition, which has produced main-thread crashes.
+        setFrame(targetFrame, display: true)
     }
 
     private func panelSize(for state: OverlayState) -> CGSize {
@@ -280,5 +278,14 @@ class RecordingOverlayWindow: NSPanel {
 
     deinit {
         removeOutsideClickMonitors()
+    }
+}
+
+private extension CGRect {
+    func isApproximatelyEqual(to other: CGRect, tolerance: CGFloat = 0.5) -> Bool {
+        abs(origin.x - other.origin.x) <= tolerance &&
+            abs(origin.y - other.origin.y) <= tolerance &&
+            abs(size.width - other.size.width) <= tolerance &&
+            abs(size.height - other.size.height) <= tolerance
     }
 }

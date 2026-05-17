@@ -84,6 +84,12 @@ enum AutomaticDictionaryLearningMonitor {
         let score: Int
     }
 
+    private enum TokenKind: Equatable {
+        case none
+        case latinOrNumber
+        case han
+    }
+
     enum RequestOutcome: Equatable {
         case ready(AutomaticDictionaryLearningRequest)
         case skipped(reason: String)
@@ -98,6 +104,10 @@ enum AutomaticDictionaryLearningMonitor {
     static let maxConsecutiveMissingSnapshotsBeforeStop = 3
     static let maxConsecutiveMissingSnapshotsAfterObservedChange = 3
     static let maximumEditRatio = 0.8
+    private static let latinOrNumberRegex = try! NSRegularExpression(
+        pattern: #"[A-Za-z0-9]+(?:[._+\-'][A-Za-z0-9]+)*"#
+    )
+    private static let hanRegex = try! NSRegularExpression(pattern: #"\p{Han}{2,12}"#)
     private static let templateReplacements: [(token: String, value: (PromptContext) -> String)] = [
         (
             AppPreferenceKey.automaticDictionaryLearningMainLanguageTemplateVariable,
@@ -259,9 +269,17 @@ enum AutomaticDictionaryLearningMonitor {
         ) else {
             return .skipped(reason: "detected edit does not intersect inserted text")
         }
-        guard changeWindow.editRatio <= maximumEditRatio else {
+        guard !isPureAppendAfterBaseline(baseline: baselineScopedText, final: finalScopedText) else {
+            return .skipped(reason: "detected edit does not intersect inserted text")
+        }
+        let editRatio = editRatio(
+            inserted: insertedText,
+            baseline: baselineScopedText,
+            final: finalScopedText
+        )
+        guard editRatio <= maximumEditRatio else {
             return .skipped(
-                reason: "edit ratio \(String(format: "%.3f", changeWindow.editRatio)) exceeded limit \(String(format: "%.3f", maximumEditRatio))"
+                reason: "edit ratio \(String(format: "%.3f", editRatio)) exceeded limit \(String(format: "%.3f", maximumEditRatio))"
             )
         }
 
@@ -272,7 +290,7 @@ enum AutomaticDictionaryLearningMonitor {
                 finalContext: finalScopedText,
                 baselineChangedFragment: changeWindow.baselineFragment,
                 finalChangedFragment: changeWindow.finalFragment,
-                editRatio: changeWindow.editRatio
+                editRatio: editRatio
             )
         )
     }
@@ -299,9 +317,17 @@ enum AutomaticDictionaryLearningMonitor {
         ) else {
             return .skipped(reason: "detected edit does not intersect inserted text")
         }
-        guard changeWindow.editRatio <= maximumEditRatio else {
+        guard !isPureAppendAfterBaseline(baseline: baselineText, final: finalText) else {
+            return .skipped(reason: "detected edit does not intersect inserted text")
+        }
+        let editRatio = editRatio(
+            inserted: insertedText,
+            baseline: baselineText,
+            final: finalText
+        )
+        guard editRatio <= maximumEditRatio else {
             return .skipped(
-                reason: "edit ratio \(String(format: "%.3f", changeWindow.editRatio)) exceeded limit \(String(format: "%.3f", maximumEditRatio))"
+                reason: "edit ratio \(String(format: "%.3f", editRatio)) exceeded limit \(String(format: "%.3f", maximumEditRatio))"
             )
         }
 
@@ -332,7 +358,7 @@ enum AutomaticDictionaryLearningMonitor {
                 finalContext: finalContext,
                 baselineChangedFragment: changeWindow.baselineFragment,
                 finalChangedFragment: changeWindow.finalFragment,
-                editRatio: changeWindow.editRatio
+                editRatio: editRatio
             )
         )
     }
@@ -487,10 +513,16 @@ enum AutomaticDictionaryLearningMonitor {
         return """
         \(resolvedTemplate)
 
+        Candidate terms extracted from the final changed fragment:
+        <candidate_terms>
+        \(candidateTermsSummary(for: request))
+        </candidate_terms>
+
         补充判断规则：
         5. 如果 <baseline_changed_fragment> 和 <final_changed_fragment> 都是短词或短语，且 final 明显是在纠正 baseline 的专有名词、产品名、工具名、技术术语、命令或混合语言词汇，直接返回 final 的最终正确写法。
         6. 类似 “Cloud Code -> Claude Code”、“Go Host -> Ghostty”、“Wechart -> WeChat”、“SG 骆魔鬼群 -> SGLang 魔鬼群” 这类错拼、音近词、错分词修正，优先返回最终完整词汇。
-        7. 即使上下文是一整句，也不要返回整句；只返回最短、最稳定、最终纠正后的词汇。
+        7. 优先从 <candidate_terms> 中选择真正像词典词条的最终纠正形式；如果候选只是数字、单位、时间、普通格式变化或整句片段，返回空数组。
+        8. 即使上下文是一整句，也不要返回整句；只返回最短、最稳定、最终纠正后的词汇。
         """
     }
 
@@ -520,6 +552,14 @@ enum AutomaticDictionaryLearningMonitor {
         }
 
         return [finalCandidate]
+    }
+
+    private static func candidateTermsSummary(for request: AutomaticDictionaryLearningRequest) -> String {
+        let terms = candidateTerms(
+            oldFragment: request.baselineChangedFragment,
+            newFragment: request.finalChangedFragment
+        )
+        return terms.isEmpty ? "(empty)" : terms.joined(separator: ", ")
     }
 
     static func observeMissingSnapshot(
@@ -691,15 +731,16 @@ enum AutomaticDictionaryLearningMonitor {
         baselineText: String,
         finalText: String
     ) -> ChangeWindow {
-        let summary = semanticChangeSummary(
+        let summary = typefluxChangeSummary(
             baselineText: baselineText,
             finalText: finalText
         )
         let baselineFragment = summary.baselineFragment
         let finalFragment = summary.finalFragment
-        let baselineMeaningful = DictionaryStore.normalizeTerm(baselineFragment)
-        let finalMeaningful = DictionaryStore.normalizeTerm(finalFragment)
-        let hasMeaningfulChange = !baselineMeaningful.isEmpty || !finalMeaningful.isEmpty
+        let hasMeaningfulChange = !candidateTerms(
+            oldFragment: baselineFragment,
+            newFragment: finalFragment
+        ).isEmpty
         let baselineChars = Array(baselineText)
         let finalChars = Array(finalText)
         let editRatio = Double(max(summary.baselineChangedCharacterCount, summary.finalChangedCharacterCount))
@@ -713,7 +754,285 @@ enum AutomaticDictionaryLearningMonitor {
             editRatio: editRatio,
             hasMeaningfulChange: hasMeaningfulChange,
             containsDeletionOnlyChangeGroup: summary.containsDeletionOnlyChangeGroup
+                || containsSemanticDeletionOnlyChangeGroup(baselineText: baselineText, finalText: finalText)
         )
+    }
+
+    private static func typefluxChangeSummary(
+        baselineText: String,
+        finalText: String
+    ) -> SemanticChangeSummary {
+        guard baselineText != finalText else {
+            return SemanticChangeSummary(
+                baselineRange: NSRange(location: 0, length: 0),
+                finalRange: NSRange(location: 0, length: 0),
+                baselineFragment: "",
+                finalFragment: "",
+                baselineChangedCharacterCount: 0,
+                finalChangedCharacterCount: 0,
+                containsDeletionOnlyChangeGroup: false
+            )
+        }
+
+        let baselineCharacters = Array(baselineText)
+        let finalCharacters = Array(finalText)
+        let sharedPrefixCount = commonPrefixCount(baselineCharacters, finalCharacters)
+        let sharedSuffixCount = commonSuffixCount(
+            baselineCharacters,
+            finalCharacters,
+            excludingSharedPrefix: sharedPrefixCount
+        )
+
+        let baselineEnd = max(sharedPrefixCount, baselineCharacters.count - sharedSuffixCount)
+        let finalEnd = max(sharedPrefixCount, finalCharacters.count - sharedSuffixCount)
+        let baselineRange = expandChangedRange(
+            in: baselineCharacters,
+            start: sharedPrefixCount,
+            end: baselineEnd
+        )
+        let finalRange = expandChangedRange(
+            in: finalCharacters,
+            start: sharedPrefixCount,
+            end: finalEnd
+        )
+
+        let baselineFragment = String(baselineCharacters[baselineRange])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalFragment = String(finalCharacters[finalRange])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let containsDeletionOnlyChangeGroup = !baselineFragment.isEmpty && finalFragment.isEmpty
+
+        return SemanticChangeSummary(
+            baselineRange: NSRange(location: baselineRange.lowerBound, length: baselineRange.count),
+            finalRange: NSRange(location: finalRange.lowerBound, length: finalRange.count),
+            baselineFragment: baselineFragment,
+            finalFragment: finalFragment,
+            baselineChangedCharacterCount: baselineRange.count,
+            finalChangedCharacterCount: finalRange.count,
+            containsDeletionOnlyChangeGroup: containsDeletionOnlyChangeGroup
+        )
+    }
+
+    private static func candidateTerms(oldFragment: String, newFragment: String) -> [String] {
+        guard !newFragment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+
+        let previousTermSurfacesByNormalized = Dictionary(
+            grouping: tokenizeVocabularyCandidates(oldFragment),
+            by: normalizeVocabularyCandidate
+        ).mapValues { Set($0) }
+
+        return tokenizeVocabularyCandidates(newFragment)
+            .filter { term in
+                let previousSurfaces = previousTermSurfacesByNormalized[normalizeVocabularyCandidate(term)] ?? []
+                return !previousSurfaces.contains(term)
+            }
+            .uniquedPreservingOrder(by: normalizeVocabularyCandidate)
+            .prefix(8)
+            .map { $0 }
+    }
+
+    private static func tokenizeVocabularyCandidates(_ text: String) -> [String] {
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        let latinMatches: [String] = latinOrNumberRegex.matches(in: text, range: nsRange)
+            .compactMap { match -> String? in
+                guard let range = Range(match.range, in: text) else { return nil }
+                let token = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return isValidLatinOrNumberToken(token) ? token : nil
+            }
+        let hanMatches: [String] = hanRegex.matches(in: text, range: nsRange)
+            .compactMap { match -> String? in
+                guard let range = Range(match.range, in: text) else { return nil }
+                let token = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return isValidHanToken(token) ? token : nil
+            }
+
+        return (latinMatches + hanMatches).uniquedPreservingOrder(by: normalizeVocabularyCandidate)
+    }
+
+    private static func isValidLatinOrNumberToken(_ token: String) -> Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 3, trimmed.count <= 32 else { return false }
+        return trimmed.rangeOfCharacter(from: .letters) != nil
+    }
+
+    private static func isValidHanToken(_ token: String) -> Bool {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count >= 2 && trimmed.count <= 12
+    }
+
+    private static func editRatio(
+        inserted: String,
+        baseline: String,
+        final: String,
+        maxLengthForExactComputation: Int = 2000
+    ) -> Double {
+        let insertedNorm = normalizeVocabularyCandidate(inserted)
+        guard !insertedNorm.isEmpty else { return 0 }
+        let baselineNorm = normalizeVocabularyCandidate(baseline)
+        let finalNorm = normalizeVocabularyCandidate(final)
+        if baselineNorm == finalNorm { return 0 }
+        if max(baselineNorm.count, finalNorm.count) > maxLengthForExactComputation {
+            return 1
+        }
+        let distance = levenshteinDistance(Array(baselineNorm), Array(finalNorm))
+        return Double(distance) / Double(insertedNorm.count)
+    }
+
+    private static func levenshteinDistance(_ lhs: [Character], _ rhs: [Character]) -> Int {
+        if lhs.isEmpty { return rhs.count }
+        if rhs.isEmpty { return lhs.count }
+
+        var previous = Array(0...rhs.count)
+        var current = Array(repeating: 0, count: rhs.count + 1)
+
+        for i in 1...lhs.count {
+            current[0] = i
+            for j in 1...rhs.count {
+                let cost = lhs[i - 1] == rhs[j - 1] ? 0 : 1
+                current[j] = Swift.min(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + cost
+                )
+            }
+            swap(&previous, &current)
+        }
+
+        return previous[rhs.count]
+    }
+
+    private static func isPureAppendAfterBaseline(baseline: String, final: String) -> Bool {
+        guard final.hasPrefix(baseline), final.count > baseline.count else {
+            return false
+        }
+        guard let lastBaselineCharacter = baseline.last,
+              let firstSuffixCharacter = final.dropFirst(baseline.count).first else {
+            return false
+        }
+
+        let baselineKind = tokenKind(for: lastBaselineCharacter)
+        let suffixKind = tokenKind(for: firstSuffixCharacter)
+        if baselineKind != .none, baselineKind == suffixKind {
+            return false
+        }
+        return true
+    }
+
+    nonisolated private static func normalizeVocabularyCandidate(_ term: String) -> String {
+        term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func containsSemanticDeletionOnlyChangeGroup(
+        baselineText: String,
+        finalText: String
+    ) -> Bool {
+        let baselineTokens = semanticTokens(in: baselineText)
+        let finalTokens = semanticTokens(in: finalText)
+        let matches = longestCommonSubsequenceMatches(
+            baselineTokens: baselineTokens,
+            finalTokens: finalTokens
+        )
+        return semanticChangeGroups(
+            baselineCount: baselineTokens.count,
+            finalCount: finalTokens.count,
+            matches: matches
+        ).contains { group in
+            group.baselineStartToken != nil && group.finalStartToken == nil
+        }
+    }
+
+    private static func commonPrefixCount(_ lhs: [Character], _ rhs: [Character]) -> Int {
+        let limit = min(lhs.count, rhs.count)
+        var count = 0
+        while count < limit, lhs[count] == rhs[count] {
+            count += 1
+        }
+        return count
+    }
+
+    private static func commonSuffixCount(
+        _ lhs: [Character],
+        _ rhs: [Character],
+        excludingSharedPrefix sharedPrefixCount: Int
+    ) -> Int {
+        let lhsRemaining = lhs.count - sharedPrefixCount
+        let rhsRemaining = rhs.count - sharedPrefixCount
+        let limit = min(lhsRemaining, rhsRemaining)
+        guard limit > 0 else { return 0 }
+
+        var count = 0
+        while count < limit,
+              lhs[lhs.count - 1 - count] == rhs[rhs.count - 1 - count] {
+            count += 1
+        }
+        return count
+    }
+
+    private static func expandChangedRange(
+        in characters: [Character],
+        start: Int,
+        end: Int
+    ) -> Range<Int> {
+        guard !characters.isEmpty else { return start..<end }
+
+        var lowerBound = max(0, min(start, characters.count))
+        var upperBound = max(lowerBound, min(end, characters.count))
+
+        let anchorIndex: Int?
+        if lowerBound < upperBound {
+            anchorIndex = lowerBound
+        } else if lowerBound < characters.count, tokenKind(for: characters[lowerBound]) != .none {
+            anchorIndex = lowerBound
+            upperBound = lowerBound + 1
+        } else if lowerBound > 0, tokenKind(for: characters[lowerBound - 1]) != .none {
+            anchorIndex = lowerBound - 1
+            lowerBound -= 1
+            upperBound = max(upperBound, lowerBound + 1)
+        } else {
+            anchorIndex = nil
+        }
+
+        guard let anchorIndex else { return lowerBound..<upperBound }
+        let kind = tokenKind(for: characters[anchorIndex])
+        guard kind != .none else { return lowerBound..<upperBound }
+
+        while lowerBound > 0, tokenKind(for: characters[lowerBound - 1]) == kind {
+            lowerBound -= 1
+        }
+
+        while upperBound < characters.count, tokenKind(for: characters[upperBound]) == kind {
+            upperBound += 1
+        }
+
+        return lowerBound..<upperBound
+    }
+
+    private static func tokenKind(for character: Character) -> TokenKind {
+        if isLatinOrNumberTokenCharacter(character) {
+            return .latinOrNumber
+        }
+        if isHanCharacter(character) {
+            return .han
+        }
+        return .none
+    }
+
+    private static func isLatinOrNumberTokenCharacter(_ character: Character) -> Bool {
+        guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first else {
+            return false
+        }
+
+        if CharacterSet.alphanumerics.contains(scalar) {
+            return true
+        }
+
+        return "._+-'".unicodeScalars.contains(scalar)
+    }
+
+    private static func isHanCharacter(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
     }
 
     private static func semanticChangeSummary(
@@ -1803,5 +2122,16 @@ enum AutomaticDictionaryLearningMonitor {
             line = ""
         }
         return line.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension [String] {
+    func uniquedPreservingOrder(by transform: (String) -> String) -> [String] {
+        var seen = Set<String>()
+        return filter { value in
+            let key = transform(value)
+            guard !key.isEmpty, seen.insert(key).inserted else { return false }
+            return true
+        }
     }
 }

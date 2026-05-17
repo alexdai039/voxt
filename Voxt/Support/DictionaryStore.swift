@@ -4,6 +4,8 @@ import Combine
 enum DictionaryEntrySource: String, Codable, CaseIterable {
     case manual
     case auto
+    case codex
+    case claude
 
     var titleKey: String {
         switch self {
@@ -11,6 +13,10 @@ enum DictionaryEntrySource: String, Codable, CaseIterable {
             return "Manual"
         case .auto:
             return "Auto"
+        case .codex:
+            return "Codex"
+        case .claude:
+            return "Claude"
         }
     }
 }
@@ -311,6 +317,18 @@ struct DictionaryImportResult: Equatable {
     let skippedCount: Int
 }
 
+struct DictionaryEntryUpsertResult: Equatable {
+    let term: String
+    let added: Bool
+    let reinforcedCount: Int
+}
+
+struct DictionaryProjectImportResult: Equatable {
+    let addedCount: Int
+    let reinforcedCount: Int
+    let skippedCount: Int
+}
+
 enum DictionaryStoreError: LocalizedError {
     case emptyTerm
     case duplicateTerm
@@ -539,6 +557,21 @@ final class DictionaryStore: ObservableObject {
         )
     }
 
+    func createOrReinforceManualEntry(
+        term: String,
+        replacementTerms: [String] = [],
+        groupID: UUID?,
+        groupNameSnapshot: String?
+    ) throws -> DictionaryEntryUpsertResult {
+        try createOrReinforceEntry(
+            term: term,
+            replacementTerms: replacementTerms,
+            groupID: groupID,
+            groupNameSnapshot: groupNameSnapshot,
+            source: .manual
+        )
+    }
+
     func createAutoEntry(
         term: String,
         replacementTerms: [String] = [],
@@ -546,6 +579,21 @@ final class DictionaryStore: ObservableObject {
         groupNameSnapshot: String?
     ) throws {
         try createEntry(
+            term: term,
+            replacementTerms: replacementTerms,
+            groupID: groupID,
+            groupNameSnapshot: groupNameSnapshot,
+            source: .auto
+        )
+    }
+
+    func createOrReinforceAutoEntry(
+        term: String,
+        replacementTerms: [String] = [],
+        groupID: UUID?,
+        groupNameSnapshot: String?
+    ) throws -> DictionaryEntryUpsertResult {
+        try createOrReinforceEntry(
             term: term,
             replacementTerms: replacementTerms,
             groupID: groupID,
@@ -581,6 +629,42 @@ final class DictionaryStore: ObservableObject {
         updatedEntries.insert(entry, at: 0)
         try upsertPersistedEntry(entry)
         replaceEntries(updatedEntries)
+    }
+
+    private func createOrReinforceEntry(
+        term: String,
+        replacementTerms: [String],
+        groupID: UUID?,
+        groupNameSnapshot: String?,
+        source: DictionaryEntrySource
+    ) throws -> DictionaryEntryUpsertResult {
+        let trimmedTerm = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = Self.normalizeTerm(trimmedTerm)
+        guard !trimmedTerm.isEmpty, !normalized.isEmpty else {
+            throw DictionaryStoreError.emptyTerm
+        }
+
+        if let existingIndex = existingTermIndex(normalizedTerm: normalized, groupID: groupID) {
+            let reinforcedEntry = reinforceEntry(at: existingIndex, by: 1)
+            return DictionaryEntryUpsertResult(
+                term: reinforcedEntry.term,
+                added: false,
+                reinforcedCount: 1
+            )
+        }
+
+        try createEntry(
+            term: term,
+            replacementTerms: replacementTerms,
+            groupID: groupID,
+            groupNameSnapshot: groupNameSnapshot,
+            source: source
+        )
+        return DictionaryEntryUpsertResult(
+            term: trimmedTerm,
+            added: true,
+            reinforcedCount: 0
+        )
     }
 
     func updateEntry(
@@ -631,6 +715,81 @@ final class DictionaryStore: ObservableObject {
     func importTransferJSONString(_ json: String) throws -> DictionaryImportResult {
         let payload = try DictionaryTransferManager.importPayload(from: json)
         return importTransferEntries(payload.entries)
+    }
+
+    func importProjectTerms(_ terms: [String], source: DictionaryEntrySource) -> DictionaryProjectImportResult {
+        var mergedEntries = entries
+        var importValidationIndex = DictionaryValidationIndex(entries: mergedEntries)
+        var addedCount = 0
+        var reinforcedCount = 0
+        var skippedCount = 0
+
+        for term in terms {
+            let trimmedTerm = term.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = Self.normalizeTerm(trimmedTerm)
+            guard !trimmedTerm.isEmpty, !normalized.isEmpty else {
+                skippedCount += 1
+                continue
+            }
+
+            if let existingIndex = mergedEntries.firstIndex(where: { entry in
+                entry.groupID == nil && entry.normalizedTerm == normalized
+            }) {
+                let now = Date()
+                mergedEntries[existingIndex].matchCount += 1
+                mergedEntries[existingIndex].lastMatchedAt = now
+                mergedEntries[existingIndex].updatedAt = now
+                reinforcedCount += 1
+                continue
+            }
+
+            do {
+                let prepared = try prepareEntryInput(
+                    term: trimmedTerm,
+                    replacementTerms: [],
+                    groupID: nil,
+                    validationIndex: importValidationIndex
+                )
+                let now = Date()
+                let entry = DictionaryEntry(
+                    term: prepared.display,
+                    normalizedTerm: prepared.normalized,
+                    groupID: nil,
+                    groupNameSnapshot: nil,
+                    source: source,
+                    createdAt: now,
+                    updatedAt: now,
+                    replacementTerms: []
+                )
+                mergedEntries.append(entry)
+                importValidationIndex.insert(entry)
+                addedCount += 1
+            } catch {
+                skippedCount += 1
+            }
+        }
+
+        let changedEntries = Dictionary(
+            uniqueKeysWithValues: mergedEntries.map { ($0.id, $0) }
+        )
+        let updatedEntries = entries.compactMap { originalEntry -> DictionaryEntry? in
+            guard let updatedEntry = changedEntries[originalEntry.id],
+                  updatedEntry != originalEntry else {
+                return nil
+            }
+            return updatedEntry
+        }
+        replaceEntries(mergedEntries)
+        if addedCount > 0 || skippedCount > 0 {
+            persist()
+        } else if reinforcedCount > 0 {
+            persistEntries(updatedEntries)
+        }
+        return DictionaryProjectImportResult(
+            addedCount: addedCount,
+            reinforcedCount: reinforcedCount,
+            skippedCount: skippedCount
+        )
     }
 
     func makeMatcherIfEnabled(for text: String, activeGroupID: UUID?) -> DictionaryMatcher? {
@@ -700,6 +859,41 @@ final class DictionaryStore: ObservableObject {
 
     func activeEntriesAcrossAllScopesForRemoteSync() -> [DictionaryEntry] {
         return entries.filter { $0.status == .active }
+    }
+
+    @discardableResult
+    func incrementOccurrences(in text: String, activeGroupID: UUID?) -> [String] {
+        let normalizedSource = Self.normalizeTerm(text)
+        guard !normalizedSource.isEmpty else { return [] }
+
+        let activeEntries = activeEntriesForRemoteRequest(activeGroupID: activeGroupID, limit: 5_000)
+        var incrementsByID: [UUID: Int] = [:]
+        for entry in activeEntries {
+            let needles = [entry.normalizedTerm] + entry.replacementTerms.map(\.normalizedText)
+            guard needles.contains(where: { sourceContainsNeedle($0, normalizedSource: normalizedSource) }) else {
+                continue
+            }
+            incrementsByID[entry.id, default: 0] += 1
+        }
+
+        guard !incrementsByID.isEmpty else { return [] }
+        let now = Date()
+        var updatedEntries = entries
+        var changedEntries: [DictionaryEntry] = []
+        var reinforcedTerms: [String] = []
+        for (entryID, count) in incrementsByID {
+            guard let index = updatedEntries.firstIndex(where: { $0.id == entryID }) else { continue }
+            updatedEntries[index].matchCount += count
+            updatedEntries[index].lastMatchedAt = now
+            updatedEntries[index].updatedAt = now
+            changedEntries.append(updatedEntries[index])
+            reinforcedTerms.append(updatedEntries[index].term)
+        }
+
+        guard !changedEntries.isEmpty else { return [] }
+        replaceEntries(updatedEntries)
+        persistEntries(changedEntries)
+        return reinforcedTerms.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     func recordMatches(_ candidates: [DictionaryMatchCandidate]) {
@@ -812,6 +1006,25 @@ final class DictionaryStore: ObservableObject {
         return DictionaryImportResult(addedCount: addedCount, skippedCount: skippedCount)
     }
 
+    private func existingTermIndex(normalizedTerm: String, groupID: UUID?) -> Int? {
+        entries.firstIndex { entry in
+            entry.groupID == groupID && entry.normalizedTerm == normalizedTerm
+        }
+    }
+
+    @discardableResult
+    private func reinforceEntry(at index: Int, by count: Int) -> DictionaryEntry {
+        let now = Date()
+        var updatedEntries = entries
+        updatedEntries[index].matchCount += count
+        updatedEntries[index].lastMatchedAt = now
+        updatedEntries[index].updatedAt = now
+        let updatedEntry = updatedEntries[index]
+        replaceEntries(updatedEntries)
+        persistEntry(updatedEntry)
+        return updatedEntry
+    }
+
     private func recordCandidates(_ candidates: [DictionaryMatchCandidate]) -> [DictionaryEntry] {
         guard !candidates.isEmpty else { return [] }
         let now = Date()
@@ -885,6 +1098,57 @@ final class DictionaryStore: ObservableObject {
             .high: 2
         ]
         return (rank[lhs] ?? 0) >= (rank[rhs] ?? 0) ? lhs : rhs
+    }
+
+    private func sourceContainsNeedle(_ needle: String, normalizedSource: String) -> Bool {
+        let normalizedNeedle = Self.normalizeTerm(needle)
+        guard !normalizedNeedle.isEmpty else { return false }
+
+        var searchRange: Range<String.Index>? = normalizedSource.startIndex..<normalizedSource.endIndex
+        while let range = normalizedSource.range(of: normalizedNeedle, options: [], range: searchRange) {
+            if hasValidBoundary(
+                before: range.lowerBound,
+                after: range.upperBound,
+                needle: normalizedNeedle,
+                source: normalizedSource
+            ) {
+                return true
+            }
+            searchRange = range.upperBound..<normalizedSource.endIndex
+        }
+        return false
+    }
+
+    private func hasValidBoundary(
+        before lowerBound: String.Index,
+        after upperBound: String.Index,
+        needle: String,
+        source: String
+    ) -> Bool {
+        let needsLeadingBoundary = needle.unicodeScalars.first.map(Self.isASCIIAlphaNumeric) ?? false
+        let needsTrailingBoundary = needle.unicodeScalars.last.map(Self.isASCIIAlphaNumeric) ?? false
+
+        if needsLeadingBoundary,
+           lowerBound > source.startIndex,
+           let previous = source[..<lowerBound].unicodeScalars.last,
+           Self.isASCIIAlphaNumeric(previous) {
+            return false
+        }
+
+        if needsTrailingBoundary,
+           upperBound < source.endIndex,
+           let next = source[upperBound...].unicodeScalars.first,
+           Self.isASCIIAlphaNumeric(next) {
+            return false
+        }
+
+        return true
+    }
+
+    private nonisolated static func isASCIIAlphaNumeric(_ scalar: UnicodeScalar) -> Bool {
+        (65...90).contains(Int(scalar.value))
+            || (97...122).contains(Int(scalar.value))
+            || (48...57).contains(Int(scalar.value))
     }
 
     private func persist() {

@@ -555,6 +555,18 @@ extension AppDelegate {
                     dictionarySuggestedTerms: dictionarySuggestions.map(\.snapshot)
                 )
                 self.overlayState.latestHistoryEntryID = historyEntryID
+                if didInject {
+                    let dictionaryScope = self.currentDictionaryScope()
+                    let reinforcedTerms = self.dictionaryStore.incrementOccurrences(
+                        in: deliveredText,
+                        activeGroupID: dictionaryScope.groupID
+                    )
+                    if !reinforcedTerms.isEmpty {
+                        VoxtLog.info(
+                            "Dictionary occurrences reinforced from delivered text. terms=\(reinforcedTerms.joined(separator: ", "))"
+                        )
+                    }
+                }
                 self.scheduleAutomaticDictionaryLearningIfNeeded(
                     insertedText: deliveredText,
                     outputMode: outputMode,

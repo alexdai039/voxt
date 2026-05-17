@@ -101,6 +101,86 @@ final class ModelDebugSupportTests: XCTestCase {
         XCTAssertEqual(resolved.inputSummary, "Discuss launch blockers")
     }
 
+    func testRuntimeInputsExposeTaskTextSeparatelyFromPromptVariables() {
+        let enhancement = LLMDebugPresetOption(
+            id: "builtin:enhancement",
+            title: "Enhancement",
+            subtitle: "Built-in preset",
+            kind: .enhancement,
+            promptTemplate: AppPromptDefaults.text(for: .enhancement, language: .english),
+            variables: ModelSettingsPromptVariables.enhancement,
+            defaultValues: [:]
+        )
+        let translation = LLMDebugPresetOption(
+            id: "builtin:translation",
+            title: "Translation",
+            subtitle: "Built-in preset",
+            kind: .translation,
+            promptTemplate: AppPromptDefaults.text(for: .translation, language: .english),
+            variables: ModelSettingsPromptVariables.translation,
+            defaultValues: [:]
+        )
+        let rewrite = LLMDebugPresetOption(
+            id: "builtin:rewrite",
+            title: "Rewrite",
+            subtitle: "Built-in preset",
+            kind: .rewrite,
+            promptTemplate: AppPromptDefaults.text(for: .rewrite, language: .english),
+            variables: ModelSettingsPromptVariables.rewrite,
+            defaultValues: [:]
+        )
+
+        XCTAssertTrue(enhancement.runtimeInputDescriptors.contains(where: { $0.token == AppDelegate.rawTranscriptionTemplateVariable }))
+        XCTAssertFalse(enhancement.variables.contains(where: { $0.token == AppDelegate.rawTranscriptionTemplateVariable }))
+        XCTAssertTrue(translation.runtimeInputDescriptors.contains(where: { $0.token == "{{SOURCE_TEXT}}" }))
+        XCTAssertFalse(translation.variables.contains(where: { $0.token == "{{SOURCE_TEXT}}" }))
+        XCTAssertTrue(rewrite.runtimeInputDescriptors.contains(where: { $0.token == "{{DICTATED_PROMPT}}" }))
+        XCTAssertTrue(rewrite.runtimeInputDescriptors.contains(where: { $0.token == "{{SOURCE_TEXT}}" }))
+        XCTAssertTrue(rewrite.variables.isEmpty)
+    }
+
+    func testAppGroupDebugPresetInjectsRuntimeRawTranscriptionIntoCompiledPrompt() throws {
+        let suiteName = "ModelDebugSupportTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let groupID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+        let groups = [
+            AppBranchGroup(
+                id: groupID,
+                name: "Chrome",
+                prompt: "Clean browser dictation for {{USER_MAIN_LANGUAGE}}.",
+                appBundleIDs: ["com.google.Chrome"],
+                appRefs: [AppBranchAppRef(bundleID: "com.google.Chrome", displayName: "Chrome")],
+                urlPatternIDs: [],
+                isExpanded: true
+            )
+        ]
+        defaults.set(try JSONEncoder().encode(groups), forKey: AppPreferenceKey.appBranchGroups)
+        defaults.set("en", forKey: AppPreferenceKey.userMainLanguageCodes)
+
+        let preset = try XCTUnwrap(
+            ModelDebugCatalog.availableLLMPresets(defaults: defaults)
+                .first(where: { $0.id == "group:\(groupID.uuidString)" })
+        )
+        let resolved = ModelDebugPromptResolver.resolve(
+            preset: preset,
+            values: [
+                AppDelegate.rawTranscriptionTemplateVariable: "raw browser asr",
+                AppDelegate.userMainLanguageTemplateVariable: "English"
+            ],
+            defaults: defaults
+        )
+
+        let compiled = try XCTUnwrap(resolved.compiledRequest)
+        XCTAssertTrue(preset.runtimeInputDescriptors.contains(where: { $0.token == AppDelegate.rawTranscriptionTemplateVariable }))
+        XCTAssertContains(compiled.instructions, "Clean browser dictation")
+        XCTAssertContains(compiled.prompt, "raw browser asr")
+        XCTAssertFalse(compiled.instructions.contains("raw browser asr"))
+    }
+
     func testPromptResolverBuildsCompiledEnhancementRequestForDefaultPrompt() {
         let preset = LLMDebugPresetOption(
             id: "builtin:enhancement",

@@ -282,12 +282,12 @@ enum AppPreferenceKey {
     static let automaticDictionaryLearningFinalFragmentTemplateVariable = "{{AFTER_EDIT}}"
     static let automaticDictionaryLearningExistingTermsTemplateVariable = "{{EXISTING}}"
     static let defaultAutomaticDictionaryLearningPrompt = """
-        You review a dictation correction and decide which vocabulary terms should be added to a speech dictionary.
+        You are a strict classifier for speech-dictionary learning. Decide whether a user's post-insertion edit reveals stable vocabulary that should be remembered for future ASR.
 
         User main language: {{USER_MAIN_LANGUAGE}}
         User other languages: {{USER_OTHER_LANGUAGES}}
 
-        Original inserted text:
+        Original text inserted by Voxt:
         <inserted_text>
         {{INSERTED}}
         </inserted_text>
@@ -317,13 +317,26 @@ enum AppPreferenceKey {
         {{EXISTING}}
         </existing_terms>
 
-        Return only vocabulary terms worth adding to the dictionary. Prefer durable proper nouns, product names, company names, personal names, technical terms, and uncommon domain terminology that appear in the final corrected text.
+        Task:
+        Return only corrected vocabulary terms that are worth adding to the speech dictionary. If a <candidate_terms> section is present, treat it as suggested evidence from the diff and keep only the terms that satisfy the rules below.
+
+        Accept:
+        - Proper nouns, app/product/company names, people names, stable project names, acronyms, code/API names, model names, and uncommon domain terms.
+        - Corrected spellings, capitalization, spacing, symbols, or homophones that matter for recognition, such as JWT, Redis, Session, INFO, Doubao, WhisperKit, MLX.
+        - Short Chinese domain terms or mixed Chinese/English terms when they are specific and reusable.
+
+        Reject:
+        - Common words, filler words, whole sentences, broad phrases, and ordinary formatting-only changes.
+        - Date, time, number, percentage, and unit formatting changes unless the final token is a stable named term.
+        - Terms already present in <existing_terms>.
+        - Mistaken forms from the inserted text. Always return the final corrected surface.
 
         Rules:
-        1. Return an empty array if the user only appended more text, made unrelated edits, or corrected punctuation or casing only.
-        2. Do not return common words, filler, whole sentences, or long phrases.
-        3. Do not return anything already present in the existing dictionary list.
-        4. Use the final corrected form, not the mistaken form.
+        1. Return at most 3 terms.
+        2. Prefer the shortest reusable term over a sentence span.
+        3. Keep original casing, spacing, punctuation, and symbols exactly as they should appear in the dictionary.
+        4. Return [] if there is no durable vocabulary term to learn.
+
         Output strict JSON as an array of objects with this exact shape:
         [{"term":"Example"}]
         """

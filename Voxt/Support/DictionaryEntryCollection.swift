@@ -1,6 +1,9 @@
 import Foundation
 
 enum DictionaryEntryCollection {
+    static let asrPromptTermLimit = 500
+    static let asrPromptCharacterLimit = 8_000
+
     static func sortedEntries(_ values: [DictionaryEntry]) -> [DictionaryEntry] {
         values.sorted {
             if $0.updatedAt == $1.updatedAt {
@@ -109,6 +112,19 @@ enum DictionaryEntryCollection {
         return selectedTerms.joined(separator: "\n")
     }
 
+    static func asrPromptTermsText(
+        from entries: [DictionaryEntry],
+        maxCount: Int = asrPromptTermLimit,
+        maxCharacters: Int = asrPromptCharacterLimit
+    ) -> String {
+        let candidates = entries.filter { $0.status == .active }
+        return rankedTermsText(
+            from: candidates,
+            maxCount: maxCount,
+            maxCharacters: maxCharacters
+        )
+    }
+
     static func matcherConfiguration(
         for entries: [DictionaryEntry],
         activeGroupID: UUID?
@@ -121,5 +137,57 @@ enum DictionaryEntryCollection {
         let scoped = entries.filter { $0.status == .active && $0.groupID == activeGroupID }
         let blockedKeys = Set(scoped.flatMap(\.matchKeys))
         return (scoped + globals, blockedKeys)
+    }
+
+    private static func rankedTermsText(
+        from entries: [DictionaryEntry],
+        maxCount: Int,
+        maxCharacters: Int
+    ) -> String {
+        guard !entries.isEmpty, maxCount > 0, maxCharacters > 0 else { return "" }
+
+        let sortedCandidates = entries.sorted {
+            if $0.matchCount != $1.matchCount {
+                return $0.matchCount > $1.matchCount
+            }
+            switch ($0.lastMatchedAt, $1.lastMatchedAt) {
+            case let (lhs?, rhs?) where lhs != rhs:
+                return lhs > rhs
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            default:
+                break
+            }
+            if $0.updatedAt != $1.updatedAt {
+                return $0.updatedAt > $1.updatedAt
+            }
+            return $0.term.localizedCaseInsensitiveCompare($1.term) == .orderedAscending
+        }
+
+        var seen = Set<String>()
+        var selectedTerms: [String] = []
+        var totalCharacters = 0
+
+        for entry in sortedCandidates {
+            let trimmed = entry.term.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            guard seen.insert(entry.normalizedTerm).inserted else { continue }
+
+            let projectedCharacters = totalCharacters + trimmed.count + (selectedTerms.isEmpty ? 0 : 1)
+            if !selectedTerms.isEmpty && projectedCharacters > maxCharacters {
+                break
+            }
+
+            selectedTerms.append(trimmed)
+            totalCharacters = projectedCharacters
+
+            if selectedTerms.count >= maxCount || totalCharacters >= maxCharacters {
+                break
+            }
+        }
+
+        return selectedTerms.joined(separator: "\n")
     }
 }

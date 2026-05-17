@@ -54,6 +54,7 @@ enum TestFactories {
         ollamaOptionsJSON: String = "",
         codexAuthFilePath: String = "",
         codexAuthFileBookmark: Data? = nil,
+        codexFastModeEnabled: Bool = false,
         generationSettings: LLMGenerationSettings? = nil
     ) -> RemoteProviderConfiguration {
         RemoteProviderConfiguration(
@@ -79,6 +80,7 @@ enum TestFactories {
             ollamaOptionsJSON: ollamaOptionsJSON,
             codexAuthFilePath: codexAuthFilePath,
             codexAuthFileBookmark: codexAuthFileBookmark,
+            codexFastModeEnabled: codexFastModeEnabled,
             generationSettings: generationSettings
         )
     }

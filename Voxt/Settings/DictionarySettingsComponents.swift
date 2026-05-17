@@ -27,78 +27,57 @@ struct DictionaryFilterPicker: View {
 
 struct DictionaryRow: View {
     let entry: DictionaryEntry
-    let scopeLabel: String
-    let scopeIsMissing: Bool
     let onEdit: () -> Void
     let onDelete: () -> Void
 
+    @State private var isHovering = false
+    @State private var isDeleteHovering = false
+
     var body: some View {
-        DictionaryListRowContainer(
-            content: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.term)
-                        .font(.body.weight(.medium))
-                        .lineLimit(1)
-                        .textSelection(.enabled)
-
-                    HStack(spacing: 6) {
-                        DictionaryCapsuleBadge(
-                            title: LocalizedStringKey(entry.source.titleKey),
-                            fill: entry.source == .manual ? Color.accentColor.opacity(0.15) : Color.orange.opacity(0.15),
-                            foreground: entry.source == .manual ? Color.accentColor : Color.orange
-                        )
-                        DictionaryCapsuleBadge(
-                            title: scopeLabel,
-                            fill: scopeIsMissing ? Color.red.opacity(0.14) : Color.secondary.opacity(0.12),
-                            foreground: scopeIsMissing ? Color.red : Color.secondary
-                        )
-                        Text(metadataText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            },
-            actions: {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
-                .help(localized("Edit"))
-
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle(tone: .destructive))
-                .help(localized("Delete"))
-            }
-        )
-    }
-
-    private var metadataText: String {
-        var parts: [String] = []
-        if entry.matchCount > 0 {
-            parts.append(AppLocalization.format("Matched %d times", entry.matchCount))
+        HStack(spacing: 8) {
+            Text(entry.term)
+                .font(.system(size: 12.5, weight: .regular))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 28)
         }
-        if !entry.replacementTerms.isEmpty {
-            parts.append(AppLocalization.format("Aliases %d", entry.replacementTerms.count))
-        }
-        if let lastMatchedAt = entry.lastMatchedAt {
-            parts.append(
-                AppLocalization.format(
-                    "Last matched %@",
-                    Self.timestampFormatter.localizedString(for: lastMatchedAt, relativeTo: Date())
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 32, alignment: .center)
+        .contentShape(Rectangle())
+        .settingsCardSurface(cornerRadius: SettingsUIStyle.compactCornerRadius, fillOpacity: 1)
+        .brightness(isHovering ? 0.035 : 0)
+        .overlay {
+            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                .strokeBorder(
+                    Color.accentColor.opacity(isHovering ? 0.42 : 0),
+                    lineWidth: 1
                 )
-            )
         }
-        return parts.joined(separator: " · ")
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .onTapGesture(perform: onEdit)
+        .overlay(alignment: .topTrailing) {
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isDeleteHovering ? Color.red : Color.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Circle()
+                            .fill(Color.red.opacity(isDeleteHovering ? 0.12 : 0))
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(localized("Delete"))
+            .onHover { hovering in
+                isDeleteHovering = hovering
+            }
+            .padding(6)
+        }
     }
-
-    private static let timestampFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter
-    }()
 }
 
 struct DictionarySuggestionRow: View {

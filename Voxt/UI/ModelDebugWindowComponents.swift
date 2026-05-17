@@ -328,10 +328,10 @@ struct LLMDebugPromptSettingsSheet: View {
                     let variableWidth = max(160, proxy.size.width * 0.3)
                     HStack(alignment: .top, spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(modelDebugLocalized("Variables"))
+                            Text(modelDebugLocalized("Runtime Input"))
                                 .font(.subheadline.weight(.medium))
                             LLMDebugVariableEditor(
-                                descriptors: preset.variables,
+                                descriptors: preset.runtimeInputDescriptors,
                                 values: $variableValues
                             )
                             Spacer(minLength: 0)
@@ -344,7 +344,8 @@ struct LLMDebugPromptSettingsSheet: View {
                             PromptEditorView(
                                 text: $draftPrompt,
                                 height: 310,
-                                variables: []
+                                variables: preset.variables,
+                                variablesTitle: modelDebugLocalized("Prompt variables")
                             )
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)

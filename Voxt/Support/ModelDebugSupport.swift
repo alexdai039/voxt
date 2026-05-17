@@ -45,6 +45,56 @@ struct LLMDebugPresetOption: Identifiable, Hashable {
     let defaultValues: [String: String]
 }
 
+extension LLMDebugPresetOption {
+    var runtimeInputDescriptors: [PromptTemplateVariableDescriptor] {
+        switch kind {
+        case .custom:
+            return []
+        case .enhancement, .appGroup:
+            return [
+                PromptTemplateVariableDescriptor(
+                    token: AppDelegate.rawTranscriptionTemplateVariable,
+                    tipKey: "Template tip {{RAW_TRANSCRIPTION}}"
+                ),
+                PromptTemplateVariableDescriptor(
+                    token: AppDelegate.userMainLanguageTemplateVariable,
+                    tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                )
+            ]
+        case .translation:
+            return [
+                PromptTemplateVariableDescriptor(
+                    token: "{{SOURCE_TEXT}}",
+                    tipKey: "Template tip {{SOURCE_TEXT}}"
+                ),
+                PromptTemplateVariableDescriptor(
+                    token: "{{TARGET_LANGUAGE}}",
+                    tipKey: "Template tip {{TARGET_LANGUAGE}}"
+                ),
+                PromptTemplateVariableDescriptor(
+                    token: AppDelegate.userMainLanguageTemplateVariable,
+                    tipKey: "Template tip {{USER_MAIN_LANGUAGE}}"
+                )
+            ]
+        case .rewrite:
+            return [
+                PromptTemplateVariableDescriptor(
+                    token: "{{DICTATED_PROMPT}}",
+                    tipKey: "Template tip {{DICTATED_PROMPT}}"
+                ),
+                PromptTemplateVariableDescriptor(
+                    token: "{{SOURCE_TEXT}}",
+                    tipKey: "Template tip {{SOURCE_TEXT}}"
+                )
+            ]
+        case .transcriptSummary:
+            return TranscriptSummarySupport.promptTemplateVariables.map {
+                PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
+            }
+        }
+    }
+}
+
 struct LLMDebugResolvedPrompt: Equatable {
     let content: String
     let inputSummary: String
@@ -336,6 +386,7 @@ enum ModelDebugCatalog {
                     promptTemplate: LLMDebugPresetStore.promptOverride(for: "group:\(group.id.uuidString)", defaults: defaults) ?? trimmedPrompt,
                     variables: ModelSettingsPromptVariables.appEnhancement,
                     defaultValues: [
+                        AppDelegate.rawTranscriptionTemplateVariable: "",
                         AppDelegate.userMainLanguageTemplateVariable: userMainLanguage
                     ]
                 )

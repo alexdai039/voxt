@@ -85,10 +85,7 @@ struct DictionaryEntriesCard: View {
     let visibleEntries: [DictionaryEntry]
     let totalEntryCount: Int
     let searchText: String
-    let dictionaryTransferMessage: String?
     let isLoadingEntries: Bool
-    let scopeLabel: (DictionaryEntry) -> String
-    let scopeIsMissing: (DictionaryEntry) -> Bool
     let onSearch: () -> Void
     let onClearSearch: () -> Void
     let onLoadMore: () -> Void
@@ -96,6 +93,8 @@ struct DictionaryEntriesCard: View {
     let onClearAll: () -> Void
     let onEdit: (DictionaryEntry) -> Void
     let onDelete: (DictionaryEntry) -> Void
+
+    private let columnCount = 3
 
     var body: some View {
         GroupBox {
@@ -144,29 +143,31 @@ struct DictionaryEntriesCard: View {
                         .foregroundStyle(.secondary)
                 } else {
                     PagedVerticalList(
-                        items: visibleEntries,
-                        totalCount: totalEntryCount,
-                        rowHeight: 56,
+                        items: entryRows,
+                        totalCount: totalRowCount,
+                        rowHeight: 34,
                         rowSpacing: 8,
                         isLoading: isLoadingEntries,
                         onLoadMore: onLoadMore
-                    ) { entry in
-                        DictionaryRow(
-                            entry: entry,
-                            scopeLabel: scopeLabel(entry),
-                            scopeIsMissing: scopeIsMissing(entry),
-                            onEdit: { onEdit(entry) },
-                            onDelete: { onDelete(entry) }
-                        )
+                    ) { row in
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(row.entries) { entry in
+                                DictionaryRow(
+                                    entry: entry,
+                                    onEdit: { onEdit(entry) },
+                                    onDelete: { onDelete(entry) }
+                                )
+                            }
+
+                            ForEach(0..<row.placeholderCount, id: \.self) { _ in
+                                Color.clear
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity, alignment: .top)
                 }
 
-                if let dictionaryTransferMessage, !dictionaryTransferMessage.isEmpty {
-                    Text(dictionaryTransferMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             .padding(8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -183,5 +184,33 @@ struct DictionaryEntriesCard: View {
 
     private var isSearchActive: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var entryRows: [DictionaryEntryGridRow] {
+        stride(from: 0, to: visibleEntries.count, by: columnCount).map { startIndex in
+            let endIndex = min(startIndex + columnCount, visibleEntries.count)
+            return DictionaryEntryGridRow(
+                entries: Array(visibleEntries[startIndex..<endIndex]),
+                columnCount: columnCount
+            )
+        }
+    }
+
+    private var totalRowCount: Int {
+        guard totalEntryCount > 0 else { return 0 }
+        return Int(ceil(Double(totalEntryCount) / Double(columnCount)))
+    }
+}
+
+private struct DictionaryEntryGridRow: Identifiable {
+    let entries: [DictionaryEntry]
+    let columnCount: Int
+
+    var id: String {
+        entries.map { $0.id.uuidString }.joined(separator: "-")
+    }
+
+    var placeholderCount: Int {
+        max(0, columnCount - entries.count)
     }
 }

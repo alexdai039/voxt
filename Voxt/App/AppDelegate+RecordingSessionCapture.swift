@@ -28,7 +28,7 @@ extension AppDelegate {
             guard let self else { return [] }
             return self.dictionaryStore.activeEntriesForRemoteRequest(
                 activeGroupID: self.activeDictionaryGroupID(),
-                limit: 64
+                limit: DictionaryEntryCollection.asrPromptTermLimit
             )
         }
         let sessionID = activeRecordingSessionID
@@ -97,7 +97,7 @@ extension AppDelegate {
             guard let self else { return [] }
             return self.dictionaryStore.activeEntriesForRemoteRequest(
                 activeGroupID: self.activeDictionaryGroupID(),
-                limit: 64
+                limit: DictionaryEntryCollection.asrPromptTermLimit
             )
         }
         let sessionID = activeRecordingSessionID
@@ -181,7 +181,7 @@ extension AppDelegate {
                 guard let self else { return [] }
                 return self.dictionaryStore.activeEntriesForRemoteRequest(
                     activeGroupID: self.activeDictionaryGroupID(),
-                    limit: 64
+                    limit: DictionaryEntryCollection.asrPromptTermLimit
                 )
             }
             self.remoteASRTranscriber.transcribedText = ""

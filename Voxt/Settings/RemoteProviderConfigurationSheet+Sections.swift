@@ -241,6 +241,17 @@ extension RemoteProviderConfigurationSheet {
         }
     }
 
+    var codexConfigurationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(AppLocalization.localizedString("Fast Mode"), isOn: $codexFastModeEnabled)
+                .toggleStyle(.switch)
+            Text(AppLocalization.localizedString("Requests Codex with priority service tier when the backend supports Fast mode."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     var advancedGenerationSettingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(AppLocalization.localizedString("Generation Settings"))

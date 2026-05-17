@@ -60,6 +60,7 @@ struct RemoteProviderConfigurationSheet: View {
     @State var omlxExtraBodyJSON = ""
     @State var codexAuthFilePath = ""
     @State var codexAuthFileBookmark: Data?
+    @State var codexFastModeEnabled = false
     @State var codexAuthFileSelectionError: String?
     @State var dynamicCodexModelOptions: [RemoteModelOption]?
     @State var isTestingConnection = false
@@ -89,6 +90,10 @@ struct RemoteProviderConfigurationSheet: View {
 
                     if !isDoubaoASRTest {
                         endpointAndKeySection
+                    }
+
+                    if isCodexLLMProvider {
+                        codexConfigurationSection
                     }
 
                     if showsSearchSection {
@@ -179,6 +184,7 @@ struct RemoteProviderConfigurationSheet: View {
             omlxExtraBodyJSON = configuration.omlxExtraBodyJSON
             codexAuthFilePath = configuration.codexAuthFilePath
             codexAuthFileBookmark = configuration.codexAuthFileBookmark
+            codexFastModeEnabled = configuration.codexFastModeEnabled
             loadCodexModelOptionsIfNeeded()
         }
     }

@@ -9,6 +9,7 @@ struct DictionaryTermDialogView: View {
     let availableGroups: [AppBranchGroup]
     let onCancel: () -> Void
     let onSave: (String, [String], UUID?) throws -> Void
+    let onSaveAndContinue: (String, [String], UUID?) throws -> Void
 
     @State private var draftTerm: String
     @State private var draftReplacementTermInput = ""
@@ -20,12 +21,14 @@ struct DictionaryTermDialogView: View {
         dialog: DictionaryDialog,
         availableGroups: [AppBranchGroup],
         onCancel: @escaping () -> Void,
-        onSave: @escaping (String, [String], UUID?) throws -> Void
+        onSave: @escaping (String, [String], UUID?) throws -> Void,
+        onSaveAndContinue: @escaping (String, [String], UUID?) throws -> Void
     ) {
         self.dialog = dialog
         self.availableGroups = availableGroups
         self.onCancel = onCancel
         self.onSave = onSave
+        self.onSaveAndContinue = onSaveAndContinue
 
         switch dialog {
         case .create:
@@ -119,12 +122,21 @@ struct DictionaryTermDialogView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button {
-                    save()
+                    save(shouldContinue: false)
                 } label: {
                     Text(verbatim: dialog.confirmButtonTitle)
                 }
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
+
+                if dialog.allowsSaveAndContinue {
+                    Button {
+                        save(shouldContinue: true)
+                    } label: {
+                        Text(verbatim: localizedDictionaryTermDialog("Confirm and Continue"))
+                    }
+                    .buttonStyle(SettingsPrimaryButtonStyle())
+                }
             }
         }
         .padding(20)
@@ -152,13 +164,24 @@ struct DictionaryTermDialogView: View {
         return availableGroups.first(where: { $0.id == selectedGroupID })?.name ?? localizedDictionaryTermDialog("Missing Group")
     }
 
-    private func save() {
+    private func save(shouldContinue: Bool) {
         do {
-            try onSave(draftTerm, draftReplacementTerms, selectedGroupID)
+            if shouldContinue {
+                try onSaveAndContinue(draftTerm, draftReplacementTerms, selectedGroupID)
+                resetForNextEntry()
+            } else {
+                try onSave(draftTerm, draftReplacementTerms, selectedGroupID)
+            }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func resetForNextEntry() {
+        draftTerm = ""
+        draftReplacementTermInput = ""
+        draftReplacementTerms = []
     }
 
     private func addDraftReplacementTerm() {
@@ -189,5 +212,16 @@ struct DictionaryTermDialogView: View {
         let normalized = DictionaryStore.normalizeTerm(value)
         draftReplacementTerms.removeAll { DictionaryStore.normalizeTerm($0) == normalized }
         errorMessage = nil
+    }
+}
+
+private extension DictionaryDialog {
+    var allowsSaveAndContinue: Bool {
+        switch self {
+        case .create:
+            return true
+        case .edit:
+            return false
+        }
     }
 }

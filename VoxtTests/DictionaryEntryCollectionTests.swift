@@ -78,6 +78,40 @@ final class DictionaryEntryCollectionTests: XCTestCase {
 
         XCTAssertEqual(bias, "Voxt\nGhostty")
     }
+
+    func testASRPromptTermsTextUsesTypefluxSizedLimitAndFrequencyRanking() {
+        let entries = (0..<40).map { index in
+            makeEntry(
+                term: "Term\(index)",
+                source: .manual,
+                matchCount: index,
+                updatedAt: Date(timeIntervalSince1970: TimeInterval(index))
+            )
+        }
+
+        let bias = DictionaryEntryCollection.asrPromptTermsText(
+            from: entries,
+            maxCount: 32,
+            maxCharacters: 10_000
+        )
+
+        let terms = bias.components(separatedBy: "\n")
+        XCTAssertEqual(terms.count, 32)
+        XCTAssertEqual(terms.first, "Term39")
+        XCTAssertEqual(terms.last, "Term8")
+    }
+
+    func testProjectDictionaryScannerExtractsDecoratedTerms() {
+        let terms = ProjectDictionaryScanner.candidateTerms(
+            in: "Use WhisperKit, MLXAudio and tmp/typeflux for VoxtProject.",
+            allowPlainLowercase: false
+        )
+
+        XCTAssertTrue(terms.contains("WhisperKit"))
+        XCTAssertTrue(terms.contains("MLXAudio"))
+        XCTAssertTrue(terms.contains("tmp/typeflux"))
+        XCTAssertTrue(terms.contains("VoxtProject"))
+    }
 }
 
 private extension DictionaryEntryCollectionTests {

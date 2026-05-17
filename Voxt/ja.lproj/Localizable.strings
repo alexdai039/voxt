@@ -701,6 +701,7 @@
 "Create Dictionary Term" = "辞書用語を作成";
 "Edit Dictionary Term" = "辞書用語を編集";
 "Dictionary Term" = "辞書用語";
+"Confirm and Continue" = "確認して続行";
 "Replacement Match Terms" = "置換マッチ語";
 " (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)" = "（任意。追加しなくても、Voxt は通常の辞書マッチングと高信頼補正を引き続き使用します）";
 "Replacement Match Term" = "置換マッチ語";
@@ -791,6 +792,14 @@
 "Dictionary exported successfully." = "辞書のエクスポートが完了しました。";
 "Dictionary export failed: %@" = "辞書のエクスポートに失敗しました: %@";
 "Imported %d terms and skipped %d duplicates." = "%d 件の用語を取り込み、%d 件の重複をスキップしました。";
+"Project vocabulary imported from %@. Added %d, reinforced %d, skipped %d." = "%@ からプロジェクト語彙をインポートしました。追加 %d 件、強化 %d 件、スキップ %d 件。";
+"No project vocabulary source was found for %@." = "%@ のプロジェクト語彙ソースが見つかりませんでした。";
+"No project vocabulary terms were found for %@." = "%@ から取り込めるプロジェクト語彙が見つかりませんでした。";
+"Reinforced existing dictionary term: %@." = "既存の辞書語を強化しました: %@。";
+"Reinforced existing dictionary term: %@" = "既存の辞書語を強化しました: %@";
+"Reinforced %d existing dictionary terms: %@" = "%d 件の既存の辞書語を強化しました: %@";
+"Added %d corrected terms and reinforced %d existing dictionary terms: %@" = "%d 件の訂正語を追加し、%d 件の既存の辞書語を強化しました: %@";
+"Claude" = "Claude";
 "Dictionary import failed: %@" = "辞書のインポートに失敗しました: %@";
 "Chinese (Traditional)" = "中国語（繁体字）";
 "Engine Hint Settings" = "エンジンヒント設定";
@@ -1493,6 +1502,8 @@
 "Choose Codex auth.json" = "Codex auth.json を選択";
 "Selected Codex auth file. Clear to return to the default path." = "Codex auth ファイルを選択済みです。クリアすると既定のパスに戻ります。";
 "Failed to update Codex auth path: %@" = "Codex auth パスの更新に失敗しました: %@";
+"Fast Mode" = "Fast モード";
+"Requests Codex with priority service tier when the backend supports Fast mode." = "バックエンドが Fast モードに対応している場合、priority サービスティアで Codex にリクエストします。";
 "Codex uses the ChatGPT subscription backend and local Codex OAuth credentials." = "Codex は ChatGPT サブスクリプションのバックエンドとローカルの Codex OAuth 認証情報を使用します。";
 "Codex auth not found at %@. Run `codex login` first." = "%@ に Codex auth が見つかりません。先に `codex login` を実行してください。";
 "Codex auth.json permission denied at %@. Click Choose and select auth.json to grant Voxt access." = "%@ を読み取る権限がありません。「選択」をクリックして auth.json を選び、Voxt にアクセスを許可してください。";

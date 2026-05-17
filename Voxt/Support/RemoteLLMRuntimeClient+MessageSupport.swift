@@ -123,6 +123,9 @@ extension RemoteLLMRuntimeClient {
         ]
         if provider == .codex {
             payload["store"] = false
+            if configuration.codexFastModeEnabled {
+                payload["service_tier"] = "priority"
+            }
         } else {
             payload["max_output_tokens"] = maxOutputTokens
         }

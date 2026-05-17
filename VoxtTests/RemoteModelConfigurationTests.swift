@@ -324,7 +324,8 @@ final class RemoteModelConfigurationTests: XCTestCase {
                 providerID: RemoteLLMProvider.codex.rawValue,
                 model: "gpt-5.3-codex-spark",
                 codexAuthFilePath: "/Users/test/.config/codex/auth.json",
-                codexAuthFileBookmark: bookmark
+                codexAuthFileBookmark: bookmark,
+                codexFastModeEnabled: true
             )
         ]
 
@@ -334,6 +335,24 @@ final class RemoteModelConfigurationTests: XCTestCase {
 
         XCTAssertEqual(restored?.codexAuthFilePath, "/Users/test/.config/codex/auth.json")
         XCTAssertEqual(restored?.codexAuthFileBookmark, bookmark)
+        XCTAssertEqual(restored?.codexFastModeEnabled, true)
+    }
+
+    func testDecodeLegacyCodexConfigurationDefaultsFastModeToOff() throws {
+        let legacyJSON = """
+        [
+          {
+            "providerID": "\(RemoteLLMProvider.codex.rawValue)",
+            "model": "gpt-5.4",
+            "endpoint": "",
+            "apiKey": ""
+          }
+        ]
+        """
+
+        let loaded = RemoteModelConfigurationStore.loadConfigurations(from: legacyJSON)
+
+        XCTAssertEqual(loaded[RemoteLLMProvider.codex.rawValue]?.codexFastModeEnabled, false)
     }
 
     func testCodexCredentialProviderUsesUserHomeOutsideAppContainer() {

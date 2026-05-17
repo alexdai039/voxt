@@ -262,6 +262,7 @@ extension RemoteProviderConfigurationSheet {
             omlxExtraBodyJSON: isOMLXLLMProvider ? generationExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines) : omlxExtraBodyJSON.trimmingCharacters(in: .whitespacesAndNewlines),
             codexAuthFilePath: isCodexLLMProvider ? codexAuthFilePath.trimmingCharacters(in: .whitespacesAndNewlines) : configuration.codexAuthFilePath,
             codexAuthFileBookmark: isCodexLLMProvider ? codexAuthFileBookmark : configuration.codexAuthFileBookmark,
+            codexFastModeEnabled: isCodexLLMProvider ? codexFastModeEnabled : configuration.codexFastModeEnabled,
             generationSettings: currentGenerationSettingsSnapshot()
         )
     }

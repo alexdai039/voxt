@@ -692,6 +692,33 @@ final class RemoteLLMRuntimeClientStreamingTests: XCTestCase {
         XCTAssertEqual(input.first?["content"] as? String, "ping")
     }
 
+    func testMakeResponsesRequestAppliesCodexFastModeServiceTier() throws {
+        let client = RemoteLLMRuntimeClient()
+        let request = try client.makeResponsesRequest(
+            provider: .codex,
+            endpointValue: "https://chatgpt.com/backend-api/codex/responses",
+            model: "gpt-5.4",
+            systemPrompt: "",
+            inputPayload: "ping",
+            configuration: RemoteProviderConfiguration(
+                providerID: RemoteLLMProvider.codex.rawValue,
+                model: "gpt-5.4",
+                endpoint: "",
+                apiKey: "",
+                codexFastModeEnabled: true
+            ),
+            previousResponseID: nil,
+            tuning: .init(maxTokens: 512, temperature: 0.2, topP: 0.9),
+            textFormat: nil,
+            streamingEnabled: false
+        )
+
+        let body = try XCTUnwrap(request.httpBody)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        XCTAssertEqual(object["service_tier"] as? String, "priority")
+    }
+
     func testMakeResponsesRequestOmitsUnsupportedCodexOptions() throws {
         let client = RemoteLLMRuntimeClient()
         let request = try client.makeResponsesRequest(

@@ -1,6 +1,28 @@
 import Foundation
 
 extension AppDelegate {
+    private struct AutomaticDictionaryLearningPersistResult {
+        let addedTerms: [String]
+        let reinforcedTerms: [String]
+
+        var isEmpty: Bool {
+            addedTerms.isEmpty && reinforcedTerms.isEmpty
+        }
+
+        var effectiveTerms: [String] {
+            Self.orderedUnique(addedTerms + reinforcedTerms)
+        }
+
+        private static func orderedUnique(_ terms: [String]) -> [String] {
+            var seen = Set<String>()
+            return terms.filter { term in
+                let normalized = DictionaryStore.normalizeTerm(term)
+                guard !normalized.isEmpty, seen.insert(normalized).inserted else { return false }
+                return true
+            }
+        }
+    }
+
     private enum AutomaticDictionaryLearningModel {
         case appleIntelligence
         case customLLM(repo: String)
@@ -28,42 +50,44 @@ extension AppDelegate {
         let directCandidateTerms = AutomaticDictionaryLearningMonitor.directCandidateTerms(
             for: request,
             existingTerms: []
-        ).filter { !dictionaryStore.hasEntry(normalizedTerm: DictionaryStore.normalizeTerm($0), activeGroupID: groupID) }
+        )
         let scannedTerms = try await runAutomaticDictionaryLearningPrompt(prompt, model: model)
         let mergedTerms = mergeDictionaryLearningTerms(
             directCandidateTerms,
             scannedTerms,
-            excludeExistingTerms: true,
+            excludeExistingTerms: false,
             activeGroupID: groupID
         )
         VoxtLog.info(
             "Automatic dictionary learning candidate terms merged. direct=\(directCandidateTerms.joined(separator: ", ")), model=\(scannedTerms.joined(separator: ", ")), final=\(mergedTerms.joined(separator: ", "))"
         )
 
-        let addedTerms = persistAutomaticDictionaryLearningTerms(
+        let persistResult = persistAutomaticDictionaryLearningTerms(
             mergedTerms,
             groupID: groupID,
             groupNameSnapshot: groupNameSnapshot
         )
 
-        guard !addedTerms.isEmpty else {
+        guard !persistResult.isEmpty else {
             VoxtLog.info("Automatic dictionary learning finished with no new dictionary entries.")
             return
         }
-        if let historyEntryID {
+        if let historyEntryID, !persistResult.addedTerms.isEmpty {
             applyAutomaticDictionaryLearningHistoryUpdate(
                 request,
                 historyEntryID: historyEntryID,
-                addedTerms: addedTerms
+                addedTerms: persistResult.addedTerms
             )
             VoxtLog.info(
-                "Automatic dictionary learning recorded correction into history. historyEntryID=\(historyEntryID.uuidString), terms=\(addedTerms.joined(separator: ", "))"
+                "Automatic dictionary learning recorded correction into history. historyEntryID=\(historyEntryID.uuidString), added=\(persistResult.addedTerms.joined(separator: ", ")), reinforced=\(persistResult.reinforcedTerms.joined(separator: ", "))"
             )
-        } else {
+        } else if !persistResult.addedTerms.isEmpty {
             VoxtLog.info("Automatic dictionary learning added terms but history entry is unavailable.")
         }
-        showOverlayStatus(automaticDictionaryLearningSuccessMessage(for: addedTerms), clearAfter: 3.2)
-        VoxtLog.info("Automatic dictionary learning added terms: \(addedTerms.joined(separator: ", "))")
+        showOverlayStatus(automaticDictionaryLearningSuccessMessage(for: persistResult), clearAfter: 3.2)
+        VoxtLog.info(
+            "Automatic dictionary learning persisted terms. added=\(persistResult.addedTerms.joined(separator: ", ")), reinforced=\(persistResult.reinforcedTerms.joined(separator: ", "))"
+        )
     }
 
     func applyManualDictionaryCorrection(
@@ -106,7 +130,7 @@ extension AppDelegate {
             let directCandidateTerms = AutomaticDictionaryLearningMonitor.directCandidateTerms(
                 for: request,
                 existingTerms: []
-            ).filter { !dictionaryStore.hasEntry(normalizedTerm: DictionaryStore.normalizeTerm($0), activeGroupID: matchedGroupID) }
+            )
             var scannedTerms: [String] = []
             if let model = try? resolvedAutomaticDictionaryLearningModel() {
                 let prompt = AutomaticDictionaryLearningMonitor.buildPrompt(
@@ -137,7 +161,7 @@ extension AppDelegate {
             VoxtLog.info("Manual dictionary correction skipped term analysis: \(reason)")
         }
 
-        let addedTerms = persistAutomaticDictionaryLearningTerms(
+        let persistResult = persistAutomaticDictionaryLearningTerms(
             correctedTerms,
             groupID: matchedGroupID,
             groupNameSnapshot: matchedGroupName
@@ -150,8 +174,8 @@ extension AppDelegate {
             correctionSnapshots: correctionSnapshots
         )
 
-        if !addedTerms.isEmpty {
-            showOverlayStatus(automaticDictionaryLearningSuccessMessage(for: addedTerms), clearAfter: 3.2)
+        if !persistResult.isEmpty {
+            showOverlayStatus(automaticDictionaryLearningSuccessMessage(for: persistResult), clearAfter: 3.2)
         }
 
         return historyStore.entry(id: entry.id)
@@ -161,32 +185,36 @@ extension AppDelegate {
         _ scannedTerms: [String],
         groupID: UUID?,
         groupNameSnapshot: String?
-    ) -> [String] {
+    ) -> AutomaticDictionaryLearningPersistResult {
         var addedTerms: [String] = []
+        var reinforcedTerms: [String] = []
         for term in scannedTerms {
             let normalized = DictionaryStore.normalizeTerm(term)
             guard !normalized.isEmpty else {
                 VoxtLog.info("Automatic dictionary learning ignored blank/invalid term candidate.")
                 continue
             }
-            guard !dictionaryStore.hasEntry(normalizedTerm: normalized, activeGroupID: groupID) else {
-                VoxtLog.info("Automatic dictionary learning skipped existing term: \(term)")
-                continue
-            }
             do {
-                try dictionaryStore.createAutoEntry(
+                let result = try dictionaryStore.createOrReinforceAutoEntry(
                     term: term,
                     groupID: groupID,
                     groupNameSnapshot: groupNameSnapshot
                 )
-                addedTerms.append(term)
+                if result.added {
+                    addedTerms.append(result.term)
+                } else {
+                    reinforcedTerms.append(result.term)
+                }
             } catch DictionaryStoreError.duplicateTerm {
                 continue
             } catch {
                 VoxtLog.warning("Automatic dictionary learning skipped term due to store error: \(error)")
             }
         }
-        return addedTerms
+        return AutomaticDictionaryLearningPersistResult(
+            addedTerms: addedTerms,
+            reinforcedTerms: reinforcedTerms
+        )
     }
 
     private func mergeDictionaryLearningTerms(
@@ -289,7 +317,24 @@ extension AppDelegate {
         ]
     }
 
-    private func automaticDictionaryLearningSuccessMessage(for addedTerms: [String]) -> String {
+    private func automaticDictionaryLearningSuccessMessage(
+        for result: AutomaticDictionaryLearningPersistResult
+    ) -> String {
+        if result.addedTerms.isEmpty {
+            return automaticDictionaryLearningReinforcedMessage(for: result.reinforcedTerms)
+        }
+        if result.reinforcedTerms.isEmpty {
+            return automaticDictionaryLearningAddedMessage(for: result.addedTerms)
+        }
+        return AppLocalization.format(
+            "Added %d corrected terms and reinforced %d existing dictionary terms: %@",
+            result.addedTerms.count,
+            result.reinforcedTerms.count,
+            result.effectiveTerms.joined(separator: ", ")
+        )
+    }
+
+    private func automaticDictionaryLearningAddedMessage(for addedTerms: [String]) -> String {
         if addedTerms.count == 1 {
             return AppLocalization.format(
                 "Added 1 corrected term to the dictionary: %@",
@@ -300,6 +345,20 @@ extension AppDelegate {
             "Added %d corrected terms to the dictionary: %@",
             addedTerms.count,
             addedTerms.joined(separator: ", ")
+        )
+    }
+
+    private func automaticDictionaryLearningReinforcedMessage(for reinforcedTerms: [String]) -> String {
+        if reinforcedTerms.count == 1 {
+            return AppLocalization.format(
+                "Reinforced existing dictionary term: %@",
+                reinforcedTerms[0]
+            )
+        }
+        return AppLocalization.format(
+            "Reinforced %d existing dictionary terms: %@",
+            reinforcedTerms.count,
+            reinforcedTerms.joined(separator: ", ")
         )
     }
 

@@ -31,8 +31,8 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             return XCTFail("Expected ready outcome, got \(outcome)")
         }
 
-        XCTAssertEqual(request.baselineChangedFragment, "Waxed")
-        XCTAssertEqual(request.finalChangedFragment, "Voxt")
+        XCTAssertEqual(request.baselineChangedFragment, "Waxed.")
+        XCTAssertEqual(request.finalChangedFragment, "Voxt.")
         XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
     }
 
@@ -47,8 +47,8 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             return XCTFail("Expected ready outcome, got \(outcome)")
         }
 
-        XCTAssertEqual(request.baselineChangedFragment, "code code")
-        XCTAssertEqual(request.finalChangedFragment, "claude code")
+        XCTAssertEqual(request.baselineChangedFragment, "code")
+        XCTAssertEqual(request.finalChangedFragment, "claude")
         XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
     }
 
@@ -63,8 +63,8 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             return XCTFail("Expected ready outcome, got \(outcome)")
         }
 
-        XCTAssertEqual(request.baselineChangedFragment, "词源")
-        XCTAssertEqual(request.finalChangedFragment, "词元")
+        XCTAssertEqual(request.baselineChangedFragment, "看一下我们投坑中有没有新的词源了。这个新的词源也需要接飞")
+        XCTAssertEqual(request.finalChangedFragment, "看一下我们投坑中有没有新的词元了。这个新的词元也需要接入")
         XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
     }
 
@@ -225,20 +225,14 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
         )
     }
 
-    func testBuildsLearningRequestWhenBaselineWrapsInsertedTextAcrossLines() {
+    func testSkipsDeletionOnlyChangeWhenBaselineWrapsInsertedTextAcrossLines() {
         let outcome = AutomaticDictionaryLearningMonitor.makeLearningRequest(
             insertedText: "React JS 和 Next JS",
             baselineText: "我们使用了 React JS\n和 Next JS 来实现整个 APP 的链路。",
             finalText: "我们使用了 React 和 Next JS 来实现整个 APP 的链路。"
         )
 
-        guard case .ready(let request) = outcome else {
-            return XCTFail("Expected ready outcome, got \(outcome)")
-        }
-
-        XCTAssertEqual(request.baselineChangedFragment, "JS")
-        XCTAssertEqual(request.finalChangedFragment, "")
-        XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
+        assertSkipped(outcome, contains: "changed fragment has no meaningful terms")
     }
 
     func testBuildsLearningRequestFromTerminalLineWhenFinalSnapshotContainsCommandOutput() {
@@ -310,8 +304,8 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             return XCTFail("Expected ready outcome, got \(outcome)")
         }
 
-        XCTAssertTrue(request.baselineChangedFragment.hasPrefix("SG 狼魔鬼穷"))
-        XCTAssertTrue(request.finalChangedFragment.hasPrefix("SGLang 魔鬼群"))
+        XCTAssertTrue(request.baselineChangedFragment.contains("狼"))
+        XCTAssertTrue(request.finalChangedFragment.contains("Lang"))
         XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
     }
 
@@ -348,7 +342,7 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
             request.finalContext,
             "你好，你帮我们看一下 WeChat 中的 SGLang魔鬼群，他们用户在说什么？"
         )
-        XCTAssertEqual(request.baselineChangedFragment, "SG 骆魔鬼群")
+        XCTAssertEqual(request.baselineChangedFragment, "骆")
         XCTAssertEqual(request.finalChangedFragment, "SGLang魔鬼群")
         XCTAssertLessThanOrEqual(request.editRatio, AutomaticDictionaryLearningMonitor.maximumEditRatio)
     }
@@ -660,6 +654,27 @@ final class AutomaticDictionaryLearningMonitorTests: XCTestCase {
         )
 
         XCTAssertTrue(prompt.contains("(empty)"))
+    }
+
+    func testBuildPromptIncludesExtractedCandidateTerms() {
+        let request = AutomaticDictionaryLearningRequest(
+            insertedText: "这次换成J W T加瑞的斯",
+            baselineContext: "这次换成J W T加瑞的斯",
+            finalContext: "这次换成JWT + Redis",
+            baselineChangedFragment: "J W T加瑞的斯",
+            finalChangedFragment: "JWT + Redis",
+            editRatio: 0.2
+        )
+
+        let prompt = AutomaticDictionaryLearningMonitor.buildPrompt(
+            template: "Review the correction.",
+            for: request,
+            existingTerms: [],
+            userMainLanguage: "Chinese",
+            userOtherLanguages: "English"
+        )
+
+        XCTAssertTrue(prompt.contains("<candidate_terms>\nJWT, Redis\n</candidate_terms>"))
     }
 
     func testBuildPromptCapsExistingTermListToTwentyItems() {

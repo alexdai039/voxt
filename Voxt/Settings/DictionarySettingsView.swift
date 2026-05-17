@@ -32,7 +32,8 @@ struct DictionarySettingsView: View {
     @State private var automaticLearningPromptDraft = AppPromptDefaults.text(for: .dictionaryAutoLearning)
     @State private var historyScanModelOptions: [DictionaryHistoryScanModelOption] = []
     @State private var selectedHistoryScanModelID = ""
-    @State private var dictionaryTransferMessage: String?
+    @State private var dictionaryToastMessage = ""
+    @State private var dictionaryToastDismissTask: Task<Void, Never>?
     @State private var suggestionActionMessage: String?
     @State private var pendingHistoryScanCount = 0
     @State private var dictionarySearchText = ""
@@ -69,6 +70,16 @@ struct DictionarySettingsView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .top) {
+            if !dictionaryToastMessage.isEmpty {
+                ModelDebugToast(message: dictionaryToastMessage) {
+                    dismissDictionaryToast()
+                }
+                .padding(.top, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: dictionaryToastMessage)
         .sheet(item: $dialog) { currentDialog in
             dialogView(for: currentDialog)
         }
@@ -170,12 +181,7 @@ struct DictionarySettingsView: View {
             visibleEntries: visibleEntries,
             totalEntryCount: totalEntryCount,
             searchText: dictionarySearchText,
-            dictionaryTransferMessage: dictionaryTransferMessage,
             isLoadingEntries: isLoadingEntries,
-            scopeLabel: scopeLabel(for:),
-            scopeIsMissing: { entry in
-                entry.groupID != nil && groupName(for: entry.groupID) == nil
-            },
             onSearch: { showDictionarySearchDialog = true },
             onClearSearch: { dictionarySearchText = "" },
             onLoadMore: { reloadDictionaryEntries(reset: false) },
@@ -205,6 +211,14 @@ struct DictionarySettingsView: View {
                     selectedGroupID: selectedGroupID
                 )
                 self.dialog = nil
+            },
+            onSaveAndContinue: { term, replacementTerms, selectedGroupID in
+                try save(
+                    dialog: dialog,
+                    term: term,
+                    replacementTerms: replacementTerms,
+                    selectedGroupID: selectedGroupID
+                )
             }
         )
     }
@@ -217,12 +231,18 @@ struct DictionarySettingsView: View {
     ) throws {
         switch dialog {
         case .create:
-            try dictionaryStore.createManualEntry(
+            let result = try dictionaryStore.createOrReinforceManualEntry(
                 term: term,
                 replacementTerms: replacementTerms,
                 groupID: selectedGroupID,
                 groupNameSnapshot: selectedGroupName(for: selectedGroupID)
             )
+            if !result.added {
+                showDictionaryToast(AppLocalization.format(
+                    "Reinforced existing dictionary term: %@.",
+                    result.term
+                ))
+            }
         case .edit(let entry):
             try dictionaryStore.updateEntry(
                 id: entry.id,
@@ -388,12 +408,12 @@ struct DictionarySettingsView: View {
         do {
             let text = try dictionaryStore.exportTransferJSONString()
             try text.write(to: url, atomically: true, encoding: .utf8)
-            dictionaryTransferMessage = localized("Dictionary exported successfully.")
+            showDictionaryToast(localized("Dictionary exported successfully."))
         } catch {
-            dictionaryTransferMessage = AppLocalization.format(
+            showDictionaryToast(AppLocalization.format(
                 "Dictionary export failed: %@",
                 error.localizedDescription
-            )
+            ))
         }
     }
 
@@ -411,17 +431,32 @@ struct DictionarySettingsView: View {
             let result = try dictionaryStore.importTransferJSONString(text)
             refreshLocalContentState()
             reloadDictionaryEntries(reset: true)
-            dictionaryTransferMessage = AppLocalization.format(
+            showDictionaryToast(AppLocalization.format(
                 "Imported %d terms and skipped %d duplicates.",
                 result.addedCount,
                 result.skippedCount
-            )
+            ))
         } catch {
-            dictionaryTransferMessage = AppLocalization.format(
+            showDictionaryToast(AppLocalization.format(
                 "Dictionary import failed: %@",
                 error.localizedDescription
-            )
+            ))
         }
+    }
+
+    private func showDictionaryToast(_ message: String, duration: TimeInterval = 2.4) {
+        dictionaryToastDismissTask?.cancel()
+        dictionaryToastMessage = message
+        dictionaryToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            dictionaryToastMessage = ""
+        }
+    }
+
+    private func dismissDictionaryToast() {
+        dictionaryToastDismissTask?.cancel()
+        dictionaryToastMessage = ""
     }
 
     private func reloadGroups() {
