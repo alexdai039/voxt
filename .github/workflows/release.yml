@@ -939,10 +939,17 @@ jobs:
           fi
 
           SPARKLE_VERSION="$RELEASE_BUILD_NUMBER"
+          curl_retry_args=(
+            --retry 6
+            --retry-all-errors
+            --retry-delay 10
+            --retry-max-time 180
+          )
           update_args=(
             --fail
             --silent
             --show-error
+            "${curl_retry_args[@]}"
             -X POST "${API_BASE}/api/pkg/update"
             -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}"
             -H "X-Voxt-Source: github-actions"
@@ -965,6 +972,7 @@ jobs:
           curl "${update_args[@]}"
 
           curl --fail --silent --show-error \
+            "${curl_retry_args[@]}" \
             -X POST "${API_BASE}/api/pkg/appcast" \
             -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}" \
             -H "Content-Type: application/json" \
