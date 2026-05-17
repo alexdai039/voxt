@@ -939,37 +939,109 @@ jobs:
           fi
 
           SPARKLE_VERSION="$RELEASE_BUILD_NUMBER"
+          ZIP_CONTENT_TYPE="application/zip"
+          DMG_CONTENT_TYPE="application/x-apple-diskimage"
+          IMMUTABLE_CACHE_CONTROL="public, max-age=31536000, immutable"
+          DMG_CONTENT_DISPOSITION="attachment; filename=\"${DMG_NAME}\""
           curl_retry_args=(
             --retry 6
             --retry-all-errors
             --retry-delay 10
             --retry-max-time 180
           )
-          update_args=(
-            --fail
-            --silent
-            --show-error
-            "${curl_retry_args[@]}"
-            -X POST "${API_BASE}/api/pkg/update"
-            -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}"
-            -H "X-Voxt-Source: github-actions"
-            -F "channel=${CHANNEL}"
-            -F "version=${VERSION}"
-            -F "sparkleVersion=${SPARKLE_VERSION}"
-            -F "sha256=${SHA256}"
-            -F "size=${SPARKLE_ED_LENGTH}"
-            -F "edSignature=${SPARKLE_ED_SIGNATURE}"
-            --form-string "releaseNotes=${RELEASE_NOTES}"
-            -F "releaseURL=${RELEASE_URL}"
-            -F "publishedAt=${PUBLISHED_AT}"
-            -F "file=@${ZIP_PATH};type=application/zip"
-            -F "dmgFile=@${DMG_PATH};type=application/x-apple-diskimage"
-          )
-          if [ -n "${RELEASE_NOTES_BY_LOCALE}" ] && [ "${RELEASE_NOTES_BY_LOCALE}" != "{}" ]; then
-            update_args+=(--form-string "releaseNotesByLocale=${RELEASE_NOTES_BY_LOCALE}")
+
+          PREPARE_RESPONSE="$(
+            jq -n \
+              --arg channel "$CHANNEL" \
+              --arg version "$VERSION" \
+              --arg assetFileName "$ZIP_NAME" \
+              --arg assetContentType "$ZIP_CONTENT_TYPE" \
+              --arg dmgFileName "$DMG_NAME" \
+              --arg dmgContentType "$DMG_CONTENT_TYPE" \
+              '{
+                action: "prepareUpload",
+                channel: $channel,
+                version: $version,
+                assetFileName: $assetFileName,
+                assetContentType: $assetContentType,
+                dmgFileName: $dmgFileName,
+                dmgContentType: $dmgContentType
+              }' |
+              curl --fail --silent --show-error \
+                "${curl_retry_args[@]}" \
+                -X POST "${API_BASE}/api/pkg/update" \
+                -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}" \
+                -H "X-Voxt-Source: github-actions" \
+                -H "Content-Type: application/json" \
+                --data-binary @-
+          )"
+
+          ZIP_UPLOAD_URL="$(printf '%s' "$PREPARE_RESPONSE" | jq -r '.data.uploads.zip.url // empty')"
+          DMG_UPLOAD_URL="$(printf '%s' "$PREPARE_RESPONSE" | jq -r '.data.uploads.dmg.url // empty')"
+          if [ -z "$ZIP_UPLOAD_URL" ] || [ -z "$DMG_UPLOAD_URL" ]; then
+            echo "::error::Failed to prepare direct R2 upload URLs"
+            echo "$PREPARE_RESPONSE"
+            exit 1
           fi
 
-          curl "${update_args[@]}"
+          curl --fail --silent --show-error \
+            "${curl_retry_args[@]}" \
+            -X PUT "$ZIP_UPLOAD_URL" \
+            -H "Content-Type: ${ZIP_CONTENT_TYPE}" \
+            -H "Cache-Control: ${IMMUTABLE_CACHE_CONTROL}" \
+            --upload-file "$ZIP_PATH"
+
+          curl --fail --silent --show-error \
+            "${curl_retry_args[@]}" \
+            -X PUT "$DMG_UPLOAD_URL" \
+            -H "Content-Type: ${DMG_CONTENT_TYPE}" \
+            -H "Cache-Control: ${IMMUTABLE_CACHE_CONTROL}" \
+            -H "Content-Disposition: ${DMG_CONTENT_DISPOSITION}" \
+            --upload-file "$DMG_PATH"
+
+          update_payload_args=(
+            --arg channel "$CHANNEL"
+            --arg version "$VERSION"
+            --arg sparkleVersion "$SPARKLE_VERSION"
+            --arg sha256 "$SHA256"
+            --arg size "$SPARKLE_ED_LENGTH"
+            --arg edSignature "$SPARKLE_ED_SIGNATURE"
+            --arg releaseNotes "$RELEASE_NOTES"
+            --arg releaseURL "$RELEASE_URL"
+            --arg publishedAt "$PUBLISHED_AT"
+            --arg assetFileName "$ZIP_NAME"
+            --arg assetContentType "$ZIP_CONTENT_TYPE"
+            --arg dmgFileName "$DMG_NAME"
+            --arg dmgContentType "$DMG_CONTENT_TYPE"
+          )
+          update_payload_filter='{
+            channel: $channel,
+            version: $version,
+            sparkleVersion: $sparkleVersion,
+            sha256: $sha256,
+            size: $size,
+            edSignature: $edSignature,
+            releaseNotes: $releaseNotes,
+            releaseURL: $releaseURL,
+            publishedAt: $publishedAt,
+            assetFileName: $assetFileName,
+            assetContentType: $assetContentType,
+            dmgFileName: $dmgFileName,
+            dmgContentType: $dmgContentType
+          }'
+          if [ -n "${RELEASE_NOTES_BY_LOCALE}" ] && [ "${RELEASE_NOTES_BY_LOCALE}" != "{}" ]; then
+            update_payload_args+=(--argjson releaseNotesByLocale "$RELEASE_NOTES_BY_LOCALE")
+            update_payload_filter="${update_payload_filter} + { releaseNotesByLocale: \$releaseNotesByLocale }"
+          fi
+          UPDATE_PAYLOAD="$(jq -n "${update_payload_args[@]}" "$update_payload_filter")"
+
+          printf '%s' "$UPDATE_PAYLOAD" | curl --fail --silent --show-error \
+            "${curl_retry_args[@]}" \
+            -X POST "${API_BASE}/api/pkg/update" \
+            -H "Authorization: Bearer ${VOXT_RELEASE_API_KEY}" \
+            -H "X-Voxt-Source: github-actions" \
+            -H "Content-Type: application/json" \
+            --data-binary @-
 
           curl --fail --silent --show-error \
             "${curl_retry_args[@]}" \
