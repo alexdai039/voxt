@@ -6,6 +6,53 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.7] - 2026-05-17
+
+### English
+
+#### Added
+- Added Typeflux-style automatic dictionary learning prompts for better correction term extraction.
+- Added Codex provider controls for custom reasoning effort and remote model debugging.
+
+#### Changed
+- ASR hints now use a larger, usage-sorted dictionary candidate set for providers that support richer hints.
+- Dictionary terms found in final inserted text now gain usage weight, improving future ASR hint ranking.
+- Reduced idle model resource usage after recording and model selection changes.
+
+#### Fixed
+- Fixed translation fallback protection for very short same-language outputs that are not strict text prefixes.
+- Fixed release uploads so DMG assets are attached to GitHub releases.
+
+### 简体中文
+
+#### 新增
+- 自动学习词典提示词改为 Typeflux 风格，提升纠错词汇提取效果。
+- Codex provider 新增自定义 reasoning effort 和远端模型调试控制。
+
+#### 改进
+- ASR hints 现在会为支持更丰富热词的 provider 使用更大的、按使用情况排序的词典候选集。
+- 最终插入文本中出现的已有词条现在会增加使用权重，让后续 ASR hint 排序更贴近真实使用。
+- 降低录音结束和模型选择变更后的空闲模型资源占用。
+
+#### 修复
+- 修复同语言翻译输出很短但不是严格前缀时没有触发 fallback 保护的问题。
+- 修复 GitHub release 上传流程，确保 DMG 资源会附加到 release。
+
+### 日本語
+
+#### 追加
+- 自動辞書学習のプロンプトを Typeflux 風にし、修正語句を抽出しやすくしました。
+- Codex provider にカスタム reasoning effort とリモートモデルデバッグの設定を追加しました。
+
+#### 変更
+- ASR hints は、より多くのヒントを扱える provider で、使用状況順に並べた大きな辞書候補セットを使うようになりました。
+- 最終的に挿入されたテキストに既存の辞書語句が含まれる場合、その使用重みを増やして今後の ASR hint の並びを改善します。
+- 録音終了後やモデル選択変更後のアイドル状態でのモデルリソース使用量を削減しました。
+
+#### 修正
+- 同一言語の翻訳結果が非常に短く、厳密なプレフィックスでない場合にも fallback 保護が働くようにしました。
+- GitHub release に DMG アセットが添付されるよう、release アップロード処理を修正しました。
+
 ## [1.11.6] - 2026-05-15
 
 ### English
