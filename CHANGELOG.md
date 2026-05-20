@@ -6,6 +6,29 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.8-beta.1] - 2026-05-21
+
+### English
+
+#### Changed
+- Rebuilt the settings window with a new sidebar, home dashboard, and cleaner About and update controls.
+- Refreshed history and dashboard pages with clearer cards, empty states, and navigation for dictation, translation, rewrite, and notes.
+- Expanded model and provider visuals across settings so feature model pickers and catalogs are easier to scan.
+
+### 简体中文
+
+#### 改进
+- 重构设置窗口，带来新的侧边栏首页、主 Dashboard，以及更清晰的 About 和更新控制。
+- 刷新历史和 Dashboard 页面，为听写、翻译、改写和笔记提供更清晰的卡片、空状态和导航结构。
+- 补全设置中的模型与 provider 视觉标识，让功能模型选择器和模型目录更易浏览。
+
+### 日本語
+
+#### 変更
+- 設定ウィンドウを刷新し、新しいサイドバーのホーム、メイン Dashboard、より分かりやすい About と更新操作を追加しました。
+- 履歴と Dashboard ページを見直し、ディクテーション、翻訳、リライト、ノート向けにカード、空状態、ナビゲーションを分かりやすくしました。
+- 設定内のモデルと provider の視覚表示を拡充し、機能別モデル選択とカタログを見やすくしました。
+
 ## [1.11.7] - 2026-05-17
 
 ### English
