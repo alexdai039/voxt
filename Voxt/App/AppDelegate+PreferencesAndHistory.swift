@@ -344,6 +344,7 @@ extension AppDelegate {
         let focusedAppBundleID = lastEnhancementPromptContext?.focusedAppBundleID
             ?? enhancementContextSnapshot?.bundleID
             ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let browserContext = historyBrowserContext(frontmostBundleID: focusedAppBundleID)
 
         let remoteASRProviderInfo: String?
         let remoteASRModelInfo: String?
@@ -400,6 +401,8 @@ extension AppDelegate {
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
             focusedAppBundleID: focusedAppBundleID,
+            browserURLHost: browserContext.host,
+            browserURLOrigin: browserContext.origin,
             matchedGroupID: lastEnhancementPromptContext?.matchedGroupID,
             matchedGroupName: lastEnhancementPromptContext?.matchedGroupName,
             matchedAppGroupName: lastEnhancementPromptContext?.matchedAppGroupName,
@@ -435,6 +438,22 @@ extension AppDelegate {
         }
 
         return entryID
+    }
+
+    private func historyBrowserContext(frontmostBundleID: String?) -> (host: String?, origin: String?) {
+        guard isBrowserBundleID(frontmostBundleID),
+              let activeURL = activeBrowserTabURL(frontmostBundleID: frontmostBundleID),
+              let url = URL(string: activeURL),
+              let host = url.host?.lowercased(),
+              !host.isEmpty
+        else {
+            return (nil, nil)
+        }
+
+        return (
+            host: host,
+            origin: EnhancementOverlayIconResolver.faviconOrigin(fromPageURL: activeURL)
+        )
     }
 
     private func continueRewriteHistoryIfPossible(

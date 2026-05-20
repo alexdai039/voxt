@@ -656,29 +656,12 @@ extension OnboardingSettingsView {
                     ]
                 )
 
-                HStack(spacing: 8) {
-                    Button(localized("Export Configuration")) {
-                        exportConfiguration()
-                    }
-                    .buttonStyle(SettingsPillButtonStyle())
-
-                    Button(localized("Import Configuration")) {
-                        importConfiguration()
-                    }
-                    .buttonStyle(SettingsPillButtonStyle())
-
+                HStack {
                     Spacer()
-
                     Button(localized("Start Voxt")) {
                         onFinish()
                     }
                     .buttonStyle(SettingsPrimaryButtonStyle())
-                }
-
-                if let configurationTransferMessage {
-                    Text(configurationTransferMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
         }

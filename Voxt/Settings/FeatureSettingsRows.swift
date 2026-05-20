@@ -69,7 +69,7 @@ struct FeatureInlineTextFieldRow: View {
 }
 
 struct FeatureDirectorySelectionRow: View {
-    private let pathFieldWidth: CGFloat = 200
+    private let pathFieldWidth: CGFloat = 184
     private let actionButtonWidth: CGFloat = 26
 
     let title: String
@@ -113,7 +113,7 @@ struct FeatureEmbeddedFieldGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     init(
-        spacing: CGFloat = 18,
+        spacing: CGFloat = 20,
         @ViewBuilder content: () -> Content
     ) {
         self.spacing = spacing
@@ -164,6 +164,79 @@ struct FeatureNoteSoundPresetRow<PickerContent: View>: View {
     }
 }
 
+struct FeatureNoteAudioRow: View {
+    let title: String
+    let detail: String
+    @Binding var isOn: Bool
+    @Binding var preset: InteractionSoundPreset
+    let onTrySound: () -> TimeInterval
+
+    @State private var isPreviewPlaying = false
+    @State private var previewToken = UUID()
+
+    var body: some View {
+        FeatureRowScaffold(
+            title: title,
+            detail: detail,
+            spacerMinLength: 12,
+            isEmbedded: false
+        ) {
+            HStack(alignment: .center, spacing: 13) {
+                if isOn {
+                    HStack(spacing: 5) {
+                        SettingsMenuPicker(
+                            selection: $preset,
+                            options: InteractionSoundPreset.allCases.map { preset in
+                                SettingsMenuOption(value: preset, title: preset.title)
+                            },
+                            selectedTitle: preset.title,
+                            width: 157.2,
+                            allowsCompactWidth: true
+                        )
+
+                        Button(action: playPreview) {
+                            FeatureSoundPreviewIcon()
+                                .foregroundStyle(isPreviewPlaying ? Color.accentColor : Color.primary.opacity(0.86))
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(SettingsCompactIconButtonStyle(size: 34))
+                        .help(featureSettingsLocalized("Try Sound"))
+                    }
+                }
+
+                Toggle("", isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+        }
+    }
+
+    private func playPreview() {
+        let duration = max(onTrySound(), 0.65)
+        let token = UUID()
+        previewToken = token
+        isPreviewPlaying = true
+
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            await MainActor.run {
+                guard previewToken == token else { return }
+                isPreviewPlaying = false
+            }
+        }
+    }
+}
+
+private struct FeatureSoundPreviewIcon: View {
+    var body: some View {
+        ZStack {
+            SVGPathShape(pathData: "M7.96997 22.75C5.34997 22.75 3.21997 20.62 3.21997 18C3.21997 15.38 5.34997 13.25 7.96997 13.25C10.59 13.25 12.72 15.38 12.72 18C12.72 20.62 10.59 22.75 7.96997 22.75ZM7.96997 14.75C6.17997 14.75 4.71997 16.21 4.71997 18C4.71997 19.79 6.17997 21.25 7.96997 21.25C9.75997 21.25 11.22 19.79 11.22 18C11.22 16.21 9.76997 14.75 7.96997 14.75Z")
+            SVGPathShape(pathData: "M11.97 18.75C11.56 18.75 11.22 18.41 11.22 18V4C11.22 3.59 11.56 3.25 11.97 3.25C12.38 3.25 12.72 3.59 12.72 4V18C12.72 18.41 12.39 18.75 11.97 18.75Z")
+            SVGPathShape(pathData: "M19.13 10.2304C18.8 10.2304 18.45 10.1704 18.11 10.0604L13.69 8.59043C12.31 8.13043 11.23 6.63043 11.23 5.18043V4.00043C11.23 3.03043 11.63 2.19043 12.31 1.69043C13 1.19043 13.92 1.09043 14.84 1.39043L19.26 2.86043C20.64 3.32043 21.72 4.82043 21.72 6.27043V7.44043C21.72 8.41043 21.32 9.25043 20.64 9.75043C20.21 10.0804 19.68 10.2304 19.13 10.2304ZM13.82 2.72043C13.58 2.72043 13.36 2.78043 13.19 2.91043C12.89 3.12043 12.73 3.51043 12.73 4.00043V5.17043C12.73 5.97043 13.4 6.90043 14.16 7.16043L18.58 8.63043C19.04 8.79043 19.47 8.75043 19.76 8.54043C20.06 8.33043 20.22 7.94043 20.22 7.45043V6.28043C20.22 5.48043 19.55 4.55043 18.79 4.29043L14.37 2.82043C14.18 2.75043 13.99 2.72043 13.82 2.72043Z")
+        }
+    }
+}
+
 struct FeatureHintBanner: View {
     let title: String
     let detail: String
@@ -200,10 +273,10 @@ struct FeatureSelectorRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 18) {
             Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary.opacity(0.92))
             Spacer(minLength: 0)
             SettingsSelectionButton(width: 280, action: action) {
                 Text(value)
@@ -225,16 +298,18 @@ struct SettingsShortcutCaptureField: View {
     var modeButtonTitle: String? = nil
     var isModeButtonSelected = false
     var onModeButtonToggle: (() -> Void)? = nil
+    var controlWidth: CGFloat = 320
     let onFocus: () -> Void
     let onReset: () -> Void
     let onCancelPending: () -> Void
     let onConfirmPending: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 18) {
             Text(title)
-                .font(.body)
-                .foregroundStyle(.secondary)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary.opacity(0.92))
             Spacer()
 
             HStack(spacing: 8) {
@@ -269,37 +344,12 @@ struct SettingsShortcutCaptureField: View {
 
                 if isPendingConfirmation {
                     Button(featureSettingsLocalized("Cancel"), action: onCancelPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
-                        )
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 8, height: 24))
                     Button(featureSettingsLocalized("Confirm"), action: onConfirmPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.18))
-                        )
+                        .buttonStyle(SettingsPrimaryButtonStyle(horizontalPadding: 8, height: 24))
                 } else if isRecording {
                     Button(featureSettingsLocalized("Cancel"), action: onCancelPending)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .frame(height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color(nsColor: .controlAccentColor).opacity(0.12))
-                        )
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 8, height: 24))
                 } else if !isReadOnly {
                     Button(action: onReset) {
                         Image(systemName: "arrow.counterclockwise")
@@ -309,23 +359,24 @@ struct SettingsShortcutCaptureField: View {
                     .help(Text(featureSettingsLocalized("Reset shortcut")))
                 }
             }
-            .frame(height: 16)
+            .frame(minHeight: 18)
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(height: 34)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
                     .fill(SettingsUIStyle.controlFillColor)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
+                    .strokeBorder(isHovered ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous))
+            .onHover { isHovered = $0 }
             .onTapGesture {
                 guard !isReadOnly else { return }
                 onFocus()
             }
-            .frame(width: 320, alignment: .trailing)
+            .frame(width: controlWidth, alignment: .trailing)
         }
     }
 }
@@ -334,20 +385,7 @@ private struct FeatureRowChromeModifier: ViewModifier {
     let isEmbedded: Bool
 
     func body(content: Content) -> some View {
-        if isEmbedded {
-            content
-        } else {
-            content
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                        .fill(SettingsUIStyle.groupedFillColor)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                        .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-                )
-        }
+        content
     }
 }
 
@@ -376,10 +414,12 @@ private struct FeatureRowScaffold<TrailingContent: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 18) {
             FeatureRowLabelStack(title: title, badgeText: badgeText, detail: detail)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: spacerMinLength)
             trailingContent
+                .fixedSize(horizontal: true, vertical: false)
         }
         .modifier(FeatureRowChromeModifier(isEmbedded: isEmbedded))
     }
@@ -394,7 +434,8 @@ private struct FeatureRowLabelStack: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .center, spacing: 8) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
 
                 if let badgeText, !badgeText.isEmpty {
                     Text(badgeText)
@@ -414,10 +455,13 @@ private struct FeatureRowLabelStack: View {
 
                 Spacer(minLength: 0)
             }
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

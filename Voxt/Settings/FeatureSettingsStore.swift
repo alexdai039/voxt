@@ -78,7 +78,7 @@ enum FeatureSettingsStore {
                     kind: .translation,
                     defaults: defaults
                 ),
-                replaceSelectedText: defaults.object(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey) as? Bool ?? true,
+                replaceSelectedText: true,
                 showResultWindow: defaults.object(forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow) as? Bool ?? true
             ),
             rewrite: RewriteFeatureSettings(
@@ -89,7 +89,7 @@ enum FeatureSettingsStore {
                     kind: .rewrite,
                     defaults: defaults
                 ),
-                appEnhancementEnabled: defaults.object(forKey: AppPreferenceKey.appEnhancementEnabled) as? Bool ?? false,
+                appEnhancementEnabled: true,
                 continueShortcut: .defaultShortcut
             )
         )
@@ -234,7 +234,7 @@ enum FeatureSettingsStore {
                     kind: .translation,
                     defaults: defaults
                 ),
-                replaceSelectedText: settings.translation.replaceSelectedText,
+                replaceSelectedText: true,
                 showResultWindow: settings.translation.showResultWindow
             ),
             rewrite: RewriteFeatureSettings(
@@ -245,7 +245,7 @@ enum FeatureSettingsStore {
                     kind: .rewrite,
                     defaults: defaults
                 ),
-                appEnhancementEnabled: settings.rewrite.appEnhancementEnabled,
+                appEnhancementEnabled: true,
                 continueShortcut: sanitizedContinueShortcutSettings(settings.rewrite.continueShortcut)
             )
         )
@@ -265,14 +265,14 @@ enum FeatureSettingsStore {
                 modelSelectionID: settings.translation.modelSelectionID,
                 targetLanguageRawValue: settings.translation.targetLanguageRawValue,
                 prompt: AppPromptDefaults.canonicalStoredText(settings.translation.prompt, kind: .translation),
-                replaceSelectedText: settings.translation.replaceSelectedText,
+                replaceSelectedText: true,
                 showResultWindow: settings.translation.showResultWindow
             ),
             rewrite: RewriteFeatureSettings(
                 asrSelectionID: settings.rewrite.asrSelectionID,
                 llmSelectionID: settings.rewrite.llmSelectionID,
                 prompt: AppPromptDefaults.canonicalStoredText(settings.rewrite.prompt, kind: .rewrite),
-                appEnhancementEnabled: settings.rewrite.appEnhancementEnabled,
+                appEnhancementEnabled: true,
                 continueShortcut: settings.rewrite.continueShortcut
             )
         )

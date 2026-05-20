@@ -88,9 +88,7 @@ struct UserMainLanguageSelectionSheet: View {
                 .disabled(draftCodes.isEmpty)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 20)
-        .frame(width: 460, height: 520)
+        .settingsDialogChrome(width: 460, height: 520, onClose: { dismiss() })
     }
 
     private func toggle(_ option: UserMainLanguageOption) {

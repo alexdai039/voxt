@@ -4,11 +4,11 @@ import CoreAudio
 
 extension AppDelegate {
     private var mainWindowContentSize: NSSize {
-        NSSize(width: 760, height: 560)
+        NSSize(width: 820, height: 560)
     }
 
     private var mainWindowMinimumContentSize: NSSize {
-        NSSize(width: 760, height: 560)
+        NSSize(width: 820, height: 560)
     }
 
     private func setMainWindowVisibility(_ isVisible: Bool) {
@@ -505,8 +505,8 @@ extension AppDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbar = nil
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.isOpaque = true
+        window.backgroundColor = SettingsUIStyle.windowBackgroundNSColor
         window.isMovableByWindowBackground = false
         // Keep the main settings window on standard AppKit behavior so Space
         // switching preserves normal foreground window ordering and focus.
@@ -584,8 +584,8 @@ extension AppDelegate {
             return
         }
 
-        let leftInset: CGFloat = 22
-        let topInset: CGFloat = 21
+        let leftInset: CGFloat = 14
+        let topInset: CGFloat = 14
         let spacing: CGFloat = 6
 
         let buttonSize = closeButton.frame.size

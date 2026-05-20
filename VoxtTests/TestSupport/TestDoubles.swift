@@ -25,15 +25,3 @@ final class TemporaryDirectory {
         try? FileManager.default.removeItem(at: url)
     }
 }
-
-enum TestEnvironmentFactory {
-    static func configurationTransferEnvironment(
-        in directory: TemporaryDirectory
-    ) -> ConfigurationTransferManager.FileEnvironment {
-        ConfigurationTransferManager.FileEnvironment(
-            dictionaryEntriesURL: { directory.url.appendingPathComponent("dictionary.json") },
-            dictionarySuggestionsURL: { directory.url.appendingPathComponent("dictionary-suggestions.json") }
-        )
-    }
-}
-

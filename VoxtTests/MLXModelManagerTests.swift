@@ -374,68 +374,6 @@ final class MLXModelManagerTests: XCTestCase {
         XCTAssertEqual(restored.topP, 0.8)
     }
 
-    func testCustomLLMGenerationSettingsByRepoRoundTripsThroughConfigurationTransfer() throws {
-        let exportSuiteName = "customLLMGenerationSettingsByRepo.\(UUID().uuidString)"
-        let importSuiteName = "customLLMGenerationSettingsByRepo.imported.\(UUID().uuidString)"
-        let defaults = TestDoubles.makeUserDefaults(testName: exportSuiteName)
-        let imported = TestDoubles.makeUserDefaults(testName: importSuiteName)
-        addTeardownBlock {
-            defaults.removePersistentDomain(forName: "VoxtTests.\(exportSuiteName)")
-            imported.removePersistentDomain(forName: "VoxtTests.\(importSuiteName)")
-        }
-        let directory = try TemporaryDirectory()
-        let environment = TestEnvironmentFactory.configurationTransferEnvironment(in: directory)
-
-        let legacyRaw = CustomLLMGenerationSettingsStore.storageValue(
-            for: LLMGenerationSettings(temperature: 0.11)
-        )
-        var byRepoRaw = CustomLLMGenerationSettingsStore.save(
-            LLMGenerationSettings(
-                temperature: 0.25,
-                topK: 40,
-                seed: 123,
-                responseFormat: .json,
-                thinking: LLMThinkingSettings(mode: .off, effort: "low", budgetTokens: 512, exposeReasoning: true),
-                extraBodyJSON: #"{"unused":true}"#
-            ),
-            for: "mlx-community/Qwen3.5-2B-MLX-4bit",
-            rawByRepo: nil
-        )
-        byRepoRaw = CustomLLMGenerationSettingsStore.save(
-            LLMGenerationSettings(temperature: 0.75, repetitionPenalty: 1.12),
-            for: "mlx-community/Llama-3.2-3B-Instruct-4bit",
-            rawByRepo: byRepoRaw
-        )
-        defaults.set(legacyRaw, forKey: AppPreferenceKey.customLLMGenerationSettings)
-        defaults.set(byRepoRaw, forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
-
-        let exported = try ConfigurationTransferManager.exportJSONString(
-            defaults: defaults,
-            environment: environment
-        )
-        try ConfigurationTransferManager.importConfiguration(
-            from: exported,
-            defaults: imported,
-            environment: environment
-        )
-        let importedRaw = imported.string(forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
-        let importedValues = CustomLLMGenerationSettingsStore.resolvedByRepo(from: importedRaw)
-        let importedLegacy = CustomLLMGenerationSettingsStore.resolvedSettings(
-            from: imported.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
-        )
-
-        XCTAssertEqual(importedLegacy.temperature, 0.11)
-        XCTAssertNil(importedValues["mlx-community/Qwen3.5-2B-MLX-4bit"])
-        XCTAssertEqual(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.temperature, 0.25)
-        XCTAssertEqual(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.topK, 40)
-        XCTAssertEqual(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.thinking.mode, .off)
-        XCTAssertNil(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.seed)
-        XCTAssertEqual(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.responseFormat, .plain)
-        XCTAssertEqual(importedValues["mlx-community/Qwen3.5-2B-4bit"]?.extraBodyJSON, "")
-        XCTAssertEqual(importedValues["mlx-community/Llama-3.2-3B-Instruct-4bit"]?.temperature, 0.75)
-        XCTAssertEqual(importedValues["mlx-community/Llama-3.2-3B-Instruct-4bit"]?.repetitionPenalty, 1.12)
-    }
-
     func testCustomLLMTaskKindUsesExpectedTokenBudgetMultipliers() {
         XCTAssertEqual(CustomLLMTaskKind.enhancement.tokenBudgetMultiplier, 1.10, accuracy: 0.0001)
         XCTAssertEqual(CustomLLMTaskKind.translation.tokenBudgetMultiplier, 1.35, accuracy: 0.0001)

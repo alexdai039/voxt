@@ -13,15 +13,6 @@ struct RemindersListSelectorDialog: View {
             HStack(alignment: .center, spacing: 12) {
                 Text(title)
                     .font(.title3.weight(.semibold))
-
-                Spacer(minLength: 0)
-
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
             }
 
             ScrollView {
@@ -81,8 +72,6 @@ struct RemindersListSelectorDialog: View {
             }
             .frame(height: 320)
         }
-        .padding(18)
-        .frame(width: 420)
-        .background(SettingsUIStyle.groupedFillColor)
+        .settingsDialogChrome(width: 420, onClose: { dismiss() })
     }
 }

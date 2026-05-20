@@ -82,7 +82,7 @@ struct HistoryAudioSettingsSheet: View {
                         .buttonStyle(SettingsPillButtonStyle())
                     }
 
-                    Text(localizedHistoryAudioSettings("New history audio is stored here. Switching the path will not move existing audio files."))
+                    Text(localizedHistoryAudioSettings("New history audio is stored here."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -92,7 +92,7 @@ struct HistoryAudioSettingsSheet: View {
                             .foregroundStyle(.red)
                     }
                 } else {
-                    Text(localizedHistoryAudioSettings("When disabled, history items will not keep audio files."))
+                    Text(localizedHistoryAudioSettings("History items will not keep audio files."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -111,7 +111,7 @@ struct HistoryAudioSettingsSheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Text(localizedHistoryAudioSettings("Copies every saved history audio file into a folder you choose."))
+                            Text(localizedHistoryAudioSettings("Copy saved audio to a folder."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -134,7 +134,6 @@ struct HistoryAudioSettingsSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 560)
+        .settingsDialogChrome(width: 560, onClose: { isPresented = false })
     }
 }

@@ -46,7 +46,6 @@ extension AppEnhancementSettingsView {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
         }
     }
 
@@ -146,7 +145,6 @@ extension AppEnhancementSettingsView {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
         }
     }
 
@@ -162,6 +160,18 @@ extension AppEnhancementSettingsView {
         let isDragging = draggingAppID == app.id
         let isHovering = hoveredCardID == hoverCardID
         let isAssigned = group != nil
+        let borderColor: Color = {
+            if isDragging {
+                return Color.accentColor
+            }
+            if isOffline {
+                return isHovering ? SettingsUIStyle.controlHoverBorderColor : Color.primary.opacity(0.18)
+            }
+            if isAssigned {
+                return Color.accentColor.opacity(isHovering ? 0.70 : 0.55)
+            }
+            return isHovering ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor
+        }()
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -178,22 +188,14 @@ extension AppEnhancementSettingsView {
         .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor)
+                .fill(isHovering ? SettingsUIStyle.sidebarItemFillColor : SettingsUIStyle.controlFillColor)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    isDragging
-                        ? Color.accentColor
-                        : (
-                            isOffline
-                                ? Color.primary.opacity(0.18)
-                                : (isAssigned ? Color.accentColor.opacity(0.55) : SettingsUIStyle.subtleBorderColor)
-                        ),
-                    lineWidth: isDragging ? 1.5 : 1
-                )
+                .strokeBorder(borderColor, lineWidth: isDragging ? 1.5 : 1)
         }
         .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.14), value: isHovering)
         .overlay(alignment: .topTrailing) {
             if showsGroupBadge, let group, isHovering {
                 HStack(spacing: 4) {
@@ -262,13 +264,14 @@ extension AppEnhancementSettingsView {
         .frame(maxWidth: .infinity, minHeight: 46, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor)
+                .fill(isHovering ? SettingsUIStyle.sidebarItemFillColor : SettingsUIStyle.controlFillColor)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.55), lineWidth: 1)
+                .strokeBorder(Color.accentColor.opacity(isHovering ? 0.70 : 0.55), lineWidth: 1)
         }
         .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.14), value: isHovering)
         .overlay(alignment: .topTrailing) {
             if isHovering {
                 Button(action: removeAction) {
@@ -412,7 +415,7 @@ extension AppEnhancementSettingsView {
                     saveGroup(state: currentModal)
                 }
             )
-            .frame(width: 460, height: 482)
+            .frame(width: 600)
 
         case .addURLs:
             URLBatchEditorSheet(

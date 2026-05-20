@@ -38,7 +38,8 @@ struct FeaturePromptSection: View {
             variables: variables,
             guidance: guidance,
             variablesTitle: PromptAuthoringGuidance.optionalVariablesTitle,
-            promptHeight: 196,
+            promptHeight: 296,
+            titleUsesFeatureRowStyle: true,
             onTextChange: schedulePersist,
             onFocusChange: handleFocusChange
         )

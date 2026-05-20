@@ -72,8 +72,7 @@ struct MicrophonePriorityDialog: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16)
-        .frame(width: 560, height: 380)
+        .settingsDialogChrome(width: 560, height: 380, onClose: { dismiss() })
         .onChange(of: state.entries) { _, newValue in
             orderedEntries = newValue
         }
@@ -97,11 +96,7 @@ struct MicrophonePriorityDialog: View {
                     .controlSize(.small)
             }
 
-            Text(
-                state.autoSwitchEnabled
-                    ? localized("Drag to reorder. Higher-priority microphones can take over when they reconnect.")
-                    : localized("Drag to reorder. With Auto Switch off, microphone changes will not switch focus automatically.")
-            )
+            Text(localized("Drag to set the preferred microphone order."))
             .font(.caption)
             .foregroundStyle(.secondary)
         }

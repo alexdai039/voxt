@@ -44,7 +44,6 @@ struct DictionarySettingsHeaderCard: View {
                     historyScanSummaryText: historyScanSummaryText
                 )
             }
-            .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -109,7 +108,7 @@ struct DictionaryEntriesCard: View {
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
-                    .buttonStyle(SettingsCompactIconButtonStyle())
+                    .buttonStyle(SettingsCompactIconButtonStyle(size: 32))
                     .help(AppLocalization.localizedString("Search Dictionary"))
 
                     Button(AppLocalization.localizedString("Create")) {
@@ -138,9 +137,11 @@ struct DictionaryEntriesCard: View {
                 }
 
                 if visibleEntries.isEmpty && !isLoadingEntries {
-                    Text(emptyStateText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    SettingsEmptyStateView(
+                        illustration: .dictionary,
+                        title: emptyStateTitle,
+                        message: emptyStateMessage
+                    )
                 } else {
                     PagedVerticalList(
                         items: entryRows,
@@ -169,17 +170,23 @@ struct DictionaryEntriesCard: View {
                 }
 
             }
-            .padding(8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    private var emptyStateText: String {
+    private var emptyStateTitle: String {
         if !isSearchActive {
-            return AppLocalization.localizedString("No dictionary terms yet.")
+            return AppLocalization.localizedString("Dictionary is empty")
         }
-        return AppLocalization.localizedString("No dictionary terms match this search.")
+        return AppLocalization.localizedString("No matching dictionary terms")
+    }
+
+    private var emptyStateMessage: String {
+        if !isSearchActive {
+            return AppLocalization.localizedString("Create a term to help Voxt recognize names, jargon, and product words.")
+        }
+        return AppLocalization.localizedString("Try another keyword or clear the search filter.")
     }
 
     private var isSearchActive: Bool {

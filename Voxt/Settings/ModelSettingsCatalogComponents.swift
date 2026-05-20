@@ -79,11 +79,18 @@ struct ModelCatalogEntry: Identifiable {
     let secondaryActions: [ModelTableAction]
 }
 
+enum ModelCatalogRowSurface {
+    case card
+    case listItem
+}
+
 struct ModelCatalogRow: View {
     let entry: ModelCatalogEntry
     let titleOverride: String?
     let showsEngine: Bool
     let showsTags: Bool
+    let showsIcon: Bool
+    private let surface: ModelCatalogRowSurface
 
     private var trimmedStatusText: String {
         let trimmed = entry.statusText
@@ -105,18 +112,30 @@ struct ModelCatalogRow: View {
         entry: ModelCatalogEntry,
         titleOverride: String? = nil,
         showsEngine: Bool = true,
-        showsTags: Bool = true
+        showsTags: Bool = true,
+        showsIcon: Bool = true,
+        surface: ModelCatalogRowSurface = .card
     ) {
         self.entry = entry
         self.titleOverride = titleOverride
         self.showsEngine = showsEngine
         self.showsTags = showsTags
+        self.showsIcon = showsIcon
+        self.surface = surface
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 8) {
+                    if showsIcon {
+                        ModelLogoView(
+                            key: entry.modelLogoKey,
+                            fallbackTitle: titleOverride ?? entry.title,
+                            size: 18
+                        )
+                    }
+
                     Text(titleOverride ?? entry.title)
                         .font(.headline)
 
@@ -190,23 +209,39 @@ struct ModelCatalogRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    isInUse
-                    ? Color.accentColor.opacity(0.055)
-                    : SettingsUIStyle.controlFillColor.opacity(0.94)
+        .modifier(ModelCatalogRowSurfaceModifier(surface: surface, isInUse: isInUse))
+    }
+}
+
+private struct ModelCatalogRowSurfaceModifier: ViewModifier {
+    let surface: ModelCatalogRowSurface
+    let isInUse: Bool
+
+    func body(content: Content) -> some View {
+        switch surface {
+        case .card:
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            isInUse
+                            ? Color.accentColor.opacity(0.055)
+                            : SettingsUIStyle.controlFillColor.opacity(0.94)
+                        )
                 )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(
-                    isInUse
-                    ? Color.accentColor.opacity(0.26)
-                    : SettingsUIStyle.panelBorderColor,
-                    lineWidth: 1
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(
+                            isInUse
+                            ? Color.accentColor.opacity(0.20)
+                            : SettingsUIStyle.modelCardBorderColor,
+                            lineWidth: 1
+                        )
                 )
-        )
+        case .listItem:
+            content
+                .background(Color.clear)
+        }
     }
 }
 
@@ -217,13 +252,14 @@ struct ModelCatalogGroupCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button(action: onToggle) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    onToggle()
+                }
+            } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 8) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 14)
+                        ModelLogoView(key: group.modelLogoKey, fallbackTitle: group.title, size: 18)
 
                         Text(group.title)
                             .font(.headline)
@@ -245,6 +281,11 @@ struct ModelCatalogGroupCard: View {
                         }
 
                         Spacer(minLength: 0)
+
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 18)
                     }
 
                     HStack(spacing: 12) {
@@ -269,28 +310,48 @@ struct ModelCatalogGroupCard: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(spacing: 10) {
-                    ForEach(group.entries) { entry in
+                VStack(spacing: 0) {
+                    ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
                         ModelCatalogRow(
                             entry: entry,
                             titleOverride: entry.groupedVariantTitle,
                             showsEngine: false,
-                            showsTags: false
+                            showsTags: false,
+                            showsIcon: false,
+                            surface: .listItem
                         )
+
+                        if index < group.entries.count - 1 {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(SettingsUIStyle.modelGroupListFillColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(SettingsUIStyle.modelCardBorderColor, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipped()
+                .transition(.opacity)
             }
         }
+        .clipped()
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor.opacity(0.94))
+                .fill(SettingsUIStyle.modelGroupFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(SettingsUIStyle.panelBorderColor, lineWidth: 1)
+                .strokeBorder(SettingsUIStyle.modelCardBorderColor, lineWidth: 1)
         )
     }
 }
@@ -543,6 +604,7 @@ struct ModelTagChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -552,15 +614,17 @@ struct ModelTagChip: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.18) : SettingsUIStyle.controlFillColor)
+                        .fill(isSelected || isHovered ? Color.accentColor.opacity(0.18) : SettingsUIStyle.controlFillColor)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(isSelected ? Color.accentColor.opacity(0.28) : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                        .stroke(isSelected || isHovered ? Color.accentColor.opacity(0.28) : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
                 )
+                .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+        .foregroundStyle(isSelected || isHovered ? Color.accentColor : .primary)
+        .onHover { isHovered = $0 }
     }
 }
 

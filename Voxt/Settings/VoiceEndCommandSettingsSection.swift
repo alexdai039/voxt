@@ -23,46 +23,54 @@ struct VoiceEndCommandSettingsSection: View {
     }
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 18) {
                 Text("Voice End Command")
-                    .font(.headline)
-                Toggle("Enable Voice End Command", isOn: $voiceEndCommandEnabled)
-                Text("When enabled, Voxt treats the configured spoken command as a stop action. If that command appears at the end of the transcript and there is about 1 second of silence after it, the session ends automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
 
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("Preset")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    SettingsMenuPicker(
-                        selection: voiceEndCommandPreset,
-                        options: VoiceEndCommandPreset.allCases.map { preset in
-                            SettingsMenuOption(value: preset, title: preset.title)
-                        },
-                        selectedTitle: voiceEndCommandPreset.wrappedValue.title,
-                        width: 220
-                    )
-                }
-                .disabled(!voiceEndCommandEnabled)
+                Spacer()
 
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("Command")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    TextField("over", text: voiceEndCommandTextBinding)
-                        .textFieldStyle(.plain)
-                        .settingsFieldSurface(width: 220)
-                }
-                .disabled(!voiceEndCommandEnabled || voiceEndCommandPreset.wrappedValue != .custom)
-
-                Text("Available presets are over, end, 完毕, and 好了. Command matching ignores surrounding spaces and punctuation, including Asian punctuation such as ， 。 ！ ？")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Toggle("", isOn: $voiceEndCommandEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
+
+            if voiceEndCommandEnabled {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Instruction")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.92))
+                        Text("Say this phrase at the end, then pause briefly to stop voice input automatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    HStack(spacing: 8) {
+                        SettingsMenuPicker(
+                            selection: voiceEndCommandPreset,
+                            options: VoiceEndCommandPreset.allCases.map { preset in
+                                SettingsMenuOption(value: preset, title: preset.title)
+                            },
+                            selectedTitle: voiceEndCommandPreset.wrappedValue.title,
+                            width: 132
+                        )
+
+                        if voiceEndCommandPreset.wrappedValue == .custom {
+                            TextField("over", text: voiceEndCommandTextBinding)
+                                .textFieldStyle(.plain)
+                                .settingsFieldSurface(width: 172)
+                                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .animation(.easeInOut(duration: 0.16), value: voiceEndCommandEnabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

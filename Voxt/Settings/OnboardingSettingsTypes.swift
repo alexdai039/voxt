@@ -50,7 +50,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
         case .appEnhancement:
             return AppLocalization.localizedString("Optionally enable app-aware prompt switching.")
         case .finish:
-            return AppLocalization.localizedString("Import or export your setup, then leave onboarding.")
+            return AppLocalization.localizedString("Review your setup, then start using Voxt.")
         }
     }
 

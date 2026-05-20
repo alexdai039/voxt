@@ -64,7 +64,7 @@ struct PermissionsSettingsView: View {
     @State private var browserAutomationMessages: [String: String] = [:]
     @State private var browserPickerErrorMessage: String?
 
-    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
+    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.appBranchCustomBrowsers) private var appBranchCustomBrowsersJSON = "[]"
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
     @AppStorage(AppPreferenceKey.transcriptionEngine) private var transcriptionEngineRaw = TranscriptionEngine.mlxAudio.rawValue
@@ -91,45 +91,51 @@ struct PermissionsSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(permissionsLocalized("Permissions"))
-                        .font(.headline)
-
-                    Text(permissionsLocalized("Voxt needs the following permissions to support hotkeys, recording, and text insertion."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    ForEach(permissionKinds) { kind in
-                        permissionRow(kind)
-                    }
+        VStack(alignment: .leading, spacing: 20) {
+            PermissionsSettingsSection(
+                title: "",
+                description: ""
+            ) {
+                ForEach(permissionKinds) { kind in
+                    permissionRow(kind)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
             }
             .settingsNavigationAnchor(.permissionsMain)
 
             if appEnhancementEnabled {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text(permissionsLocalized("App Branch URL Authorization"))
-                                .font(.headline)
-                            Spacer()
-                            Button(permissionsLocalized("Add Browser")) {
-                                chooseBrowserApplication()
-                            }
-                            .buttonStyle(SettingsPillButtonStyle())
-                            Button(permissionsLocalized("Open Settings")) {
-                                openBrowserAutomationSettings()
-                            }
-                            .buttonStyle(SettingsPillButtonStyle())
-                        }
+                Divider()
 
-                        Text(permissionsLocalized("Grant browser automation permission so Voxt can read active-tab URLs for App Branch matching."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                PermissionsSettingsSection(
+                    title: "",
+                    description: ""
+                ) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .center, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(permissionsLocalized("App Branch Authorization"))
+                                    .font(.headline)
+
+                                Text(permissionsLocalized("Allow Voxt to read active browser URLs for app grouping."))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                            HStack(spacing: 8) {
+                                Button(permissionsLocalized("Add Browser")) {
+                                    chooseBrowserApplication()
+                                }
+                                .buttonStyle(SettingsPillButtonStyle())
+
+                                Button(permissionsLocalized("Open Settings")) {
+                                    openBrowserAutomationSettings()
+                                }
+                                .buttonStyle(SettingsPillButtonStyle())
+                            }
+                            .fixedSize(horizontal: true, vertical: false)
+                        }
 
                         ForEach(browserTargets) { target in
                             browserAuthorizationRow(target)
@@ -141,8 +147,6 @@ struct PermissionsSettingsView: View {
                                 .foregroundStyle(.orange)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
                 }
                 .settingsNavigationAnchor(.permissionsAppBranchURLAuthorization)
             }
@@ -169,82 +173,88 @@ struct PermissionsSettingsView: View {
 
     @ViewBuilder
     private func permissionRow(_ kind: SettingsPermissionKind) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(kind.titleKey)
-                    .font(.subheadline)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
                 Text(kind.descriptionKey)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
+            HStack(alignment: .center, spacing: 8) {
+                if monitoringKinds.contains(kind) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 14, height: 14)
+                }
 
-            if monitoringKinds.contains(kind) {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 14, height: 14)
+                statusBadge(for: states[kind] ?? .disabled)
+
+                Button(permissionsLocalized("Request")) {
+                    requestPermission(kind)
+                }
+                .buttonStyle(SettingsCompactActionButtonStyle())
+
+                Button(permissionsLocalized("Open Settings")) {
+                    openSettings(for: kind)
+                }
+                .buttonStyle(SettingsCompactActionButtonStyle())
             }
-
-            statusBadge(for: states[kind] ?? .disabled)
-
-            Button(permissionsLocalized("Request")) {
-                requestPermission(kind)
-            }
-            .buttonStyle(SettingsCompactActionButtonStyle())
-
-            Button(permissionsLocalized("Open Settings")) {
-                openSettings(for: kind)
-            }
-            .buttonStyle(SettingsCompactActionButtonStyle())
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.vertical, 2)
     }
 
     @ViewBuilder
     private func browserAuthorizationRow(_ target: BrowserAutomationTarget) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 18) {
                 Text(target.displayName)
-                    .font(.subheadline)
-                Text(AppLocalization.format("Allow Voxt to read the active URL in %@.", target.displayName))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(alignment: .center, spacing: 8) {
+                    if browserAutomationRequestsInFlight.contains(target.bundleID) || browserAutomationTestsInFlight.contains(target.bundleID) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 14, height: 14)
+                    }
+
+                    statusBadge(for: browserAutomationStates[target.bundleID] ?? .disabled)
+
+                    Button(permissionsLocalized("Request")) {
+                        requestBrowserAutomationPermission(target)
+                    }
+                    .buttonStyle(SettingsCompactActionButtonStyle())
+
+                    Button(permissionsLocalized("Test")) {
+                        testBrowserURLRead(target)
+                    }
+                    .buttonStyle(SettingsCompactActionButtonStyle())
+
+                    if target.isCustom {
+                        Button(permissionsLocalized("Delete"), role: .destructive) {
+                            removeCustomBrowser(target)
+                        }
+                        .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
+                    }
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
+
+            if let message = browserAutomationMessages[target.bundleID] {
+                Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let message = browserAutomationMessages[target.bundleID] {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            if browserAutomationRequestsInFlight.contains(target.bundleID) || browserAutomationTestsInFlight.contains(target.bundleID) {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 14, height: 14)
-            }
-
-            statusBadge(for: browserAutomationStates[target.bundleID] ?? .disabled)
-
-            Button(permissionsLocalized("Request")) {
-                requestBrowserAutomationPermission(target)
-            }
-            .buttonStyle(SettingsCompactActionButtonStyle())
-
-            Button(permissionsLocalized("Test")) {
-                testBrowserURLRead(target)
-            }
-            .buttonStyle(SettingsCompactActionButtonStyle())
-
-            if target.isCustom {
-                Button(permissionsLocalized("Delete"), role: .destructive) {
-                    removeCustomBrowser(target)
-                }
-                .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 2)
     }
 
     private func statusBadge(for state: PermissionState) -> some View {
@@ -627,5 +637,35 @@ struct PermissionsSettingsView: View {
                 return "\(kind.logKey)=\(state == .enabled ? "on" : "off")"
             }
             .joined(separator: ", ")
+    }
+}
+
+private struct PermissionsSettingsSection<Content: View>: View {
+    let title: String
+    let description: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !title.isEmpty || !description.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    if !title.isEmpty {
+                        Text(title)
+                            .font(.headline)
+                    }
+
+                    if !description.isEmpty {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

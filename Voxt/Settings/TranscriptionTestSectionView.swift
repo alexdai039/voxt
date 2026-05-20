@@ -57,18 +57,7 @@ struct TranscriptionTestSectionView: View {
 
                 ZStack(alignment: .bottomTrailing) {
                     TextEditor(text: $testInputText)
-                        .font(.system(size: 12))
-                        .frame(height: 120)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.quaternary.opacity(0.35))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(.quaternary, lineWidth: 1)
-                        )
+                        .settingsPromptEditor(height: 120, contentPadding: 6)
 
                     Button(localized("Clean")) {
                         testInputText = ""
@@ -78,7 +67,6 @@ struct TranscriptionTestSectionView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
         }
     }
 

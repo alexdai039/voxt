@@ -45,6 +45,7 @@ struct URLPatternRowView: View {
     var onRemoveFromGroup: (() -> Void)? = nil
     let onEdit: () -> Void
     let onDelete: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -98,11 +99,16 @@ struct URLPatternRowView: View {
         .frame(height: 36)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor)
+                .fill(isHovering ? SettingsUIStyle.sidebarItemFillColor : SettingsUIStyle.controlFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                .strokeBorder(isHovering ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.14), value: isHovering)
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }

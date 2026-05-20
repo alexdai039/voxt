@@ -3,7 +3,6 @@ import AppKit
 import AVFoundation
 import Speech
 import ApplicationServices
-import UniformTypeIdentifiers
 
 private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
@@ -28,7 +27,7 @@ struct OnboardingSettingsView: View {
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
     @AppStorage(AppPreferenceKey.translateSelectedTextOnTranslationHotkey) var translateSelectedTextOnTranslationHotkey = true
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) var autoCopyWhenNoFocusedInput = false
-    @AppStorage(AppPreferenceKey.appEnhancementEnabled) var appEnhancementEnabled = false
+    @AppStorage(AppPreferenceKey.appEnhancementEnabled) var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.modelStorageRootPath) var modelStorageRootPath = ""
     @AppStorage(AppPreferenceKey.useHfMirror) var useHfMirror = false
     @AppStorage(AppPreferenceKey.transcriptionEngine) var engineRaw = TranscriptionEngine.mlxAudio.rawValue
@@ -56,7 +55,6 @@ struct OnboardingSettingsView: View {
     @State var modelStorageDisplayPath = ""
     @State var modelStorageSelectionError: String?
     @State var systemAudioPermissionMessage: String?
-    @State var configurationTransferMessage: String?
     @State var isUserMainLanguageSheetPresented = false
     @State var isMicrophonePriorityDialogPresented = false
     @State var isPermissionsDialogPresented = false
@@ -340,7 +338,9 @@ struct OnboardingSettingsView: View {
                 PermissionsSettingsView(navigationRequest: nil)
                     .padding(16)
             }
-            .frame(minWidth: 720, minHeight: 520)
+            .settingsDialogChrome(width: 720, height: 520, onClose: {
+                isPermissionsDialogPresented = false
+            })
         })
         let asrSheet = AnyView(permissionsSheet.sheet(item: $editingASRProvider) { provider in
             RemoteProviderConfigurationSheet(
@@ -490,11 +490,7 @@ struct OnboardingSettingsView: View {
             }
             .padding(.top, 4)
         }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 12)
-        .padding(.top, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .settingsSidebarSurface()
     }
 
     var onboardingHeader: some View {

@@ -13,17 +13,23 @@ struct TranscriptionDetailContentView: View {
     @ObservedObject var viewModel: TranscriptionDetailViewModel
     let locale: Locale
     let style: TranscriptionDetailPresentationStyle
+    let contentPaddingOverride: CGFloat?
+    let verticalPaddingOverride: CGFloat?
 
     @StateObject private var playbackController: HistoryAudioPlaybackController
 
     init(
         viewModel: TranscriptionDetailViewModel,
         locale: Locale,
-        style: TranscriptionDetailPresentationStyle
+        style: TranscriptionDetailPresentationStyle,
+        contentPaddingOverride: CGFloat? = nil,
+        verticalPaddingOverride: CGFloat? = nil
     ) {
         self.viewModel = viewModel
         self.locale = locale
         self.style = style
+        self.contentPaddingOverride = contentPaddingOverride
+        self.verticalPaddingOverride = verticalPaddingOverride
         _playbackController = StateObject(wrappedValue: HistoryAudioPlaybackController(audioURL: viewModel.audioURL))
     }
 
@@ -36,7 +42,11 @@ struct TranscriptionDetailContentView: View {
     }
 
     private var contentPadding: CGFloat {
-        style == .popover ? 8 : 14
+        contentPaddingOverride ?? (style == .popover ? 8 : 14)
+    }
+
+    private var verticalPadding: CGFloat {
+        verticalPaddingOverride ?? (style == .popover ? 10 : 14)
     }
 
     private var sectionSpacing: CGFloat {
@@ -211,7 +221,7 @@ struct TranscriptionDetailContentView: View {
                 }
             }
             .padding(.horizontal, contentPadding)
-            .padding(.vertical, style == .popover ? 10 : 14)
+            .padding(.vertical, verticalPadding)
             .frame(width: preferredContentWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }

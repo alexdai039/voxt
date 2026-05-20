@@ -15,26 +15,32 @@ struct FeatureHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.12))
-                    )
+            if !title.isEmpty || !subtitle.isEmpty {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.accentColor.opacity(0.12))
+                        )
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title)
-                        .font(.title2.weight(.semibold))
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !title.isEmpty {
+                            Text(title)
+                                .font(.title2.weight(.semibold))
+                        }
+                        if !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
                 }
-
-                Spacer(minLength: 0)
             }
 
             if !pills.isEmpty {
@@ -63,8 +69,7 @@ struct FeatureHeroCard: View {
                 }
             }
         }
-        .padding(18)
-        .settingsPanelSurface(cornerRadius: SettingsUIStyle.panelCornerRadius, fillOpacity: 0.88)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -79,10 +84,12 @@ struct FeatureSettingsCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                Spacer(minLength: 0)
+            if !title.isEmpty {
+                HStack {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                    Spacer(minLength: 0)
+                }
             }
             content
         }
@@ -103,8 +110,10 @@ struct FeatureSettingSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+            }
             if !detail.isEmpty {
                 Text(detail)
                     .font(.caption)
@@ -113,14 +122,6 @@ struct FeatureSettingSection<Content: View>: View {
             }
             content
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                .fill(SettingsUIStyle.groupedFillColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

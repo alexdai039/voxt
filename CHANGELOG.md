@@ -11,7 +11,7 @@ The format is based on Keep a Changelog.
 ### English
 
 #### Added
-- Added Typeflux-style automatic dictionary learning prompts for better correction term extraction.
+- Improved automatic dictionary learning prompts for better correction term extraction.
 - Added Codex provider controls for custom reasoning effort and remote model debugging.
 
 #### Changed
@@ -26,7 +26,7 @@ The format is based on Keep a Changelog.
 ### 简体中文
 
 #### 新增
-- 自动学习词典提示词改为 Typeflux 风格，提升纠错词汇提取效果。
+- 优化自动学习词典提示词，提升纠错词汇提取效果。
 - Codex provider 新增自定义 reasoning effort 和远端模型调试控制。
 
 #### 改进
@@ -41,7 +41,7 @@ The format is based on Keep a Changelog.
 ### 日本語
 
 #### 追加
-- 自動辞書学習のプロンプトを Typeflux 風にし、修正語句を抽出しやすくしました。
+- 自動辞書学習のプロンプトを改善し、修正語句を抽出しやすくしました。
 - Codex provider にカスタム reasoning effort とリモートモデルデバッグの設定を追加しました。
 
 #### 変更

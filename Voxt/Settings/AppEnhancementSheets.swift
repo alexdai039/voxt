@@ -11,6 +11,7 @@ struct GroupEditorSheet: View {
     @State private var selectedPresetID = Self.placeholderPresetID
 
     private static let placeholderPresetID = "choose-template"
+    private let dialogPadding: CGFloat = 0
 
     private struct PromptPreset: Identifiable {
         let id: String
@@ -58,63 +59,58 @@ struct GroupEditorSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.title3.weight(.semibold))
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 14)
+                .padding(.horizontal, dialogPadding)
+                .padding(.top, dialogPadding)
+                .padding(.bottom, 10)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(AppLocalization.localizedString("Group Name"))
-                            .font(.headline)
-                        TextField(AppLocalization.localizedString("Enter group name"), text: $name)
-                            .textFieldStyle(.plain)
-                            .settingsFieldSurface(minHeight: 34)
-                    }
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AppLocalization.localizedString("Name"))
+                        .font(.headline)
+                    TextField(AppLocalization.localizedString("Enter group name"), text: $name)
+                        .textFieldStyle(.plain)
+                        .settingsFieldSurface(minHeight: 34)
+                }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(AppLocalization.localizedString("Prompt"))
-                            .font(.headline)
-                        Text(PromptAuthoringGuidance.appEnhancement)
-                            .font(.caption)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AppLocalization.localizedString("Prompt"))
+                        .font(.headline)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(AppLocalization.localizedString("Starter templates"))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(.secondary)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(AppLocalization.localizedString("Starter templates"))
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-
-                            SettingsMenuPicker(
-                                selection: $selectedPresetID,
-                                options: presetOptions,
-                                selectedTitle: AppLocalization.localizedString("Choose template..."),
-                                width: 220
-                            )
-                            .onChange(of: selectedPresetID) { _, newValue in
-                                applyPreset(id: newValue)
-                            }
-                        }
-
-                        PromptEditorView(
-                            text: $prompt,
-                            height: 160,
-                            contentPadding: 8,
-                            variables: ModelSettingsPromptVariables.appEnhancement,
-                            variablesLayout: .twoColumns,
-                            variablesTitle: PromptAuthoringGuidance.optionalVariablesTitle
+                        SettingsMenuPicker(
+                            selection: $selectedPresetID,
+                            options: presetOptions,
+                            selectedTitle: AppLocalization.localizedString("Choose template..."),
+                            width: 220
                         )
+                        .onChange(of: selectedPresetID) { _, newValue in
+                            applyPreset(id: newValue)
+                        }
                     }
 
-                    if let errorMessage, !errorMessage.isEmpty {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
+                    PromptEditorView(
+                        text: $prompt,
+                        height: 160,
+                        contentPadding: 8,
+                        variables: ModelSettingsPromptVariables.appEnhancement,
+                        variablesLayout: .twoColumns,
+                        variablesTitle: PromptAuthoringGuidance.optionalVariablesTitle
+                    )
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 14)
+
+                if let errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, dialogPadding)
+            .padding(.bottom, 8)
 
             Divider()
 
@@ -127,10 +123,11 @@ struct GroupEditorSheet: View {
                     .buttonStyle(SettingsPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 18)
+            .padding(.horizontal, dialogPadding)
+            .padding(.top, 8)
+            .padding(.bottom, dialogPadding)
         }
+        .settingsDialogChrome(onClose: onCancel)
     }
 
     private func applyPreset(id: String) {
@@ -156,6 +153,7 @@ struct URLBatchEditorSheet: View {
     let onCancel: () -> Void
     let onSave: () -> Void
     @State private var testInput = ""
+    @State private var isTestInputHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -167,7 +165,7 @@ struct URLBatchEditorSheet: View {
                     .font(.headline)
                 PromptEditorView(text: $text, height: 180, contentPadding: 8)
 
-                Text(AppLocalization.localizedString("Enter one wildcard pattern per line. Examples: google.com/*, *.google.com/*, x.*.google.com/*/doc"))
+                Text(AppLocalization.localizedString("One wildcard pattern per line."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -175,7 +173,7 @@ struct URLBatchEditorSheet: View {
                     Text(AppLocalization.localizedString("Pattern Test"))
                         .font(.headline)
 
-                    TextField(AppLocalization.localizedString("Paste a URL or any text to test the patterns above"), text: $testInput)
+                    TextField(AppLocalization.localizedString("Paste a URL to test"), text: $testInput)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .frame(minHeight: 34)
@@ -187,6 +185,8 @@ struct URLBatchEditorSheet: View {
                             RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
                                 .strokeBorder(testFieldBorderColor, lineWidth: 1)
                         )
+                        .contentShape(RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous))
+                        .onHover { isTestInputHovered = $0 }
 
                     Text(testFeedbackText)
                         .font(.caption)
@@ -212,8 +212,7 @@ struct URLBatchEditorSheet: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 24)
+        .settingsDialogChrome(onClose: onCancel)
     }
 
     private var normalizedPatterns: [String] {
@@ -250,7 +249,7 @@ struct URLBatchEditorSheet: View {
     private var testFieldBorderColor: Color {
         switch testStatus {
         case .idle:
-            return SettingsUIStyle.subtleBorderColor
+            return isTestInputHovered ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor
         case .matched:
             return Color.green.opacity(0.7)
         case .unmatched:
@@ -324,6 +323,6 @@ struct URLDetailSheet: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
+        .settingsDialogChrome(onClose: onClose)
     }
 }

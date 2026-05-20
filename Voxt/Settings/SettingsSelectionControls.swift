@@ -13,9 +13,16 @@ struct SettingsMenuPicker<Value: Hashable>: View {
     let options: [SettingsMenuOption<Value>]
     let selectedTitle: String
     let width: CGFloat
+    var allowsCompactWidth = false
+    var isCompact = false
+    var usesCompactInsets = false
 
     private var resolvedWidth: CGFloat {
-        SettingsUIStyle.resolvedSelectWidth(width)
+        allowsCompactWidth ? max(ceil(width), 1) : SettingsUIStyle.resolvedSelectWidth(width)
+    }
+
+    private var resolvedHeight: CGFloat {
+        isCompact ? 24 : 34
     }
 
     var body: some View {
@@ -23,9 +30,11 @@ struct SettingsMenuPicker<Value: Hashable>: View {
             selection: $selection,
             options: options,
             selectedTitle: selectedTitle,
-            preferredWidth: resolvedWidth
+            preferredWidth: resolvedWidth,
+            isCompact: isCompact,
+            usesCompactInsets: usesCompactInsets
         )
-        .frame(width: resolvedWidth, height: 34)
+        .frame(width: resolvedWidth, height: resolvedHeight)
         .alignmentGuide(.firstTextBaseline) { dimensions in
             dimensions[VerticalAlignment.center]
         }
@@ -63,6 +72,15 @@ struct SettingsSelectionButton<Label: View>: View {
 
 struct SettingsSelectLikeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        SettingsSelectLikeButtonBody(configuration: configuration)
+    }
+}
+
+private struct SettingsSelectLikeButtonBody: View {
+    let configuration: SettingsSelectLikeButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(.primary)
@@ -74,9 +92,11 @@ struct SettingsSelectLikeButtonStyle: ButtonStyle {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                    .strokeBorder(isHovered ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous))
             .opacity(configuration.isPressed ? 0.92 : 1)
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -128,6 +148,8 @@ private struct SettingsNativeMenuPicker<Value: Hashable>: NSViewRepresentable {
     let options: [SettingsMenuOption<Value>]
     let selectedTitle: String
     let preferredWidth: CGFloat
+    let isCompact: Bool
+    let usesCompactInsets: Bool
 
     private var state: SettingsNativeMenuPickerState {
         let selectionBinding = $selection
@@ -138,6 +160,8 @@ private struct SettingsNativeMenuPicker<Value: Hashable>: NSViewRepresentable {
             selectedValue: AnyHashable(selection),
             selectedTitle: selectedTitle,
             preferredWidth: preferredWidth,
+            isCompact: isCompact,
+            usesCompactInsets: usesCompactInsets,
             onSelectValue: { selectedValue in
                 guard let value = selectedValue.base as? Value else { return }
                 if selectionBinding.wrappedValue != value {
@@ -176,6 +200,7 @@ private final class SettingsNativeMenuPickerCoordinator: NSObject {
     }
 
     func update(_ hostView: SettingsMenuHostView) {
+        hostView.setCompactMode(state.isCompact, usesCompactInsets: state.usesCompactInsets)
         let titles = state.options.map(\.title)
         if let selectedIndex = state.options.firstIndex(where: { $0.value == state.selectedValue }) {
             hostView.toolTip = state.options[selectedIndex].title
@@ -220,6 +245,8 @@ private struct SettingsNativeMenuPickerState {
     let selectedValue: AnyHashable
     let selectedTitle: String
     let preferredWidth: CGFloat
+    let isCompact: Bool
+    let usesCompactInsets: Bool
     let onSelectValue: (AnyHashable) -> Void
 }
 
@@ -232,8 +259,17 @@ private final class SettingsMenuHostView: NSView {
     private let titleField = NSTextField(labelWithString: "")
     private let indicatorView = NSImageView()
     private let popupMenu = NSMenu()
+    private var titleLeadingConstraint: NSLayoutConstraint?
+    private var titleIndicatorConstraint: NSLayoutConstraint?
+    private var indicatorTrailingConstraint: NSLayoutConstraint?
+    private var indicatorWidthConstraint: NSLayoutConstraint?
+    private var indicatorHeightConstraint: NSLayoutConstraint?
     private var selectedIndex: Int?
     private var currentMenuWidth: CGFloat = 0
+    private var isCompact = false
+    private var usesCompactInsets = false
+    private var isHovered = false
+    private var trackingArea: NSTrackingArea?
     var onSelectIndex: ((Int) -> Void)?
 
     override var isFlipped: Bool {
@@ -263,14 +299,20 @@ private final class SettingsMenuHostView: NSView {
         addSubview(titleField)
         addSubview(indicatorView)
 
+        titleLeadingConstraint = titleField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12)
+        titleIndicatorConstraint = titleField.trailingAnchor.constraint(equalTo: indicatorView.leadingAnchor, constant: -8)
+        indicatorTrailingConstraint = indicatorView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10)
+        indicatorWidthConstraint = indicatorView.widthAnchor.constraint(equalToConstant: 14)
+        indicatorHeightConstraint = indicatorView.heightAnchor.constraint(equalToConstant: 14)
+
         NSLayoutConstraint.activate([
-            titleField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            titleField.trailingAnchor.constraint(lessThanOrEqualTo: indicatorView.leadingAnchor, constant: -8),
+            titleLeadingConstraint!,
+            titleIndicatorConstraint!,
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            indicatorView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            indicatorTrailingConstraint!,
             indicatorView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            indicatorView.widthAnchor.constraint(equalToConstant: 14),
-            indicatorView.heightAnchor.constraint(equalToConstant: 14)
+            indicatorWidthConstraint!,
+            indicatorHeightConstraint!
         ])
     }
 
@@ -283,8 +325,56 @@ private final class SettingsMenuHostView: NSView {
         super.layout()
         layer?.cornerRadius = SettingsUIStyle.controlCornerRadius
         layer?.backgroundColor = SettingsUIStyle.controlFillNSColor.cgColor
-        layer?.borderColor = SettingsUIStyle.subtleBorderNSColor.cgColor
+        updateBorder()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        trackingArea = area
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        updateBorder()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        updateBorder()
+    }
+
+    private func updateBorder() {
+        layer?.borderColor = (isHovered ? SettingsUIStyle.controlHoverBorderNSColor : SettingsUIStyle.subtleBorderNSColor).cgColor
         layer?.borderWidth = 1
+    }
+
+    func setCompactMode(_ compact: Bool, usesCompactInsets compactInsets: Bool) {
+        guard isCompact != compact || usesCompactInsets != compactInsets else { return }
+        isCompact = compact
+        usesCompactInsets = compactInsets
+        let shouldUseCompactInsets = compact || compactInsets
+        titleField.font = .systemFont(ofSize: compact ? 11 : 13, weight: .medium)
+        indicatorView.image = NSImage(
+            systemSymbolName: "chevron.up.chevron.down",
+            accessibilityDescription: nil
+        )?.withSymbolConfiguration(.init(pointSize: compact ? 9 : 11, weight: .semibold))
+        titleLeadingConstraint?.constant = shouldUseCompactInsets ? 8 : 12
+        titleIndicatorConstraint?.constant = shouldUseCompactInsets ? -4 : -8
+        indicatorTrailingConstraint?.constant = shouldUseCompactInsets ? -7 : -10
+        indicatorWidthConstraint?.constant = compact ? 10 : 14
+        indicatorHeightConstraint?.constant = compact ? 10 : 14
+        titleField.alignment = compactInsets ? .right : .left
+        needsLayout = true
     }
 
     func updateMenu(titles: [String], selectedIndex: Int?, fallbackTitle: String, preferredWidth: CGFloat) {
@@ -298,6 +388,7 @@ private final class SettingsMenuHostView: NSView {
                 item.target = self
                 item.tag = index
                 item.state = index == selectedIndex ? .on : .off
+                applyMenuItemAppearance(item)
                 popupMenu.addItem(item)
             }
             currentMenuWidth = menuWidth
@@ -306,10 +397,21 @@ private final class SettingsMenuHostView: NSView {
         self.selectedIndex = selectedIndex
         for item in popupMenu.items {
             item.state = item.tag == selectedIndex ? .on : .off
+            applyMenuItemAppearance(item)
         }
 
         popupMenu.minimumWidth = menuWidth
         titleField.stringValue = fallbackTitle
+    }
+
+    private func applyMenuItemAppearance(_ item: NSMenuItem) {
+        guard isCompact else { return }
+        item.attributedTitle = NSAttributedString(
+            string: item.title,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium)
+            ]
+        )
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -84,7 +84,7 @@ struct DictionaryOneClickIngestDialog: View {
                         onRestoreDefaultPrompt: onRestoreDefaultPrompt
                     )
 
-                    Text(AppLocalization.localizedString("One-click ingest scans new history records and writes accepted terms directly into the dictionary."))
+                    Text(AppLocalization.localizedString("Scan history and add accepted terms to the dictionary."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -117,9 +117,9 @@ struct DictionaryOneClickIngestDialog: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: dialogWidth)
-        .frame(maxHeight: dialogMaxHeight)
+        .settingsDialogChrome(width: dialogWidth, maxHeight: dialogMaxHeight, onClose: {
+            isPresented = false
+        })
     }
 }
 

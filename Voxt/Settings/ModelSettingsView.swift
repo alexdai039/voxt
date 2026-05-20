@@ -695,7 +695,7 @@ struct ModelSettingsView: View {
                     .buttonStyle(SettingsPillButtonStyle())
                 }
 
-                Text(localized("New model downloads are stored here. Switching the path will not move existing model files."))
+                Text(localized("New model downloads are stored here."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -709,7 +709,7 @@ struct ModelSettingsView: View {
             GeneralSettingsCard(titleText: localized("Memory")) {
                 Toggle(localized("Memory Optimization"), isOn: $localModelMemoryOptimizationEnabled)
 
-                Text(localized("When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse."))
+                Text(localized("Unload idle local models to reduce memory usage."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -717,7 +717,7 @@ struct ModelSettingsView: View {
             GeneralSettingsCard(titleText: localized("Download Source")) {
                 Toggle(localized("Use China mirror"), isOn: $useHfMirror)
 
-                Text(localized("Use the China mirror when downloading local models. This only changes the download source for Hugging Face based local models."))
+                Text(localized("Use the mirror for Hugging Face model downloads."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -748,8 +748,9 @@ struct ModelSettingsView: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 560)
+        .settingsDialogChrome(width: 560, onClose: {
+            isModelDownloadSettingsPresented = false
+        })
     }
 
     @ViewBuilder

@@ -68,6 +68,9 @@ struct HotkeySettingsView: View {
     @State private var pendingCapturedField: RecordingField?
     @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
     @State private var recorderMessageKey: String?
+    @State private var isAdvancedExpanded = false
+    @State private var hotkeyToastMessage = ""
+    @State private var hotkeyToastDismissTask: Task<Void, Never>?
 
     private var hotkeyBinding: Binding<UInt16> {
         Binding(
@@ -308,12 +311,10 @@ struct HotkeySettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(localized("Shortcut"))
-                        .font(.headline)
-
                     HStack(alignment: .center, spacing: 12) {
                         Text(localized("Preset"))
-                            .foregroundStyle(.secondary)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.92))
                         Spacer()
                         SettingsMenuPicker(
                             selection: presetBinding,
@@ -328,8 +329,9 @@ struct HotkeySettingsView: View {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(localized("Distinguish Left/Right Modifiers"))
-                                .foregroundStyle(.secondary)
-                            Text(localized("When enabled, Left Shift and Right Shift are treated as different shortcuts."))
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.primary.opacity(0.92))
+                            Text(localized("Left Shift and Right Shift are treated as different shortcuts."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -408,6 +410,55 @@ struct HotkeySettingsView: View {
                         onConfirmPending: confirmPendingCapture
                     )
 
+                    ForEach(validationMessages) { message in
+                        Text(message.text)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    HotkeyRecorderView(
+                        isRecording: isRecordingBinding,
+                        onCapture: { capturedHotkey in
+                            guard let field = recordingField else { return }
+                            pendingCapturedField = field
+                            pendingCapturedHotkey = capturedHotkey
+                            showHotkeyToast(localized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
+                        },
+                        onCancelCapture: {
+                            discardPendingCapture()
+                            recordingField = nil
+                        },
+                        onRecorderMessageChange: { messageKey in
+                            guard recorderMessageKey != messageKey else { return }
+                            DispatchQueue.main.async {
+                                recorderMessageKey = messageKey
+                                if let messageKey {
+                                    showHotkeyToast(localized(messageKey))
+                                }
+                            }
+                        }
+                    )
+                    .frame(width: 0, height: 0)
+
+                    GeneralSectionDivider()
+                        .padding(.top, 2)
+
+                    HStack(alignment: .center, spacing: 12) {
+                        Text(localized("Trigger"))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.92))
+                        Spacer()
+                        SettingsMenuPicker(
+                            selection: triggerModeBinding,
+                            options: HotkeyPreference.TriggerMode.allCases.map { mode in
+                                SettingsMenuOption(value: mode, title: mode.title)
+                            },
+                            selectedTitle: triggerModeBinding.wrappedValue.title,
+                            width: 336
+                        )
+                        .disabled(isRewriteDoubleTapWakeEnabled)
+                    }
+
                     if customPasteHotkeyEnabled {
                         SettingsShortcutCaptureField(
                             title: "Custom Paste",
@@ -427,80 +478,10 @@ struct HotkeySettingsView: View {
                         )
                     }
 
-                    if recordingField != nil, pendingCapturedField != recordingField {
-                        Text(localized("Type your shortcut now. Press Esc to cancel recording."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if pendingCapturedField != nil {
-                        Text(localized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let recorderMessageKey {
-                        Text(LocalizedStringKey(recorderMessageKey))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    ForEach(validationMessages) { message in
-                        Text(message.text)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-
-                    HotkeyRecorderView(
-                        isRecording: isRecordingBinding,
-                        onCapture: { capturedHotkey in
-                            guard let field = recordingField else { return }
-                            pendingCapturedField = field
-                            pendingCapturedHotkey = capturedHotkey
-                        },
-                        onCancelCapture: {
-                            discardPendingCapture()
-                            recordingField = nil
-                        },
-                        onRecorderMessageChange: { messageKey in
-                            guard recorderMessageKey != messageKey else { return }
-                            DispatchQueue.main.async {
-                                recorderMessageKey = messageKey
-                            }
-                        }
-                    )
-                    .frame(width: 0, height: 0)
-
-                    HStack(alignment: .center, spacing: 12) {
-                        Text(localized("Trigger"))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        SettingsMenuPicker(
-                            selection: triggerModeBinding,
-                            options: HotkeyPreference.TriggerMode.allCases.map { mode in
-                                SettingsMenuOption(value: mode, title: mode.title)
-                            },
-                            selectedTitle: triggerModeBinding.wrappedValue.title,
-                            width: 220
-                        )
-                        .disabled(isRewriteDoubleTapWakeEnabled)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-            }
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(localized("Cancel Shortcut"))
-                        .font(.headline)
-
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(localized("Use Esc to Cancel"))
-                                .foregroundStyle(.secondary)
-                            Text(localized("When enabled, pressing Esc cancels the active overlay session. Turn this off to disable Esc cancellation."))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    HStack(alignment: .center, spacing: 18) {
+                        Text(localized("Use Esc to Cancel"))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.92))
                         Spacer()
                         Toggle("", isOn: $escapeKeyCancelsOverlaySession)
                             .labelsHidden()
@@ -509,36 +490,23 @@ struct HotkeySettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
             }
 
-            VoiceEndCommandSettingsSection()
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localized("Hotkey Tips"))
-                        .font(.headline)
-                    Text(localized("Use a single key such as fn, or combine it with modifier keys."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(localized("Mouse buttons such as middle click and side buttons can be recorded as shortcuts, with optional modifier keys."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(localized("Long Press runs while held. Tap starts and stops with a tap."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(localized("If text is selected, the translation shortcut translates and replaces the selection directly."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(localized("On macOS, fn shortcuts may conflict with Globe or input source switching. If needed, change that shortcut in System Settings > Keyboard > Keyboard Shortcuts > Input Sources."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
+            GeneralAdvancedCard(isExpanded: $isAdvancedExpanded) {
+                VoiceEndCommandSettingsSection()
             }
         }
         .id(interfaceLanguageRaw)
+        .overlay(alignment: .top) {
+            if !hotkeyToastMessage.isEmpty {
+                ModelDebugToast(message: hotkeyToastMessage) {
+                    dismissHotkeyToast()
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: hotkeyToastMessage)
         .onChange(of: customPasteHotkeyEnabled) { _, enabled in
             guard !enabled else { return }
             if recordingField == .customPaste || pendingCapturedField == .customPaste {
@@ -566,6 +534,7 @@ struct HotkeySettingsView: View {
         pendingCapturedField = nil
         pendingCapturedHotkey = nil
         recordingField = field
+        showHotkeyToast(localized("Type your shortcut now. Press Esc to cancel recording."))
     }
 
     private func toggleRewriteDoubleTapWake() {
@@ -596,6 +565,7 @@ struct HotkeySettingsView: View {
         pendingCapturedField = nil
         pendingCapturedHotkey = nil
         recordingField = nil
+        dismissHotkeyToast()
     }
 
     private func confirmPendingCapture() {
@@ -625,6 +595,22 @@ struct HotkeySettingsView: View {
         pendingCapturedField = nil
         pendingCapturedHotkey = nil
         recordingField = nil
+        dismissHotkeyToast()
+    }
+
+    private func showHotkeyToast(_ message: String, duration: TimeInterval = 2.2) {
+        hotkeyToastDismissTask?.cancel()
+        hotkeyToastMessage = message
+        hotkeyToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            hotkeyToastMessage = ""
+        }
+    }
+
+    private func dismissHotkeyToast() {
+        hotkeyToastDismissTask?.cancel()
+        hotkeyToastMessage = ""
     }
 
     private func assign(

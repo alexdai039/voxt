@@ -2,26 +2,92 @@ import SwiftUI
 import AppKit
 
 enum SettingsUIStyle {
-    static let windowCornerRadius: CGFloat = 22
     static let panelCornerRadius: CGFloat = 16
+    static let dialogCornerRadius: CGFloat = 6
+    static let dialogPadding: CGFloat = 16
+    static let modelConfigurationDialogWidth: CGFloat = 520
+    static let modelConfigurationDialogMaxHeight: CGFloat = 720
+    static let modelConfigurationScrollMaxHeight: CGFloat = 600
     static let compactCornerRadius: CGFloat = 12
     static let controlCornerRadius: CGFloat = 10
-    static let sidebarWidth: CGFloat = 184
-    static let sidebarHorizontalPadding: CGFloat = 12
+    static let sidebarWidth: CGFloat = 172
     static let sidebarItemHorizontalPadding: CGFloat = 14
     static let sidebarItemHeight: CGFloat = 36
     static let sidebarItemIconWidth: CGFloat = 18
+    static let contentScrollIndicatorOutset: CGFloat = 10
+    static let contentScrollTrailingGutter: CGFloat = 14
+
+    static var windowBackgroundNSColor: NSColor {
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.980, green: 0.980, blue: 0.980, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.09, alpha: 1)
+        )
+    }
+
+    static var windowBackgroundColor: Color {
+        Color(nsColor: windowBackgroundNSColor)
+    }
+
+    static var panelFillNSColor: NSColor {
+        dynamicColor(
+            light: NSColor.white,
+            dark: NSColor(calibratedWhite: 0.125, alpha: 1)
+        )
+    }
+
+    static var panelFillColor: Color {
+        Color(nsColor: panelFillNSColor)
+    }
 
     static var controlFillNSColor: NSColor {
-        dynamicColor(light: NSColor.controlBackgroundColor, dark: NSColor(calibratedWhite: 0.185, alpha: 1))
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.965, green: 0.965, blue: 0.965, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.20, alpha: 1)
+        )
     }
 
     static var controlFillColor: Color {
         Color(nsColor: controlFillNSColor)
     }
 
+    static var modelGroupFillNSColor: NSColor {
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.957, green: 0.957, blue: 0.957, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.18, alpha: 1)
+        )
+    }
+
+    static var modelGroupFillColor: Color {
+        Color(nsColor: modelGroupFillNSColor)
+    }
+
+    static var modelGroupListFillNSColor: NSColor {
+        dynamicColor(
+            light: NSColor.white,
+            dark: NSColor(calibratedWhite: 0.14, alpha: 1)
+        )
+    }
+
+    static var modelGroupListFillColor: Color {
+        Color(nsColor: modelGroupListFillNSColor)
+    }
+
+    static var modelCardBorderNSColor: NSColor {
+        dynamicColor(
+            light: NSColor.black.withAlphaComponent(0.032),
+            dark: NSColor.white.withAlphaComponent(0.052)
+        )
+    }
+
+    static var modelCardBorderColor: Color {
+        Color(nsColor: modelCardBorderNSColor)
+    }
+
     static var groupedFillNSColor: NSColor {
-        dynamicColor(light: NSColor.windowBackgroundColor, dark: NSColor(calibratedWhite: 0.15, alpha: 1))
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.980, green: 0.980, blue: 0.980, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.12, alpha: 1)
+        )
     }
 
     static var groupedFillColor: Color {
@@ -29,22 +95,58 @@ enum SettingsUIStyle {
     }
 
     static var subtleFillNSColor: NSColor {
-        dynamicColor(light: NSColor.controlBackgroundColor, dark: NSColor(calibratedWhite: 0.20, alpha: 1))
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.937, green: 0.937, blue: 0.937, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.20, alpha: 1)
+        )
     }
 
     static var subtleFillColor: Color {
         Color(nsColor: subtleFillNSColor)
     }
 
+    static var sidebarItemFillNSColor: NSColor {
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.933, green: 0.933, blue: 0.933, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.22, alpha: 1)
+        )
+    }
+
+    static var sidebarItemFillColor: Color {
+        Color(nsColor: sidebarItemFillNSColor)
+    }
+
+    static var sidebarItemPressedFillNSColor: NSColor {
+        dynamicColor(
+            light: NSColor(calibratedRed: 0.902, green: 0.902, blue: 0.902, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.27, alpha: 1)
+        )
+    }
+
+    static var sidebarItemPressedFillColor: Color {
+        Color(nsColor: sidebarItemPressedFillNSColor)
+    }
+
     static var subtleBorderNSColor: NSColor {
         dynamicColor(
-            light: NSColor.black.withAlphaComponent(0.08),
-            dark: NSColor.white.withAlphaComponent(0.10)
+            light: NSColor.black.withAlphaComponent(0.045),
+            dark: NSColor.white.withAlphaComponent(0.075)
         )
     }
 
     static var subtleBorderColor: Color {
         Color(nsColor: subtleBorderNSColor)
+    }
+
+    static var controlHoverBorderNSColor: NSColor {
+        dynamicColor(
+            light: NSColor.black.withAlphaComponent(0.105),
+            dark: NSColor.white.withAlphaComponent(0.145)
+        )
+    }
+
+    static var controlHoverBorderColor: Color {
+        Color(nsColor: controlHoverBorderNSColor)
     }
 
     static var panelBorderNSColor: NSColor {
@@ -56,6 +158,17 @@ enum SettingsUIStyle {
 
     static var panelBorderColor: Color {
         Color(nsColor: panelBorderNSColor)
+    }
+
+    static var dialogBorderNSColor: NSColor {
+        dynamicColor(
+            light: NSColor.black.withAlphaComponent(0.045),
+            dark: NSColor.white.withAlphaComponent(0.04)
+        )
+    }
+
+    static var dialogBorderColor: Color {
+        Color(nsColor: dialogBorderNSColor)
     }
 
     static var primaryButtonFillColor: Color {
@@ -91,7 +204,7 @@ enum SettingsUIStyle {
 struct SettingsPanelSurface: ViewModifier {
     var cornerRadius: CGFloat = SettingsUIStyle.panelCornerRadius
     var fillOpacity: CGFloat = 0.76
-    var backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
+    var backgroundColor: Color = SettingsUIStyle.panelFillColor
 
     func body(content: Content) -> some View {
         content
@@ -110,21 +223,42 @@ struct SettingsPanelGroupBoxStyle: GroupBoxStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .settingsCardSurface()
     }
 }
 
-struct SettingsSidebarSurface: ViewModifier {
+struct SettingsDialogChromeModifier: ViewModifier {
+    var width: CGFloat?
+    var height: CGFloat?
+    var maxHeight: CGFloat?
+    var onClose: (() -> Void)?
+
     func body(content: Content) -> some View {
         content
-            .modifier(
-                SettingsPanelSurface(
-                    cornerRadius: SettingsUIStyle.panelCornerRadius,
-                    fillOpacity: 0.74,
-                    backgroundColor: Color(nsColor: .windowBackgroundColor)
-                )
+            .padding(SettingsUIStyle.dialogPadding)
+            .frame(width: width)
+            .frame(height: height)
+            .frame(maxHeight: maxHeight, alignment: .top)
+            .background(SettingsUIStyle.windowBackgroundColor)
+            .clipShape(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.dialogCornerRadius, style: .continuous)
             )
-            .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 3)
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.dialogCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsUIStyle.dialogBorderColor, lineWidth: 0.7)
+            )
+            .overlay(alignment: .topTrailing) {
+                if let onClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(SettingsCompactIconButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+                    .padding(.top, 16)
+                    .padding(.trailing, 16)
+                    .help(AppLocalization.localizedString("Close"))
+                }
+            }
     }
 }
 
@@ -135,6 +269,26 @@ struct SettingsFieldSurfaceModifier: ViewModifier {
     var alignment: Alignment = .leading
 
     func body(content: Content) -> some View {
+        SettingsFieldSurfaceBody(
+            width: width,
+            minHeight: minHeight,
+            horizontalPadding: horizontalPadding,
+            alignment: alignment,
+            content: content
+        )
+    }
+}
+
+private struct SettingsFieldSurfaceBody<Content: View>: View {
+    var width: CGFloat?
+    var minHeight: CGFloat
+    var horizontalPadding: CGFloat
+    var alignment: Alignment
+    let content: Content
+
+    @State private var isHovered = false
+
+    var body: some View {
         content
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment)
             .frame(width: width, alignment: alignment)
@@ -146,8 +300,10 @@ struct SettingsFieldSurfaceModifier: ViewModifier {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                    .strokeBorder(isHovered ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous))
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -156,19 +312,34 @@ struct SettingsPromptEditorModifier: ViewModifier {
     var contentPadding: CGFloat
 
     func body(content: Content) -> some View {
+        SettingsPromptEditorBody(height: height, contentPadding: contentPadding, content: content)
+    }
+}
+
+private struct SettingsPromptEditorBody<Content: View>: View {
+    var height: CGFloat
+    var contentPadding: CGFloat
+    let content: Content
+
+    @State private var isHovered = false
+
+    var body: some View {
         content
             .font(.system(size: 13, weight: .medium, design: .monospaced))
             .lineSpacing(4)
             .frame(height: height)
             .scrollContentBackground(.hidden)
             .padding(contentPadding)
-            .modifier(
-                SettingsPanelSurface(
-                    cornerRadius: SettingsUIStyle.compactCornerRadius,
-                    fillOpacity: 1,
-                    backgroundColor: SettingsUIStyle.controlFillColor
-                )
+            .background(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                    .fill(SettingsUIStyle.controlFillColor)
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                    .strokeBorder(isHovered ? SettingsUIStyle.controlHoverBorderColor : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous))
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -193,10 +364,6 @@ extension View {
         )
     }
 
-    func settingsSidebarSurface() -> some View {
-        modifier(SettingsSidebarSurface())
-    }
-
     func settingsFieldSurface(
         width: CGFloat? = nil,
         minHeight: CGFloat = 32,
@@ -216,4 +383,21 @@ extension View {
     func settingsPromptEditor(height: CGFloat, contentPadding: CGFloat = 8) -> some View {
         modifier(SettingsPromptEditorModifier(height: height, contentPadding: contentPadding))
     }
+
+    func settingsDialogChrome(
+        width: CGFloat? = nil,
+        height: CGFloat? = nil,
+        maxHeight: CGFloat? = nil,
+        onClose: (() -> Void)? = nil
+    ) -> some View {
+        modifier(
+            SettingsDialogChromeModifier(
+                width: width,
+                height: height,
+                maxHeight: maxHeight,
+                onClose: onClose
+            )
+        )
+    }
+
 }

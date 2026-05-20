@@ -56,17 +56,7 @@ struct HistoryDetailSheetContent: View {
             HStack(alignment: .center, spacing: 12) {
                 Text(localizedHistoryDetail("History Details"))
                     .font(.title3.weight(.semibold))
-
-                Spacer(minLength: 12)
-
-                Button(localizedHistoryDetail("Close")) {
-                    dismiss()
-                }
-                .buttonStyle(SettingsPillButtonStyle())
-                .keyboardShortcut(.cancelAction)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
             .padding(.bottom, 10)
 
             Divider()
@@ -74,10 +64,11 @@ struct HistoryDetailSheetContent: View {
             TranscriptionDetailContentView(
                 viewModel: viewModel,
                 locale: locale,
-                style: .window
+                style: .window,
+                contentPaddingOverride: 0,
+                verticalPaddingOverride: 12
             )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
         }
+        .settingsDialogChrome(onClose: { dismiss() })
     }
 }

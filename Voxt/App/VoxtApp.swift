@@ -254,7 +254,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.autoCopyWhenNoFocusedInput: false,
             AppPreferenceKey.realtimeTextDisplayEnabled: true,
             AppPreferenceKey.alwaysShowRewriteAnswerCard: false,
-            AppPreferenceKey.appEnhancementEnabled: false,
+            AppPreferenceKey.appEnhancementEnabled: true,
             AppPreferenceKey.translationSystemPrompt: "",
             AppPreferenceKey.rewriteSystemPrompt: "",
             AppPreferenceKey.asrHintSettings: ASRHintSettingsStore.defaultStoredValue(),

@@ -68,6 +68,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let llmDurationSeconds: TimeInterval?
     let focusedAppName: String?
     let focusedAppBundleID: String?
+    let browserURLHost: String?
+    let browserURLOrigin: String?
     let matchedGroupID: UUID?
     let matchedGroupName: String?
     let matchedAppGroupName: String?
@@ -106,6 +108,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case llmDurationSeconds
         case focusedAppName
         case focusedAppBundleID
+        case browserURLHost
+        case browserURLOrigin
         case matchedGroupID
         case matchedGroupName
         case matchedAppGroupName
@@ -145,6 +149,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
         focusedAppBundleID: String?,
+        browserURLHost: String? = nil,
+        browserURLOrigin: String? = nil,
         matchedGroupID: UUID?,
         matchedGroupName: String?,
         matchedAppGroupName: String?,
@@ -182,6 +188,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.llmDurationSeconds = llmDurationSeconds
         self.focusedAppName = focusedAppName
         self.focusedAppBundleID = focusedAppBundleID
+        self.browserURLHost = browserURLHost
+        self.browserURLOrigin = browserURLOrigin
         self.matchedGroupID = matchedGroupID
         self.matchedGroupName = matchedGroupName
         self.matchedAppGroupName = matchedAppGroupName
@@ -224,6 +232,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         llmDurationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .llmDurationSeconds)
         focusedAppName = try container.decodeIfPresent(String.self, forKey: .focusedAppName)
         focusedAppBundleID = try container.decodeIfPresent(String.self, forKey: .focusedAppBundleID)
+        browserURLHost = try container.decodeIfPresent(String.self, forKey: .browserURLHost)
+        browserURLOrigin = try container.decodeIfPresent(String.self, forKey: .browserURLOrigin)
         let decodedMatchedAppGroupName = try container.decodeIfPresent(String.self, forKey: .matchedAppGroupName)
         let decodedMatchedURLGroupName = try container.decodeIfPresent(String.self, forKey: .matchedURLGroupName)
         matchedGroupID = try container.decodeIfPresent(UUID.self, forKey: .matchedGroupID)
@@ -269,6 +279,8 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(llmDurationSeconds, forKey: .llmDurationSeconds)
         try container.encodeIfPresent(focusedAppName, forKey: .focusedAppName)
         try container.encodeIfPresent(focusedAppBundleID, forKey: .focusedAppBundleID)
+        try container.encodeIfPresent(browserURLHost, forKey: .browserURLHost)
+        try container.encodeIfPresent(browserURLOrigin, forKey: .browserURLOrigin)
         try container.encodeIfPresent(matchedGroupID, forKey: .matchedGroupID)
         try container.encodeIfPresent(matchedGroupName, forKey: .matchedGroupName)
         try container.encodeIfPresent(matchedAppGroupName, forKey: .matchedAppGroupName)
@@ -299,6 +311,31 @@ struct HistoryReportMetrics: Hashable {
     let totalCharacters: Int
     let totalTranslationCharacters: Int
     let dailyCharacters: [Date: Int]
+    let branchItems: [HistoryBranchMetricItem]
+}
+
+struct HistoryBranchMetricItem: Identifiable, Hashable {
+    enum Kind: String, Hashable {
+        case app
+        case url
+    }
+
+    let kind: Kind
+    let title: String
+    let subtitle: String?
+    let bundleID: String?
+    let urlHost: String?
+    let urlOrigin: String?
+    let characterCount: Int
+
+    var id: String {
+        switch kind {
+        case .app:
+            return "app:\(bundleID ?? title)"
+        case .url:
+            return "url:\(urlHost ?? title)"
+        }
+    }
 }
 
 @MainActor
@@ -474,10 +511,14 @@ final class TranscriptionHistoryStore: ObservableObject {
         (try? repository.pendingNormalEntries(after: checkpoint)) ?? []
     }
 
-    func reportMetrics(dayStarts: [Date], completion: @escaping (HistoryReportMetrics?) -> Void) {
+    func reportMetrics(
+        dayStarts: [Date],
+        branchStartDate: Date? = nil,
+        completion: @escaping (HistoryReportMetrics?) -> Void
+    ) {
         let repository = repository
         DispatchQueue.global(qos: .utility).async {
-            let metrics = try? repository.reportMetrics(dayStarts: dayStarts)
+            let metrics = try? repository.reportMetrics(dayStarts: dayStarts, branchStartDate: branchStartDate)
             DispatchQueue.main.async {
                 completion(metrics)
             }
@@ -498,6 +539,8 @@ final class TranscriptionHistoryStore: ObservableObject {
         llmDurationSeconds: TimeInterval?,
         focusedAppName: String?,
         focusedAppBundleID: String?,
+        browserURLHost: String? = nil,
+        browserURLOrigin: String? = nil,
         matchedGroupID: UUID?,
         matchedGroupName: String?,
         matchedAppGroupName: String?,
@@ -538,6 +581,8 @@ final class TranscriptionHistoryStore: ObservableObject {
             llmDurationSeconds: llmDurationSeconds,
             focusedAppName: focusedAppName,
             focusedAppBundleID: focusedAppBundleID,
+            browserURLHost: browserURLHost,
+            browserURLOrigin: browserURLOrigin,
             matchedGroupID: matchedGroupID,
             matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,
