@@ -341,6 +341,7 @@
 "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions." = "Direct Dictation には音声認識権限が必要です。設定 > 権限で有効にしてください。";
 "MLX model is not downloaded. Open Settings > Model to install it." = "MLX モデルが未ダウンロードです。設定 > モデルでインストールしてください。";
 "MLX model is unavailable. Open Settings > Model to fix it." = "MLX モデルが利用できません。設定 > モデルで修正してください。";
+"MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "MLX モデルが利用できません。設定 > モデルで修正してください。\n理由: %@";
 "MLX model is still downloading. Wait for installation to finish and try again." = "MLX モデルはまだダウンロード中です。インストール完了後に再試行してください。";
 "Whisper (On-device)" = "Whisper オンデバイス";
 "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding." = "WhisperKit の音声モデルをローカル実行します。複数の Whisper モデルとデコード設定に対応します。";
@@ -373,6 +374,7 @@
 "Whisper model is not downloaded. Open Settings > Model to install it." = "Whisper モデルが未ダウンロードです。設定 > モデルでインストールしてください。";
 "Whisper model is still downloading. Wait for installation to finish and try again." = "Whisper モデルはまだダウンロード中です。インストール完了後に再試行してください。";
 "Whisper model is unavailable. Open Settings > Model to fix it." = "Whisper モデルが利用できません。設定 > モデルで修正してください。";
+"Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "Whisper モデルが利用できません。設定 > モデルで修正してください。\n理由: %@";
 "Whisper failed to load the selected model." = "選択した Whisper モデルの読み込みに失敗しました。";
 "Whisper is not ready yet. Open Settings > Model and try again." = "Whisper はまだ準備できていません。設定 > モデルを開いて再試行してください。";
 "Whisper failed to start recording." = "Whisper の録音開始に失敗しました。";
