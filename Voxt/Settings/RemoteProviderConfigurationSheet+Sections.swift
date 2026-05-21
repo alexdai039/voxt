@@ -322,7 +322,8 @@ extension RemoteProviderConfigurationSheet {
             }
 
             if shouldShowGenerationAdvancedControls {
-                DisclosureGroup(
+                RemoteProviderConfigurationDisclosureSection(
+                    title: AppLocalization.localizedString("Advanced"),
                     isExpanded: $generationAdvancedExpanded,
                     content: {
                         VStack(alignment: .leading, spacing: 12) {
@@ -368,16 +369,13 @@ extension RemoteProviderConfigurationSheet {
                             }
                         }
                         .padding(.top, 8)
-                    },
-                    label: {
-                        Text(AppLocalization.localizedString("Advanced"))
-                            .font(.subheadline)
                     }
                 )
             }
 
             if shouldShowGenerationExpertControls {
-                DisclosureGroup(
+                RemoteProviderConfigurationDisclosureSection(
+                    title: AppLocalization.localizedString("Expert"),
                     isExpanded: $generationExpertExpanded,
                     content: {
                         VStack(alignment: .leading, spacing: 12) {
@@ -416,10 +414,6 @@ extension RemoteProviderConfigurationSheet {
                             }
                         }
                         .padding(.top, 8)
-                    },
-                    label: {
-                        Text(AppLocalization.localizedString("Expert"))
-                            .font(.subheadline)
                     }
                 )
             }
@@ -617,5 +611,44 @@ extension RemoteProviderConfigurationSheet {
                     .allowsHitTesting(false)
             }
         }
+    }
+}
+
+private struct RemoteProviderConfigurationDisclosureSection<Content: View>: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12, height: 12)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                content()
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .clipped()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

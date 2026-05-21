@@ -391,6 +391,10 @@
 "Report" = "ダッシュボード";
 "Dashboard" = "ダッシュボード";
 "Home" = "ホーム";
+"Speak clearly. Adapt to context." = "言葉を形に、文脈に合わせて";
+"Home Shortcut Prompt Prefix" = "";
+"Home Shortcut Prompt Suffix" = "を押して音声入力を開始/停止";
+"Changelog" = "更新履歴";
 "Total Dictation Time" = "総口述時間";
 "Total Dictation Characters" = "口述文字数";
 "Time Saved" = "節約時間";
@@ -399,6 +403,10 @@
 "char/min" = "文字/分";
 "Daily Characters (Last 7 Days)" = "直近7日間の日別文字数";
 "chars" = "文字";
+"Vocabulary" = "語彙";
+"No usage records yet" = "使用記録はまだありません";
+"No auto-learned vocabulary yet" = "自動学習された語彙はまだありません";
+"No trend data yet" = "トレンドデータはまだありません";
 "%d ms" = "%dミリ秒";
 "%.1f s" = "%.1f秒";
 "%dm %ds" = "%d分 %d秒";
@@ -496,6 +504,7 @@
 "1 Year" = "1年";
 "3 Months" = "3か月";
 "6 Months" = "6か月";
+"Today" = "今日";
 "1 Day" = "1日";
 "7 Days" = "7日";
 "15 Days" = "15日";

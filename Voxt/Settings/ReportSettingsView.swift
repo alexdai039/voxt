@@ -1,6 +1,10 @@
 import SwiftUI
 import AppKit
 
+private func reportLocalized(_ key: String) -> String {
+    AppLocalization.localizedString(key)
+}
+
 struct ReportSettingsView: View {
     @Environment(\.locale) private var locale
     @ObservedObject var historyStore: TranscriptionHistoryStore
@@ -32,30 +36,30 @@ struct ReportSettingsView: View {
                     LazyVGrid(columns: metricColumns, spacing: 10) {
                         ReportMetricCard(
                             iconName: "clock.badge.checkmark",
-                            title: "总口述时间",
+                            title: reportLocalized("Total Dictation Time"),
                             value: formattedDuration(summary.totalDictationSeconds),
                             unit: nil
                         )
                         .frame(height: metricCardHeight)
                         ReportMetricCard(
                             iconName: "character.textbox",
-                            title: "口述字数",
+                            title: reportLocalized("Total Dictation Characters"),
                             value: localizedNumber(summary.totalCharacters),
-                            unit: "字"
+                            unit: reportLocalized("chars")
                         )
                         .frame(height: metricCardHeight)
                         ReportMetricCard(
                             iconName: "globe",
-                            title: "翻译字数",
+                            title: reportLocalized("Total Translation Characters"),
                             value: localizedNumber(summary.totalTranslationCharacters),
-                            unit: "字"
+                            unit: reportLocalized("chars")
                         )
                         .frame(height: metricCardHeight)
                         ReportMetricCard(
                             iconName: "speedometer",
-                            title: "平均口述速度",
+                            title: reportLocalized("Average Dictation Speed"),
                             value: localizedNumber(Int(summary.averageCharactersPerMinute)),
-                            unit: "字/分钟"
+                            unit: reportLocalized("char/min")
                         )
                         .frame(height: metricCardHeight)
                     }
@@ -128,12 +132,12 @@ struct ReportSettingsView: View {
         let minutes = (totalSeconds % 3600) / 60
         let remainSeconds = totalSeconds % 60
         if hours > 0 {
-            return String(format: "%d时 %d分", locale: locale, hours, minutes)
+            return String(format: reportLocalized("%dh %dm"), locale: locale, hours, minutes)
         }
         if minutes > 0 {
-            return String(format: "%d分 %d秒", locale: locale, minutes, remainSeconds)
+            return String(format: reportLocalized("%dm %ds"), locale: locale, minutes, remainSeconds)
         }
-        return String(format: "%d秒", locale: locale, remainSeconds)
+        return String(format: reportLocalized("%d s"), locale: locale, remainSeconds)
     }
 
     private func localizedNumber(_ value: Int) -> String {
@@ -173,9 +177,9 @@ private enum ReportTimeRange: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .today: return "今天"
-        case .sevenDays: return "7天"
-        case .thirtyDays: return "30天"
+        case .today: return reportLocalized("Today")
+        case .sevenDays: return reportLocalized("7 Days")
+        case .thirtyDays: return reportLocalized("30 Days")
         }
     }
 
@@ -244,10 +248,10 @@ private struct BranchRankingCard: View {
     var body: some View {
         DashboardCard {
             VStack(alignment: .leading, spacing: 10) {
-                DashboardCardHeader(title: "增强", selectedRange: $selectedRange)
+                DashboardCardHeader(title: reportLocalized("Enhancement"), selectedRange: $selectedRange)
 
                 if items.isEmpty {
-                    DashboardEmptyState(text: "暂无使用记录")
+                    DashboardEmptyState(text: reportLocalized("No usage records yet"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView(.vertical) {
@@ -311,7 +315,7 @@ private struct BranchRankingRow: View {
                 }
                 .frame(width: 54, height: 5)
 
-                Text("\(localizedNumber(item.characterCount)) 字")
+                Text("\(localizedNumber(item.characterCount)) \(reportLocalized("chars"))")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -427,10 +431,10 @@ private struct VocabularyCard: View {
     var body: some View {
         DashboardCard {
             VStack(alignment: .leading, spacing: 10) {
-                DashboardCardHeader(title: "词汇", selectedRange: $selectedRange)
+                DashboardCardHeader(title: reportLocalized("Vocabulary"), selectedRange: $selectedRange)
 
                 if entries.isEmpty {
-                    DashboardEmptyState(text: "暂无自动学习词汇")
+                    DashboardEmptyState(text: reportLocalized("No auto-learned vocabulary yet"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView(.vertical) {
@@ -469,13 +473,13 @@ private struct DailyCharactersTrendCard: View {
         DashboardCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("近 7 天每日字数")
+                    Text(reportLocalized("Daily Characters (Last 7 Days)"))
                         .font(.system(size: 14, weight: .bold))
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
-                    Text("\(data.map(\.value).reduce(0, +)) 字")
+                    Text("\(data.map(\.value).reduce(0, +)) \(reportLocalized("chars"))")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -570,7 +574,7 @@ private struct DailyCharactersTrendChart: View {
                 }
 
                 if data.allSatisfy({ $0.value == 0 }) {
-                    DashboardEmptyState(text: "暂无趋势数据")
+                    DashboardEmptyState(text: reportLocalized("No trend data yet"))
                         .frame(width: proxy.size.width, height: graphRect.height)
                         .offset(y: graphRect.minY)
                 }

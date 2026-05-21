@@ -285,7 +285,7 @@ struct SettingsView: View {
                     HStack(alignment: selectedTab == .report && sidebarMode == .root ? .top : .center, spacing: 12) {
                         if sidebarMode == .root, selectedTab == .report {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("出口成文，因境而变")
+                                Text(settingsLocalized("Speak clearly. Adapt to context."))
                                     .font(.system(size: 18, weight: .bold))
                                     .lineLimit(1)
                                 HomeShortcutPrompt(shortcut: currentTranscriptionHotkeyDisplayString)
@@ -313,7 +313,7 @@ struct SettingsView: View {
                     HStack {
                         Spacer(minLength: 0)
 
-                        Button("更新日志") {
+                        Button(settingsLocalized("Changelog")) {
                             openChangelog()
                         }
                         .buttonStyle(.plain)
@@ -775,7 +775,11 @@ private struct HomeShortcutPrompt: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 5) {
-            Text("按下")
+            let prefix = settingsLocalized("Home Shortcut Prompt Prefix")
+            let suffix = settingsLocalized("Home Shortcut Prompt Suffix")
+            if !prefix.isEmpty {
+                Text(prefix)
+            }
             Text(shortcut)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.primary)
@@ -787,7 +791,9 @@ private struct HomeShortcutPrompt: View {
                     Capsule(style: .continuous)
                         .fill(SettingsUIStyle.controlFillColor)
                 )
-            Text("键，开始和停止语音输入")
+            if !suffix.isEmpty {
+                Text(suffix)
+            }
         }
         .font(.system(size: 12, weight: .medium))
         .foregroundStyle(.secondary)

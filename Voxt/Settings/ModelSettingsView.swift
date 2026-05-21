@@ -669,10 +669,10 @@ struct ModelSettingsView: View {
                 .font(.title3.weight(.semibold))
 
             GeneralSettingsCard(titleText: localized("Model Storage")) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(localized("Storage Path"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                GeneralFieldRow(
+                    title: LocalizedStringKey(localized("Storage Path")),
+                    description: LocalizedStringKey(localized("New model downloads are stored here."))
+                ) {
                     Button(action: openModelStorageInFinder) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
@@ -695,10 +695,6 @@ struct ModelSettingsView: View {
                     .buttonStyle(SettingsPillButtonStyle())
                 }
 
-                Text(localized("New model downloads are stored here."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 if let modelStorageSelectionError, !modelStorageSelectionError.isEmpty {
                     Text(modelStorageSelectionError)
                         .font(.caption)
@@ -706,20 +702,22 @@ struct ModelSettingsView: View {
                 }
             }
 
-            GeneralSettingsCard(titleText: localized("Memory")) {
-                Toggle(localized("Memory Optimization"), isOn: $localModelMemoryOptimizationEnabled)
+            GeneralSectionDivider()
 
-                Text(localized("Unload idle local models to reduce memory usage."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            GeneralToggleRow(
+                title: LocalizedStringKey(localized("Memory Optimization")),
+                description: LocalizedStringKey(localized("Unload idle local models to reduce memory usage.")),
+                isOn: $localModelMemoryOptimizationEnabled
+            )
 
-            GeneralSettingsCard(titleText: localized("Download Source")) {
-                Toggle(localized("Use China mirror"), isOn: $useHfMirror)
+            GeneralSectionDivider()
 
-                Text(localized("Use the mirror for Hugging Face model downloads."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                GeneralToggleRow(
+                    title: LocalizedStringKey(localized("Use China mirror")),
+                    description: LocalizedStringKey(localized("Use the mirror for Hugging Face model downloads.")),
+                    isOn: $useHfMirror
+                )
 
                 endpointTestRow(
                     title: localized("Global"),

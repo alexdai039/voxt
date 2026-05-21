@@ -30,6 +30,32 @@ struct AboutSettingsView: View {
         return localized("Version metadata missing")
     }
 
+    private var isBetaVersion: Bool {
+        let bundle = Bundle.main
+        let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        let lowercasedVersionMetadata = "\(shortVersion) \(buildVersion)".lowercased()
+        if lowercasedVersionMetadata.contains("beta") {
+            return true
+        }
+
+        let versionComponents = shortVersion
+            .split(separator: ".")
+            .compactMap { Int($0) }
+        guard versionComponents.count == 3,
+              let major = versionComponents[safe: 0],
+              let minor = versionComponents[safe: 1],
+              let patch = versionComponents[safe: 2],
+              let buildNumber = Int(buildVersion)
+        else {
+            return false
+        }
+
+        let releaseBuildBase = major * 100_000_000 + minor * 100_000 + patch * 100
+        let releaseBuildSuffix = buildNumber - releaseBuildBase
+        return (1...98).contains(releaseBuildSuffix)
+    }
+
     private let feedbackURL = URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
 
     var body: some View {
@@ -40,9 +66,23 @@ struct AboutSettingsView: View {
                         Text(localizedKey("Version"))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.primary.opacity(0.92))
-                        Text(appVersionText)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Text(appVersionText)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+
+                            if isBetaVersion {
+                                Text(localizedKey("Beta"))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(Color.accentColor.opacity(0.11))
+                                    )
+                            }
+                        }
                     }
 
                     Spacer(minLength: 0)
@@ -66,13 +106,16 @@ struct AboutSettingsView: View {
 
             HStack(alignment: .top, spacing: 14) {
                 AboutInfoCard(title: localizedKey("Project")) {
-                    Link("github.com/hehehai/voxt", destination: URL(string: "https://github.com/hehehai/voxt")!)
-                    Link(localized("Feedback"), destination: feedbackURL)
+                    AboutExternalLink(
+                        title: "github.com/hehehai/voxt",
+                        destination: URL(string: "https://github.com/hehehai/voxt")!
+                    )
+                    AboutExternalLink(title: localized("Feedback"), destination: feedbackURL)
                 }
                 .settingsNavigationAnchor(.aboutProject)
 
                 AboutInfoCard(title: localizedKey("Author")) {
-                    Link("hehehai", destination: URL(string: "https://www.hehehai.cn/")!)
+                    AboutExternalLink(title: "hehehai", destination: URL(string: "https://www.hehehai.cn/")!)
                 }
                 .settingsNavigationAnchor(.aboutAuthor)
             }
@@ -95,10 +138,6 @@ private struct AboutInfoCard<Content: View>: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 content()
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
             }
             Spacer(minLength: 0)
         }
@@ -112,5 +151,32 @@ private struct AboutInfoCard<Content: View>: View {
             RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
                 .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
         )
+    }
+}
+
+private struct AboutExternalLink: View {
+    let title: String
+    let destination: URL
+
+    var body: some View {
+        Link(destination: destination) {
+            HStack(spacing: 5) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.primary.opacity(0.84))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

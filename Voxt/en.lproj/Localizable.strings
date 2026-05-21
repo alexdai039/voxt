@@ -397,6 +397,10 @@
 "Report" = "Dashboard";
 "Dashboard" = "Dashboard";
 "Home" = "Home";
+"Speak clearly. Adapt to context." = "Speak clearly. Adapt to context.";
+"Home Shortcut Prompt Prefix" = "Press";
+"Home Shortcut Prompt Suffix" = "to start and stop voice input";
+"Changelog" = "Changelog";
 "Total Dictation Time" = "Total Dictation Time";
 "Total Dictation Characters" = "Total Dictation Characters";
 "Time Saved" = "Time Saved";
@@ -405,6 +409,10 @@
 "char/min" = "char/min";
 "Daily Characters (Last 7 Days)" = "Daily Characters (Last 7 Days)";
 "chars" = "chars";
+"Vocabulary" = "Vocabulary";
+"No usage records yet" = "No usage records yet";
+"No auto-learned vocabulary yet" = "No auto-learned vocabulary yet";
+"No trend data yet" = "No trend data yet";
 "%d ms" = "%d ms";
 "%.1f s" = "%.1f s";
 "%dm %ds" = "%dm %ds";
@@ -502,6 +510,7 @@
 "1 Year" = "1 Year";
 "3 Months" = "3 Months";
 "6 Months" = "6 Months";
+"Today" = "Today";
 "1 Day" = "1 Day";
 "7 Days" = "7 Days";
 "15 Days" = "15 Days";

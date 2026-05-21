@@ -397,6 +397,10 @@
 "Report" = "看板";
 "Dashboard" = "看板";
 "Home" = "首页";
+"Speak clearly. Adapt to context." = "出口成文，因境而变";
+"Home Shortcut Prompt Prefix" = "按下";
+"Home Shortcut Prompt Suffix" = "键，开始和停止语音输入";
+"Changelog" = "更新日志";
 "Total Dictation Time" = "总口述时间";
 "Total Dictation Characters" = "口述字数";
 "Time Saved" = "节省时间";
@@ -405,6 +409,10 @@
 "char/min" = "字/分钟";
 "Daily Characters (Last 7 Days)" = "近 7 天每日字数";
 "chars" = "字";
+"Vocabulary" = "词汇";
+"No usage records yet" = "暂无使用记录";
+"No auto-learned vocabulary yet" = "暂无自动学习词汇";
+"No trend data yet" = "暂无趋势数据";
 "%d ms" = "%d 毫秒";
 "%.1f s" = "%.1f 秒";
 "%dm %ds" = "%d分 %d秒";
@@ -502,6 +510,7 @@
 "1 Year" = "一年";
 "3 Months" = "三个月";
 "6 Months" = "六个月";
+"Today" = "今天";
 "1 Day" = "1 天";
 "7 Days" = "7 天";
 "15 Days" = "15 天";
