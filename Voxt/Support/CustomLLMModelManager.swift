@@ -129,10 +129,9 @@ class CustomLLMModelManager: ObservableObject {
     private var inferenceModelRepo: String?
     private var lastLoggedModelPresence: (repo: String, downloaded: Bool)?
     private var lastInvalidRepoLogged: String?
-    private let idleUnloadDelay: Duration = .seconds(90)
     private var activeInferenceCount = 0
-    private var isMemoryOptimizationEnabled: Bool {
-        UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
+    private var resolvedIdleUnloadDelay: Duration {
+        .seconds(AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds())
     }
     private func resolvedGenerationSettings(for repo: String) -> LLMGenerationSettings {
         CustomLLMGenerationSettingsStore.resolvedSettings(
@@ -165,16 +164,7 @@ class CustomLLMModelManager: ObservableObject {
             return
         }
         guard activeInferenceCount == 0 else { return }
-        if isMemoryOptimizationEnabled {
-            scheduleIdleUnloadIfNeeded()
-        } else {
-            cancelIdleUnloadTask()
-        }
-    }
-
-    func releaseLoadedModelIfIdle(reason: String) {
-        guard isMemoryOptimizationEnabled else { return }
-        unloadInferenceContainerIfIdle(expectedRepo: inferenceModelRepo, reason: reason)
+        scheduleIdleUnloadIfNeeded()
     }
 
     func isModelLoaded(repo: String) -> Bool {
@@ -783,7 +773,7 @@ class CustomLLMModelManager: ObservableObject {
 
     func checkExistingModel() {
         guard let modelDir = cacheDirectory(for: modelRepo) else {
-            state = .error("Invalid model identifier")
+            setStateIfNeeded(.error("Invalid model identifier"))
             downloadedStateByRepo[modelRepo] = false
             if lastInvalidRepoLogged != modelRepo {
                 VoxtLog.error("Invalid custom LLM repo identifier: \(modelRepo)")
@@ -795,7 +785,7 @@ class CustomLLMModelManager: ObservableObject {
         let isDownloaded = CustomLLMModelStorageSupport.isModelDirectoryValid(modelDir)
         downloadedStateByRepo[modelRepo] = isDownloaded
         if isDownloaded {
-            state = .downloaded
+            setStateIfNeeded(.downloaded)
         } else if downloadTask == nil, hasResumableDownload(repo: modelRepo) {
             setPausedState(
                 progress: 0,
@@ -806,7 +796,7 @@ class CustomLLMModelManager: ObservableObject {
                 totalFiles: 0
             )
         } else {
-            state = .notDownloaded
+            setStateIfNeeded(.notDownloaded)
         }
         let downloaded = (state == .downloaded)
         if lastLoggedModelPresence?.repo != modelRepo || lastLoggedModelPresence?.downloaded != downloaded {
@@ -1261,6 +1251,12 @@ class CustomLLMModelManager: ObservableObject {
         }
     }
 
+    private func setStateIfNeeded(_ nextState: ModelState) {
+        if state != nextState {
+            state = nextState
+        }
+    }
+
     private func pauseDownloadIfNetworkIssue(_ error: Error) -> Bool {
         guard let message = MLXModelDownloadSupport.pauseMessageForInterruptedDownload(error) else {
             return false
@@ -1494,13 +1490,9 @@ class CustomLLMModelManager: ObservableObject {
 
     private func scheduleIdleUnloadIfNeeded() {
         guard inferenceContainer != nil else { return }
-        guard isMemoryOptimizationEnabled else {
-            cancelIdleUnloadTask()
-            return
-        }
         idleUnloadTask?.cancel()
         let expectedRepo = inferenceModelRepo
-        let delay = idleUnloadDelay
+        let delay = resolvedIdleUnloadDelay
         idleUnloadTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: delay)

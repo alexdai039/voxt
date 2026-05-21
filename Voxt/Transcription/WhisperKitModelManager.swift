@@ -80,12 +80,10 @@ final class WhisperKitModelManager: ObservableObject {
     private var sizeTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var idleUnloadTask: Task<Void, Never>?
-    private let idleUnloadDelay: Duration = .seconds(90)
     private var activeUseCount = 0
     private var downloadErrorByID: [String: String] = [:]
-    private var isMemoryOptimizationEnabled: Bool {
-        let defaults = UserDefaults.standard
-        return defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
+    private var resolvedIdleUnloadDelay: Duration {
+        .seconds(AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds())
     }
 
     init(modelID: String, hubBaseURL: URL) {
@@ -139,15 +137,10 @@ final class WhisperKitModelManager: ObservableObject {
             return
         }
         guard activeUseCount == 0 else { return }
-        if isMemoryOptimizationEnabled {
-            scheduleIdleUnloadIfNeeded()
-        } else {
-            cancelIdleUnloadTask()
-        }
+        scheduleIdleUnloadIfNeeded()
     }
 
     func releaseLoadedModelIfIdle(reason: String) async {
-        guard isMemoryOptimizationEnabled else { return }
         guard activeUseCount == 0 else { return }
         guard loadedWhisper != nil else {
             cancelIdleUnloadTask()
@@ -442,7 +435,7 @@ final class WhisperKitModelManager: ObservableObject {
             if downloadTask == nil {
                 restorePausedDownloadIfPossible(for: modelID)
             } else {
-                state = .notDownloaded
+                setStateIfNeeded(.notDownloaded)
             }
             downloadedStateByID[modelID] = false
             return
@@ -455,9 +448,9 @@ final class WhisperKitModelManager: ObservableObject {
         }
         downloadedStateByID[modelID] = true
         if loadedWhisper != nil, loadedModelID == modelID {
-            state = .ready
+            setStateIfNeeded(.ready)
         } else {
-            state = .downloaded
+            setStateIfNeeded(.downloaded)
         }
     }
 
@@ -884,6 +877,12 @@ final class WhisperKitModelManager: ObservableObject {
         }
     }
 
+    private func setStateIfNeeded(_ nextState: ModelState) {
+        if state != nextState {
+            state = nextState
+        }
+    }
+
     private func pauseDownloadIfNetworkIssue(_ error: Error, targetID: String) -> Bool {
         guard let message = MLXModelDownloadSupport.pauseMessageForInterruptedDownload(error) else {
             return false
@@ -1165,11 +1164,11 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func scheduleIdleUnloadIfNeeded() {
         cancelIdleUnloadTask()
-        guard isMemoryOptimizationEnabled else { return }
+        guard loadedWhisper != nil else { return }
         idleUnloadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(for: idleUnloadDelay)
+                try await Task.sleep(for: resolvedIdleUnloadDelay)
             } catch {
                 return
             }

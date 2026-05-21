@@ -855,7 +855,9 @@
 "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready." = "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready.";
 "Memory" = "Memory";
 "Memory Optimization" = "Memory Optimization";
-"When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse." = "When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse.";
+"When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse." = "When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse.";
+"Unload Delay" = "Unload Delay";
+"Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse." = "Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse.";
 "Keep Resident" = "Keep Resident";
 "Resident On" = "Resident On";
 "Resident Off" = "Resident Off";

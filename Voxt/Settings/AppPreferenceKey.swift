@@ -11,6 +11,7 @@ enum AppPreferenceKey {
     static let whisperVADEnabled = "whisperVADEnabled"
     static let whisperTimestampsEnabled = "whisperTimestampsEnabled"
     static let whisperRealtimeEnabled = "whisperRealtimeEnabled"
+    static let localModelIdleUnloadDelaySeconds = "localModelIdleUnloadDelaySeconds"
     static let localModelMemoryOptimizationEnabled = "localModelMemoryOptimizationEnabled"
     static let whisperKeepResidentLoaded = "whisperKeepResidentLoaded"
     static let whisperLocalASRTuningSettings = "whisperLocalASRTuningSettings"
@@ -103,6 +104,32 @@ enum AppPreferenceKey {
     static let historyAudioStorageEnabled = "historyAudioStorageEnabled"
     static let historyAudioStorageRootPath = "historyAudioStorageRootPath"
     static let historyAudioStorageRootBookmark = "historyAudioStorageRootBookmark"
+
+    static let localModelIdleUnloadDelayMinimumSeconds = 10
+    static let localModelIdleUnloadDelayMaximumSeconds = 3000
+    static let defaultLocalModelIdleUnloadDelaySeconds = 90
+    static let legacyLongLocalModelIdleUnloadDelaySeconds = 120
+
+    static func clampedLocalModelIdleUnloadDelaySeconds(_ value: Int) -> Int {
+        min(max(value, localModelIdleUnloadDelayMinimumSeconds), localModelIdleUnloadDelayMaximumSeconds)
+    }
+
+    static func resolvedLocalModelIdleUnloadDelaySeconds(defaults: UserDefaults = .standard) -> Int {
+        if let stored = defaults.object(forKey: localModelIdleUnloadDelaySeconds) as? Int {
+            return clampedLocalModelIdleUnloadDelaySeconds(stored)
+        }
+        if let optimizationEnabled = defaults.object(forKey: localModelMemoryOptimizationEnabled) as? Bool {
+            return optimizationEnabled
+                ? defaultLocalModelIdleUnloadDelaySeconds
+                : legacyLongLocalModelIdleUnloadDelaySeconds
+        }
+        if let legacyKeepResident = defaults.object(forKey: whisperKeepResidentLoaded) as? Bool {
+            return legacyKeepResident
+                ? legacyLongLocalModelIdleUnloadDelaySeconds
+                : defaultLocalModelIdleUnloadDelaySeconds
+        }
+        return defaultLocalModelIdleUnloadDelaySeconds
+    }
 
     static func resolvedTranscriptSummaryPromptTemplate(defaults: UserDefaults = .standard) -> String? {
         defaults.string(forKey: transcriptSummaryPromptTemplate)

@@ -56,7 +56,8 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.whisperVADEnabled) var whisperVADEnabled = true
     @AppStorage(AppPreferenceKey.whisperTimestampsEnabled) var whisperTimestampsEnabled = false
     @AppStorage(AppPreferenceKey.whisperRealtimeEnabled) var whisperRealtimeEnabled = false
-    @AppStorage(AppPreferenceKey.localModelMemoryOptimizationEnabled) var localModelMemoryOptimizationEnabled = true
+    @AppStorage(AppPreferenceKey.localModelIdleUnloadDelaySeconds)
+    var localModelIdleUnloadDelaySeconds = AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
     @AppStorage(AppPreferenceKey.whisperLocalASRTuningSettings) var whisperLocalASRTuningSettingsRaw = WhisperLocalTuningSettingsStore.defaultStoredValue()
     @AppStorage(AppPreferenceKey.customLLMModelRepo) var customLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.customLLMGenerationSettings) var customLLMGenerationSettingsRaw = CustomLLMGenerationSettingsStore.defaultStoredValue()
@@ -704,9 +705,24 @@ struct ModelSettingsView: View {
             }
 
             GeneralSettingsCard(titleText: localized("Memory")) {
-                Toggle(localized("Memory Optimization"), isOn: $localModelMemoryOptimizationEnabled)
+                HStack(alignment: .center) {
+                    Text(localized("Unload Delay"))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 6) {
+                        LocalModelIdleUnloadDelayTextField(
+                            value: $localModelIdleUnloadDelaySeconds,
+                            range: AppPreferenceKey.localModelIdleUnloadDelayMinimumSeconds...AppPreferenceKey.localModelIdleUnloadDelayMaximumSeconds,
+                            width: 80
+                        )
 
-                Text(localized("When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse."))
+                        Text("s")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text(localized("Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -861,5 +877,61 @@ struct ModelSettingsView: View {
         case .rewriteCustomLLM(let repo):
             return AppLocalization.format("%@ %@: %@", customLLMManager.displayTitle(for: repo), localized("Rewrite"), issue.message)
         }
+    }
+}
+
+private struct LocalModelIdleUnloadDelayTextField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let width: CGFloat
+
+    @State private var text: String
+
+    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
+        _value = value
+        self.range = range
+        self.width = width
+        _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
+    }
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .settingsFieldSurface(width: width, alignment: .trailing)
+            .multilineTextAlignment(.trailing)
+            .onChange(of: text) { _, newValue in
+                let digits = newValue.filter(\.isNumber)
+                guard !digits.isEmpty else { return }
+
+                let parsed = Int(digits) ?? range.lowerBound
+                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                value = clamped
+
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onSubmit {
+                syncTextToValue()
+            }
+            .onChange(of: value) { _, newValue in
+                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onAppear {
+                syncTextToValue()
+            }
+    }
+
+    private func syncTextToValue() {
+        let digits = text.filter(\.isNumber)
+        let parsed = Int(digits) ?? value
+        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+        value = clamped
+        text = String(clamped)
     }
 }

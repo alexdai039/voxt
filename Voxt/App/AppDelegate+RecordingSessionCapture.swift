@@ -420,6 +420,7 @@ extension AppDelegate {
         _ message: String,
         autoHideAfter seconds: TimeInterval = 2.4
     ) {
+        releaseResidualRecordingResources(reason: "recording-start-failure")
         showOverlayReminder(message, autoHideAfter: seconds)
         resetSessionAfterFailedStart()
     }

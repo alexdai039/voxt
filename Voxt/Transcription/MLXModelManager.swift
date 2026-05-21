@@ -117,10 +117,9 @@ class MLXModelManager: ObservableObject {
     private var prefetchTask: Task<Void, Never>?
     private var idleUnloadTask: Task<Void, Never>?
     private let downloadSizeTolerance: Double = 0.9
-    private let idleUnloadDelay: Duration = .seconds(90)
     private var activeUseCount = 0
-    private var isMemoryOptimizationEnabled: Bool {
-        UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
+    private var resolvedIdleUnloadDelay: Duration {
+        .seconds(AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds())
     }
 
     init(modelRepo: String, hubBaseURL: URL = URL(string: "https://huggingface.co")!) {
@@ -139,16 +138,7 @@ class MLXModelManager: ObservableObject {
             return
         }
         guard activeUseCount == 0 else { return }
-        if isMemoryOptimizationEnabled {
-            scheduleIdleUnloadIfNeeded()
-        } else {
-            cancelIdleUnloadTask()
-        }
-    }
-
-    func releaseLoadedModelIfIdle(reason: String) {
-        guard isMemoryOptimizationEnabled else { return }
-        unloadLoadedModelIfIdle(expectedRepo: loadedRepo, reason: reason)
+        scheduleIdleUnloadIfNeeded()
     }
 
     func displayTitle(for repo: String) -> String {
@@ -1350,13 +1340,9 @@ class MLXModelManager: ObservableObject {
 
     private func scheduleIdleUnloadIfNeeded() {
         guard loadedModel != nil else { return }
-        guard isMemoryOptimizationEnabled else {
-            cancelIdleUnloadTask()
-            return
-        }
         idleUnloadTask?.cancel()
         let expectedRepo = loadedRepo
-        let delay = idleUnloadDelay
+        let delay = resolvedIdleUnloadDelay
         idleUnloadTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: delay)

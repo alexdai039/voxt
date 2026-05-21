@@ -1,11 +1,19 @@
 import Foundation
 
 enum ModelSettingsProgressRefreshSupport {
-    static func shouldRefreshCatalogForMetadataChange(
+    static func shouldRefreshCatalogForLifecycleChange(
         isActive: Bool,
         isWindowVisible: Bool
     ) -> Bool {
         isActive && isWindowVisible
+    }
+
+    static func shouldRefreshCatalogForMetadataChange(
+        isActive: Bool,
+        isWindowVisible: Bool,
+        shouldPollModelState: Bool
+    ) -> Bool {
+        isActive && isWindowVisible && shouldPollModelState
     }
 
     static func shouldPollModelState(

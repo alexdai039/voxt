@@ -6,6 +6,12 @@ private func localizedModelCatalog(_ key: String) -> String {
 
 @MainActor
 struct ModelCatalogBuilder {
+    struct CatalogDecoration {
+        let filterTags: [String]
+        let displayTags: [String]
+        let usageLocations: [String]
+    }
+
     let mlxModelManager: MLXModelManager
     let whisperModelManager: WhisperKitModelManager
     let customLLMManager: CustomLLMModelManager
@@ -67,6 +73,13 @@ struct ModelCatalogBuilder {
             )
             let configured = configuration.isConfigured
             let needsSetup = hasIssue(.remoteASRProvider(provider))
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
+                installed: false,
+                requiresConfiguration: true,
+                configured: configured,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "remote-asr:\(provider.rawValue)",
@@ -74,21 +87,10 @@ struct ModelCatalogBuilder {
                 engine: localizedModelCatalog("Remote ASR"),
                 sizeText: configuration.hasUsableModel ? configuration.model : localizedModelCatalog("Cloud"),
                 ratingText: provider == .openAIWhisper ? "4.6" : "4.4",
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
-                    installed: false,
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: remoteASRStatusText(provider, configuration),
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: needsSetup ? localizedModelCatalog("Needs Setup") : nil,
                 primaryAction: ModelTableAction(title: localizedModelCatalog("Configure")) {
                     configureASRProvider(provider)
@@ -109,6 +111,13 @@ struct ModelCatalogBuilder {
             let isInstalled = isCustomLLMInstalled(repo)
             let badge = customLLMBadgeText(repo)
             let status = isUninstallingCustomLLM(repo) ? localizedModelCatalog("Uninstalling…") : customLLMStatusText(repo)
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
+                installed: isInstalled,
+                requiresConfiguration: false,
+                configured: true,
+                selectionID: selectionID
+            )
             let primaryAction: ModelTableAction?
             let secondaryActions: [ModelTableAction]
             if isUninstallingCustomLLM(repo) {
@@ -159,21 +168,10 @@ struct ModelCatalogBuilder {
                     ? (customLLMManager.cachedModelSizeText(repo: repo) ?? customLLMManager.remoteSizeText(repo: repo))
                     : customLLMManager.remoteSizeText(repo: repo),
                 ratingText: CustomLLMModelManager.ratingText(for: repo),
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
-                    installed: isInstalled,
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: status,
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: badge,
                 primaryAction: primaryAction,
                 secondaryActions: secondaryActions
@@ -191,6 +189,13 @@ struct ModelCatalogBuilder {
                 stored: remoteLLMConfigurations
             )
             let status = configured ? "" : localizedModelCatalog("Not configured")
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
+                installed: false,
+                requiresConfiguration: true,
+                configured: configured,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "remote-llm:\(provider.rawValue)",
@@ -198,21 +203,10 @@ struct ModelCatalogBuilder {
                 engine: localizedModelCatalog("Remote LLM"),
                 sizeText: configured ? configuration.model : localizedModelCatalog("Cloud"),
                 ratingText: "4.5",
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
-                    installed: false,
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: status,
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: remoteLLMBadgeText(provider),
                 primaryAction: ModelTableAction(title: localizedModelCatalog("Configure")) {
                     configureLLMProvider(provider)
@@ -241,6 +235,43 @@ struct ModelCatalogBuilder {
         return labels
     }
 
+    func catalogDecoration(
+        base: [String],
+        installed: Bool,
+        requiresConfiguration: Bool,
+        configured: Bool,
+        selectionID: FeatureModelSelectionID
+    ) -> CatalogDecoration {
+        let usageLocations = usageLocations(for: selectionID)
+        var filterTags = base
+        if installed {
+            filterTags.append(localizedModelCatalog("Installed"))
+        }
+        if requiresConfiguration && configured {
+            filterTags.append(localizedModelCatalog("Configured"))
+        }
+        if !usageLocations.isEmpty {
+            filterTags.append(localizedModelCatalog("In Use"))
+        }
+
+        var displayTags = base.filter { $0 != localizedModelCatalog("Multilingual") }
+        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
+            displayTags.append(languageSupportTag)
+        }
+        if requiresConfiguration && configured {
+            displayTags.append(localizedModelCatalog("Configured"))
+        }
+        if !usageLocations.isEmpty {
+            displayTags.append(localizedModelCatalog("In Use"))
+        }
+
+        return CatalogDecoration(
+            filterTags: deduplicatedTags(filterTags),
+            displayTags: deduplicatedTags(displayTags),
+            usageLocations: usageLocations
+        )
+    }
+
     func catalogFilterTags(
         base: [String],
         installed: Bool,
@@ -267,17 +298,14 @@ struct ModelCatalogBuilder {
         configured: Bool,
         selectionID: FeatureModelSelectionID
     ) -> [String] {
-        var tags = base.filter { $0 != localizedModelCatalog("Multilingual") }
-        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
-            tags.append(languageSupportTag)
-        }
-        if requiresConfiguration && configured {
-            tags.append(localizedModelCatalog("Configured"))
-        }
-        if !usageLocations(for: selectionID).isEmpty {
-            tags.append(localizedModelCatalog("In Use"))
-        }
-        return deduplicatedTags(tags)
+        catalogDecoration(
+            base: base,
+            installed: false,
+            requiresConfiguration: requiresConfiguration,
+            configured: configured,
+            selectionID: selectionID
+        )
+        .displayTags
     }
 
     func mlxCatalogTags(for repo: String) -> [String] {

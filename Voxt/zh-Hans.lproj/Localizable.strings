@@ -855,7 +855,9 @@
 "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready." = "Whisper 首次在本地加载时可能需要几秒钟。在模型准备好之前，Voxt 会在浮层中显示初始化状态。";
 "Memory" = "内存";
 "Memory Optimization" = "内存优化";
-"When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse." = "开启后，Voxt 会在冷却期后卸载空闲的本地 ASR 和本地 LLM 模型，以降低内存占用。关闭后，已加载的本地模型会保持常驻，以便更快复用。";
+"When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse." = "开启后，Voxt 会更快卸载空闲的本地 ASR 和本地 LLM 模型，以降低内存占用。关闭后，模型会在卸载前保留更久，以便更快复用。";
+"Unload Delay" = "卸载延迟";
+"Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse." = "本地 ASR 和本地 LLM 模型在空闲后的卸载延迟。数值越小，内存占用越低；数值越大，短时间复用越快。";
 "Keep Resident" = "常驻加载";
 "Resident On" = "常驻开启";
 "Resident Off" = "常驻关闭";

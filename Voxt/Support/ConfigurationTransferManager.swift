@@ -329,6 +329,7 @@ enum ConfigurationTransferManager {
         var whisperVADEnabled: Bool
         var whisperTimestampsEnabled: Bool
         var whisperRealtimeEnabled: Bool
+        var localModelIdleUnloadDelaySeconds: Int
         var localModelMemoryOptimizationEnabled: Bool
         var whisperKeepResidentLoaded: Bool
         var customLLMModelRepo: String
@@ -362,6 +363,7 @@ enum ConfigurationTransferManager {
             case whisperVADEnabled
             case whisperTimestampsEnabled
             case whisperRealtimeEnabled
+            case localModelIdleUnloadDelaySeconds
             case localModelMemoryOptimizationEnabled
             case whisperKeepResidentLoaded
             case customLLMModelRepo
@@ -396,7 +398,7 @@ enum ConfigurationTransferManager {
             whisperVADEnabled: Bool,
             whisperTimestampsEnabled: Bool,
             whisperRealtimeEnabled: Bool,
-            localModelMemoryOptimizationEnabled: Bool,
+            localModelIdleUnloadDelaySeconds: Int,
             customLLMModelRepo: String,
             customLLMGenerationSettings: String,
             customLLMGenerationSettingsByRepo: String,
@@ -427,8 +429,10 @@ enum ConfigurationTransferManager {
             self.whisperVADEnabled = whisperVADEnabled
             self.whisperTimestampsEnabled = whisperTimestampsEnabled
             self.whisperRealtimeEnabled = whisperRealtimeEnabled
-            self.localModelMemoryOptimizationEnabled = localModelMemoryOptimizationEnabled
-            self.whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
+            let clampedIdleUnloadDelay = AppPreferenceKey.clampedLocalModelIdleUnloadDelaySeconds(localModelIdleUnloadDelaySeconds)
+            self.localModelIdleUnloadDelaySeconds = clampedIdleUnloadDelay
+            self.localModelMemoryOptimizationEnabled = clampedIdleUnloadDelay <= AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
+            self.whisperKeepResidentLoaded = !self.localModelMemoryOptimizationEnabled
             self.customLLMModelRepo = customLLMModelRepo
             self.customLLMGenerationSettings = CustomLLMGenerationSettingsStore.storageValue(
                 for: CustomLLMGenerationSettingsStore.resolvedSettings(from: customLLMGenerationSettings)
@@ -470,13 +474,20 @@ enum ConfigurationTransferManager {
             whisperVADEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperVADEnabled) ?? true
             whisperTimestampsEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperTimestampsEnabled) ?? false
             whisperRealtimeEnabled = try container.decodeIfPresent(Bool.self, forKey: .whisperRealtimeEnabled) ?? false
-            if let optimizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .localModelMemoryOptimizationEnabled) {
-                localModelMemoryOptimizationEnabled = optimizationEnabled
+            if let idleUnloadDelay = try container.decodeIfPresent(Int.self, forKey: .localModelIdleUnloadDelaySeconds) {
+                localModelIdleUnloadDelaySeconds = AppPreferenceKey.clampedLocalModelIdleUnloadDelaySeconds(idleUnloadDelay)
+            } else if let optimizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .localModelMemoryOptimizationEnabled) {
+                localModelIdleUnloadDelaySeconds = optimizationEnabled
+                    ? AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
+                    : AppPreferenceKey.legacyLongLocalModelIdleUnloadDelaySeconds
             } else if let legacyKeepResident = try container.decodeIfPresent(Bool.self, forKey: .whisperKeepResidentLoaded) {
-                localModelMemoryOptimizationEnabled = !legacyKeepResident
+                localModelIdleUnloadDelaySeconds = legacyKeepResident
+                    ? AppPreferenceKey.legacyLongLocalModelIdleUnloadDelaySeconds
+                    : AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
             } else {
-                localModelMemoryOptimizationEnabled = true
+                localModelIdleUnloadDelaySeconds = AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
             }
+            localModelMemoryOptimizationEnabled = localModelIdleUnloadDelaySeconds <= AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
             whisperKeepResidentLoaded = !localModelMemoryOptimizationEnabled
             customLLMModelRepo = try container.decode(String.self, forKey: .customLLMModelRepo)
             customLLMGenerationSettings = try container.decodeIfPresent(String.self, forKey: .customLLMGenerationSettings)
@@ -948,8 +959,7 @@ enum ConfigurationTransferManager {
                 whisperVADEnabled: defaults.object(forKey: AppPreferenceKey.whisperVADEnabled) as? Bool ?? true,
                 whisperTimestampsEnabled: defaults.object(forKey: AppPreferenceKey.whisperTimestampsEnabled) as? Bool ?? false,
                 whisperRealtimeEnabled: defaults.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) as? Bool ?? false,
-                localModelMemoryOptimizationEnabled: defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool
-                    ?? !(defaults.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool ?? false),
+                localModelIdleUnloadDelaySeconds: AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds(defaults: defaults),
                 customLLMModelRepo: defaults.string(forKey: AppPreferenceKey.customLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
                 customLLMGenerationSettings: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
                     ?? CustomLLMGenerationSettingsStore.defaultStoredValue(),
@@ -1097,8 +1107,11 @@ enum ConfigurationTransferManager {
         defaults.set(model.whisperVADEnabled, forKey: AppPreferenceKey.whisperVADEnabled)
         defaults.set(model.whisperTimestampsEnabled, forKey: AppPreferenceKey.whisperTimestampsEnabled)
         defaults.set(model.whisperRealtimeEnabled, forKey: AppPreferenceKey.whisperRealtimeEnabled)
-        defaults.set(model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled)
-        defaults.set(!model.localModelMemoryOptimizationEnabled, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
+        let clampedIdleUnloadDelay = AppPreferenceKey.clampedLocalModelIdleUnloadDelaySeconds(model.localModelIdleUnloadDelaySeconds)
+        let legacyOptimizationEnabled = clampedIdleUnloadDelay <= AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
+        defaults.set(clampedIdleUnloadDelay, forKey: AppPreferenceKey.localModelIdleUnloadDelaySeconds)
+        defaults.set(legacyOptimizationEnabled, forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled)
+        defaults.set(!legacyOptimizationEnabled, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
         defaults.set(model.customLLMModelRepo, forKey: AppPreferenceKey.customLLMModelRepo)
         defaults.set(model.customLLMGenerationSettings, forKey: AppPreferenceKey.customLLMGenerationSettings)
         defaults.set(model.customLLMGenerationSettingsByRepo, forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)

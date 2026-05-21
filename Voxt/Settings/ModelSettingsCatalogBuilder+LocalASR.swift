@@ -7,27 +7,23 @@ private func localizedModelCatalog(_ key: String) -> String {
 @MainActor
 extension ModelCatalogBuilder {
     func dictationASREntry() -> ModelCatalogEntry {
-        ModelCatalogEntry(
+        let decoration = catalogDecoration(
+            base: [localizedModelCatalog("Local"), localizedModelCatalog("Built-in"), localizedModelCatalog("Fast")],
+            installed: true,
+            requiresConfiguration: false,
+            configured: true,
+            selectionID: .dictation
+        )
+        return ModelCatalogEntry(
             id: FeatureModelSelectionID.dictation.rawValue,
             title: localizedModelCatalog("Direct Dictation"),
             engine: localizedModelCatalog("System ASR"),
             sizeText: localizedModelCatalog("Built-in"),
             ratingText: "3.4",
-            filterTags: catalogFilterTags(
-                base: [localizedModelCatalog("Local"), localizedModelCatalog("Built-in"), localizedModelCatalog("Fast")],
-                installed: true,
-                requiresConfiguration: false,
-                configured: true,
-                selectionID: .dictation
-            ),
-            displayTags: catalogDisplayTags(
-                base: [localizedModelCatalog("Local"), localizedModelCatalog("Built-in"), localizedModelCatalog("Fast")],
-                requiresConfiguration: false,
-                configured: true,
-                selectionID: .dictation
-            ),
+            filterTags: decoration.filterTags,
+            displayTags: decoration.displayTags,
             statusText: "",
-            usageLocations: usageLocations(for: .dictation),
+            usageLocations: decoration.usageLocations,
             badgeText: nil,
             primaryAction: ModelTableAction(title: localizedModelCatalog("Settings")) {
                 showASRHintTarget(.dictation)
@@ -48,6 +44,13 @@ extension ModelCatalogBuilder {
             let status = isUninstallingModel(repo)
                 ? localizedModelCatalog("Uninstalling…")
                 : mlxStatusText(snapshot)
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Local")] + mlxCatalogTags(for: repo),
+                installed: isInstalled,
+                requiresConfiguration: false,
+                configured: true,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "mlx:\(repo)",
@@ -55,21 +58,10 @@ extension ModelCatalogBuilder {
                 engine: localizedModelCatalog("MLX Audio"),
                 sizeText: mlxASRSizeText(repo: repo, isInstalled: isInstalled),
                 ratingText: MLXModelManager.ratingText(for: repo),
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Local")] + mlxCatalogTags(for: repo),
-                    installed: isInstalled,
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Local")] + mlxCatalogTags(for: repo),
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: status,
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: badge,
                 primaryAction: mlxPrimaryAction(
                     repo: repo,
@@ -98,6 +90,13 @@ extension ModelCatalogBuilder {
             let isInstalled = whisperModelManager.isModelDownloaded(id: modelID)
             let badge = hasIssue(.whisperModel(modelID)) ? localizedModelCatalog("Needs Setup") : nil
             let status = isUninstallingWhisperModel(modelID) ? localizedModelCatalog("Uninstalling…") : whisperModelStatusText(modelID)
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Local")] + whisperCatalogTags(for: modelID),
+                installed: isInstalled,
+                requiresConfiguration: false,
+                configured: true,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "whisper:\(modelID)",
@@ -105,21 +104,10 @@ extension ModelCatalogBuilder {
                 engine: localizedModelCatalog("Whisper"),
                 sizeText: whisperASRSizeText(modelID: modelID, isInstalled: isInstalled),
                 ratingText: WhisperKitModelManager.ratingText(for: modelID),
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Local")] + whisperCatalogTags(for: modelID),
-                    installed: isInstalled,
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Local")] + whisperCatalogTags(for: modelID),
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: status,
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: badge,
                 primaryAction: whisperPrimaryAction(modelID: modelID, isInstalled: isInstalled),
                 secondaryActions: whisperSecondaryActions(modelID: modelID, isInstalled: isInstalled)

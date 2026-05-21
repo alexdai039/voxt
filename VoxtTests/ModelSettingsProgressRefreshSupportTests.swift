@@ -2,23 +2,54 @@ import XCTest
 @testable import Voxt
 
 final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
-    func testShouldRefreshCatalogForMetadataChangeOnlyWhenActiveAndVisible() {
+    func testShouldRefreshCatalogForLifecycleChangeOnlyWhenActiveAndVisible() {
         XCTAssertTrue(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: true,
                 isWindowVisible: true
             )
         )
         XCTAssertFalse(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: false,
                 isWindowVisible: true
             )
         )
         XCTAssertFalse(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: true,
                 isWindowVisible: false
+            )
+        )
+    }
+
+    func testShouldRefreshCatalogForMetadataChangeOnlyWhenActiveVisibleAndPolling() {
+        XCTAssertTrue(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: true,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: false,
+                isWindowVisible: true,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: false,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: true,
+                shouldPollModelState: false
             )
         )
     }

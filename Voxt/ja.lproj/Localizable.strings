@@ -854,7 +854,9 @@
 "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready." = "Whisper の初回ローカル読み込みには数秒かかることがあります。モデルの準備ができるまでは、Voxt がオーバーレイに初期化状態を表示します。";
 "Memory" = "メモリ";
 "Memory Optimization" = "メモリ最適化";
-"When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse." = "有効にすると、Voxt はクールダウン後にアイドル状態のローカル ASR とローカル LLM モデルを解放してメモリ使用量を下げます。無効にすると、読み込み済みのローカルモデルを常駐させて再利用を速くします。";
+"When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse." = "有効にすると、Voxt はアイドル状態のローカル ASR とローカル LLM モデルをより早く解放してメモリ使用量を下げます。無効にすると、解放までの待機時間が長くなり、短時間での再利用が速くなります。";
+"Unload Delay" = "アンロード遅延";
+"Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse." = "ローカル ASR とローカル LLM モデルがアイドル状態になってから解放されるまでの待機時間です。短いほどメモリ使用量を抑えられ、長いほど短時間での再利用が速くなります。";
 "Keep Resident" = "常駐ロード";
 "Resident On" = "常駐オン";
 "Resident Off" = "常駐オフ";
