@@ -378,14 +378,60 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         removeCompletedAudioArchiveIfNeeded()
     }
 
+    private func ensurePreparedWhisperForInference() async throws -> WhisperKit {
+        if let preparedWhisper {
+            return preparedWhisper
+        }
+
+        if !activeUseHeld {
+            modelManager.beginActiveUse()
+            activeUseHeld = true
+        }
+
+        let whisper = try await modelManager.loadWhisper()
+        preparedWhisper = whisper
+        return whisper
+    }
+
+    @discardableResult
+    func startRecordingCapture() -> String? {
+        guard !isRecording else { return nil }
+
+        cancelActiveTasks()
+        removeCompletedAudioArchiveIfNeeded()
+        resetTransientState()
+        sessionRevision += 1
+        lastStartFailureMessage = nil
+        didRetryCaptureStartup = false
+        isModelInitializing = !modelManager.isCurrentModelLoaded
+
+        do {
+            try startAudioCaptureGraph()
+            isRecording = true
+            scheduleCaptureStartupWatchdog(revision: sessionRevision)
+            return nil
+        } catch {
+            isModelInitializing = false
+            let message = String(localized: "Whisper failed to start recording.")
+            lastStartFailureMessage = message
+            VoxtLog.error("Whisper capture setup failed: \(error)")
+            stopAudioEngine()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            cleanupPreparedWhisperIfNeeded()
+            return message
+        }
+    }
+
     func prepareSession(
         outputMode: SessionOutputMode,
         useBuiltInTranslationTask: Bool = false
     ) async -> String? {
-        cancelActiveTasks()
+        if !isRecording {
+            cancelActiveTasks()
+            resetTransientState()
+        }
         cleanupPreparedWhisperIfNeeded()
         removeCompletedAudioArchiveIfNeeded()
-        resetTransientState()
         preparedOutputMode = outputMode
         preparedUseBuiltInTranslationTask = useBuiltInTranslationTask
         lastStartFailureMessage = nil
@@ -414,7 +460,6 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
 
     @discardableResult
     func startRecordingSession() async -> String? {
-        guard !isRecording else { return nil }
         guard preparedWhisper != nil else {
             isModelInitializing = false
             let message = String(localized: "Whisper is not ready yet. Open Settings > Model and try again.")
@@ -423,36 +468,30 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
             return message
         }
 
-        cancelActiveTasks()
-        resetTransientState()
-        sessionRevision += 1
         lastStartFailureMessage = nil
-        didRetryCaptureStartup = false
-
-        if effectiveWhisperRealtimeEnabled {
-            return await startRealtimeRecordingSession(revision: sessionRevision)
+        if !isRecording, let startFailureMessage = startRecordingCapture() {
+            return startFailureMessage
         }
 
-        do {
-            try startAudioCaptureGraph()
-            isRecording = true
+        let revision = sessionRevision
+        partialLoopTask?.cancel()
+        partialLoopTask = nil
+        stopRealtimePollingTasks()
+
+        if effectiveWhisperRealtimeEnabled {
             isModelInitializing = false
-            let revision = sessionRevision
+            startRealtimeEagerLoop(revision: revision)
+            return nil
+        }
+
+        if partialLoopTask == nil {
             scheduleCaptureStartupWatchdog(revision: revision)
             partialLoopTask = Task { [weak self] in
                 await self?.runPartialLoop(revision: revision)
             }
-            return nil
-        } catch {
-            isModelInitializing = false
-            let message = String(localized: "Whisper failed to start recording.")
-            lastStartFailureMessage = message
-            VoxtLog.error("Whisper transcriber start failed: \(error)")
-            stopAudioEngine()
-            audioEngine.inputNode.removeTap(onBus: 0)
-            cleanupPreparedWhisperIfNeeded()
-            return message
         }
+        isModelInitializing = false
+        return nil
     }
 
     func stopRecording() {
@@ -480,7 +519,8 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         isFinalizingTranscription = true
         finalizationTask?.cancel()
         if effectiveWhisperRealtimeEnabled {
-            preparedWhisper?.audioProcessor.stopRecording()
+            stopAudioEngine()
+            audioEngine.inputNode.removeTap(onBus: 0)
             finalizationTask = Task { [weak self] in
                 guard let self else { return }
                 await self.runFinalTranscription(
@@ -810,45 +850,17 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
 
     func restartCaptureForPreferredInputDevice() throws {
         guard isRecording else { return }
-        guard !effectiveWhisperRealtimeEnabled else {
-            throw NSError(
-                domain: "Voxt.WhisperKitTranscriber",
-                code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "Whisper realtime capture cannot be hot-swapped safely."]
-            )
-        }
         try startAudioCaptureGraph()
         scheduleCaptureStartupWatchdog(revision: sessionRevision)
     }
 
     private func startRealtimeRecordingSession(revision: Int) async -> String? {
-        guard let whisper = preparedWhisper else {
+        guard preparedWhisper != nil else {
             return String(localized: "Whisper is not ready yet. Open Settings > Model and try again.")
         }
-
-        do {
-            inputSampleRate = targetSampleRate
-            try whisper.audioProcessor.startRecordingLive(inputDeviceID: preferredInputDeviceID) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.handleRealtimeAudioBuffer(revision: revision)
-                }
-            }
-            isRecording = true
-            isModelInitializing = false
-            startRealtimeLevelUpdates(revision: revision)
-            startRealtimeEagerLoop(revision: revision)
-            VoxtLog.info(
-                "Whisper audio capture started. sampleRate=\(Int(targetSampleRate)), deviceID=\(preferredInputDeviceID.map(String.init(describing:)) ?? "default"), mode=realtime-eager",
-                verbose: true
-            )
-            return nil
-        } catch {
-            let message = String(localized: "Whisper failed to start recording.")
-            lastStartFailureMessage = message
-            VoxtLog.error("Whisper realtime setup failed: \(error)")
-            cleanupPreparedWhisperIfNeeded()
-            return message
-        }
+        isModelInitializing = false
+        startRealtimeEagerLoop(revision: revision)
+        return nil
     }
 
     private func runPartialLoop(revision: Int) async {
@@ -888,6 +900,22 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
                 "Whisper realtime finalization promoted to offline long-form profile. bufferedSec=\(String(format: "%.2f", bufferedSeconds))",
                 verbose: true
             )
+        }
+        if preparedWhisper == nil {
+            isModelInitializing = true
+            do {
+                _ = try await ensurePreparedWhisperForInference()
+                isModelInitializing = false
+            } catch {
+                isModelInitializing = false
+                let fallbackText = transcribedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let preparedSamples = prepareInputSamples(samples, sampleRate: sampleRate)
+                stageCompletedAudioArchive(samples: preparedSamples, sampleRate: targetSampleRate)
+                latestWordTimings = []
+                VoxtLog.error("Whisper finalization model load failed: \(error)")
+                onTranscriptionFinished?(fallbackText)
+                return
+            }
         }
         defer {
             if revision == sessionRevision {
@@ -1347,11 +1375,6 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
         }
     }
 
-    private func handleRealtimeAudioBuffer(revision: Int) {
-        guard revision == sessionRevision, isRecording, effectiveWhisperRealtimeEnabled else { return }
-        audioLevel = resolvedRealtimeAudioLevel(from: preparedWhisper?.audioProcessor.relativeEnergy ?? [])
-    }
-
     private func startRealtimeEagerLoop(revision: Int) {
         realtimeEagerTask?.cancel()
         realtimeEagerLastSampleCount = 0
@@ -1533,35 +1556,6 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
             VoxtLog.warning("Whisper realtime silence reconcile failed: \(error.localizedDescription)")
             return nil
         }
-    }
-
-    private func startRealtimeLevelUpdates(revision: Int) {
-        realtimeLevelTask?.cancel()
-        realtimeLevelTask = Task { [weak self] in
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .milliseconds(50))
-                } catch {
-                    return
-                }
-                self?.publishRealtimeAudioLevelIfNeeded(revision: revision)
-            }
-        }
-    }
-
-    private func publishRealtimeAudioLevelIfNeeded(revision: Int) {
-        guard revision == sessionRevision, isRecording, effectiveWhisperRealtimeEnabled else { return }
-        let energy = preparedWhisper?.audioProcessor.relativeEnergy ?? []
-        audioLevel = resolvedRealtimeAudioLevel(from: energy)
-    }
-
-    private func resolvedRealtimeAudioLevel(from energy: [Float]) -> Float {
-        guard !energy.isEmpty else { return 0 }
-        let recentEnergy = Array(energy.suffix(4))
-        guard !recentEnergy.isEmpty else { return 0 }
-        let peak = recentEnergy.max() ?? 0
-        let average = recentEnergy.reduce(0, +) / Float(recentEnergy.count)
-        return min(max((peak * 0.7) + (average * 0.3), 0), 1)
     }
 
     @discardableResult
@@ -1889,8 +1883,9 @@ final class WhisperKitTranscriber: ObservableObject, TranscriberProtocol {
     }
 
     private func snapshotPreparedAudioSamples() -> [Float] {
-        guard let preparedWhisper else { return [] }
-        return Array(preparedWhisper.audioProcessor.audioSamples)
+        let rawSamples = sampleStore.snapshot()
+        guard !rawSamples.isEmpty else { return [] }
+        return prepareInputSamples(rawSamples, sampleRate: inputSampleRate)
     }
 
     private func normalizeText(_ text: String) -> String {

@@ -122,6 +122,10 @@ extension AppDelegate {
             state: overlayState,
             position: overlayPosition
         )
+        if let captureStartFailure = whisper.startRecordingCapture() {
+            handleRecordingStartFailure(captureStartFailure)
+            return
+        }
 
         pendingWhisperStartupTask?.cancel()
         pendingWhisperStartupTask = Task { [weak self] in
