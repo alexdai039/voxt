@@ -344,6 +344,7 @@
 "MLX model is not downloaded. Open Settings > Model to install it." = "MLX model is not downloaded. Open Settings > Model to install it.";
 "MLX model is still downloading. Wait for installation to finish and try again." = "MLX model is still downloading. Wait for installation to finish and try again.";
 "MLX model is unavailable. Open Settings > Model to fix it." = "MLX model is unavailable. Open Settings > Model to fix it.";
+"MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@";
 "Whisper (On-device)" = "Whisper (On-device)";
 "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding." = "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding.";
 "Transcribe" = "Transcribe";
@@ -375,6 +376,7 @@
 "Whisper model is not downloaded. Open Settings > Model to install it." = "Whisper model is not downloaded. Open Settings > Model to install it.";
 "Whisper model is still downloading. Wait for installation to finish and try again." = "Whisper model is still downloading. Wait for installation to finish and try again.";
 "Whisper model is unavailable. Open Settings > Model to fix it." = "Whisper model is unavailable. Open Settings > Model to fix it.";
+"Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@";
 "Whisper failed to load the selected model." = "Whisper failed to load the selected model.";
 "Whisper is not ready yet. Open Settings > Model and try again." = "Whisper is not ready yet. Open Settings > Model and try again.";
 "Whisper failed to start recording." = "Whisper failed to start recording.";

@@ -19,7 +19,7 @@ final class RecordingStartPlannerTests: XCTestCase {
             whisperModelState: .notDownloaded
         )
 
-        XCTAssertEqual(decision, .blocked(.mlxModelUnavailable))
+        XCTAssertEqual(decision, .blocked(.mlxModelUnavailable(detail: "broken")))
     }
 
     func testMLXAudioDownloadedStartsWithMLXAudio() {
@@ -117,7 +117,7 @@ final class RecordingStartPlannerTests: XCTestCase {
             whisperModelState: .error("broken")
         )
 
-        XCTAssertEqual(decision, .blocked(.whisperModelUnavailable))
+        XCTAssertEqual(decision, .blocked(.whisperModelUnavailable(detail: "broken")))
     }
 
     func testWhisperDownloadedStartsWithWhisperEngine() {
@@ -128,5 +128,22 @@ final class RecordingStartPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(decision, .start(.whisperKit))
+    }
+
+    func testMLXUnavailableMessageIncludesErrorDetail() {
+        let message = RecordingStartBlockReason.mlxModelUnavailable(detail: "Model load failed: missing key").userMessage
+
+        XCTAssertTrue(message.contains("missing key"))
+    }
+
+    func testDetailedUnavailableReminderUsesLongerDuration() {
+        XCTAssertEqual(
+            RecordingStartBlockReason.mlxModelUnavailable(detail: "broken").reminderDuration,
+            4.2
+        )
+        XCTAssertEqual(
+            RecordingStartBlockReason.mlxModelUnavailable(detail: nil).reminderDuration,
+            2.4
+        )
     }
 }

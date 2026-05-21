@@ -892,7 +892,7 @@
 			repositoryURL = "https://github.com/hehehai/mlx-audio-swift.git";
 			requirement = {
 				kind = revision;
-				revision = 8ae0c745360b32c128c0ba6d4e46b27ee3214529;
+				revision = a1c7b11b68b16f1591bb0ff586372dde9b265135;
 			};
 		};
 		B1C2D3E4F5060708090A0B0E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
