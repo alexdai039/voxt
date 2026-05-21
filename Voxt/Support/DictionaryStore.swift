@@ -698,9 +698,11 @@ final class DictionaryStore: ObservableObject {
         replaceEntries(updatedEntries)
     }
 
-    func delete(id: UUID) {
-        guard deletePersistedEntry(id: id) else { return }
+    @discardableResult
+    func delete(id: UUID) -> Bool {
+        guard deletePersistedEntry(id: id) else { return false }
         replaceEntries(entries.filter { $0.id != id }, sort: false)
+        return true
     }
 
     func clearAll() {

@@ -42,6 +42,7 @@ struct DictionarySettingsView: View {
     @State private var totalEntryCount = 0
     @State private var isLoadingEntries = false
     @State private var entryPageGeneration = 0
+    @State private var suppressedStoreEntryReloadCount = 0
 
     private let entryPageSize = 80
 
@@ -127,6 +128,10 @@ struct DictionarySettingsView: View {
             reloadDictionaryEntries(reset: true)
         }
         .onReceive(dictionaryStore.$entries) { _ in
+            if suppressedStoreEntryReloadCount > 0 {
+                suppressedStoreEntryReloadCount -= 1
+                return
+            }
             reloadDictionaryEntries(reset: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
@@ -188,10 +193,7 @@ struct DictionarySettingsView: View {
             onCreate: { dialog = .create },
             onClearAll: { showClearAllConfirmation = true },
             onEdit: { entry in dialog = .edit(entry) },
-            onDelete: { entry in
-                dictionaryStore.delete(id: entry.id)
-                reloadDictionaryEntries(reset: true)
-            }
+            onDelete: deleteDictionaryEntry
         )
     }
 
@@ -229,30 +231,36 @@ struct DictionarySettingsView: View {
         replacementTerms: [String],
         selectedGroupID: UUID?
     ) throws {
-        switch dialog {
-        case .create:
-            let result = try dictionaryStore.createOrReinforceManualEntry(
-                term: term,
-                replacementTerms: replacementTerms,
-                groupID: selectedGroupID,
-                groupNameSnapshot: selectedGroupName(for: selectedGroupID)
-            )
-            if !result.added {
-                showDictionaryToast(AppLocalization.format(
-                    "Reinforced existing dictionary term: %@.",
-                    result.term
-                ))
+        suppressedStoreEntryReloadCount += 1
+        do {
+            switch dialog {
+            case .create:
+                let result = try dictionaryStore.createOrReinforceManualEntry(
+                    term: term,
+                    replacementTerms: replacementTerms,
+                    groupID: selectedGroupID,
+                    groupNameSnapshot: selectedGroupName(for: selectedGroupID)
+                )
+                if !result.added {
+                    showDictionaryToast(AppLocalization.format(
+                        "Reinforced existing dictionary term: %@.",
+                        result.term
+                    ))
+                }
+            case .edit(let entry):
+                try dictionaryStore.updateEntry(
+                    id: entry.id,
+                    term: term,
+                    replacementTerms: replacementTerms,
+                    groupID: selectedGroupID,
+                    groupNameSnapshot: selectedGroupName(for: selectedGroupID) ?? entry.groupNameSnapshot
+                )
             }
-        case .edit(let entry):
-            try dictionaryStore.updateEntry(
-                id: entry.id,
-                term: term,
-                replacementTerms: replacementTerms,
-                groupID: selectedGroupID,
-                groupNameSnapshot: selectedGroupName(for: selectedGroupID) ?? entry.groupNameSnapshot
-            )
+        } catch {
+            suppressedStoreEntryReloadCount = max(0, suppressedStoreEntryReloadCount - 1)
+            throw error
         }
-        reloadDictionaryEntries(reset: true)
+        refreshDictionaryEntriesAfterMutation()
     }
 
     private func reloadContentAsync() {
@@ -266,6 +274,10 @@ struct DictionarySettingsView: View {
         guard reset || offset < totalEntryCount else { return }
         guard reset || !isLoadingEntries else { return }
 
+        loadDictionaryEntries(offset: offset, limit: entryPageSize, reset: reset)
+    }
+
+    private func loadDictionaryEntries(offset: Int, limit: Int, reset: Bool) {
         entryPageGeneration += 1
         let generation = entryPageGeneration
         let filter = selectedFilter
@@ -275,7 +287,7 @@ struct DictionarySettingsView: View {
         dictionaryStore.loadEntries(
             filter: filter,
             query: query,
-            limit: entryPageSize,
+            limit: limit,
             offset: offset
         ) { count, page in
             guard generation == entryPageGeneration else { return }
@@ -283,6 +295,30 @@ struct DictionarySettingsView: View {
             visibleEntries = reset ? page : visibleEntries + page
             isLoadingEntries = false
         }
+    }
+
+    private func deleteDictionaryEntry(_ entry: DictionaryEntry) {
+        suppressedStoreEntryReloadCount += 1
+        guard dictionaryStore.delete(id: entry.id) else {
+            suppressedStoreEntryReloadCount = max(0, suppressedStoreEntryReloadCount - 1)
+            return
+        }
+
+        guard let removedIndex = visibleEntries.firstIndex(where: { $0.id == entry.id }) else {
+            reloadDictionaryEntries(reset: true)
+            return
+        }
+
+        visibleEntries.remove(at: removedIndex)
+        totalEntryCount = max(0, totalEntryCount - 1)
+
+        guard visibleEntries.count < totalEntryCount else { return }
+        loadDictionaryEntries(offset: visibleEntries.count, limit: 1, reset: false)
+    }
+
+    private func refreshDictionaryEntriesAfterMutation() {
+        let retainedVisibleCount = max(entryPageSize, visibleEntries.count)
+        loadDictionaryEntries(offset: 0, limit: retainedVisibleCount, reset: true)
     }
 
     private func refreshLocalContentState() {
