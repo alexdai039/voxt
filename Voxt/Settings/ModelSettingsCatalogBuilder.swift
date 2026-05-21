@@ -19,41 +19,15 @@ struct ModelCatalogBuilder {
     let remoteLLMConfigurations: [String: RemoteProviderConfiguration]
     let featureSettings: FeatureSettings
     let hasIssue: (ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool
-    let modelStatusText: (String) -> String
-    let whisperModelStatusText: (String) -> String
-    let customLLMStatusText: (String) -> String
     let customLLMBadgeText: (String) -> String?
     let remoteASRStatusText: (RemoteASRProvider, RemoteProviderConfiguration) -> String
     let remoteLLMBadgeText: (RemoteLLMProvider) -> String?
     let primaryUserLanguageCode: String?
-    let isDownloadingModel: (String) -> Bool
-    let isPausedModel: (String) -> Bool
-    let isDownloadingWhisperModel: (String) -> Bool
-    let isPausedWhisperModel: (String) -> Bool
-    let isAnotherWhisperModelDownloading: (String) -> Bool
-    let isDownloadingCustomLLM: (String) -> Bool
-    let isPausedCustomLLM: (String) -> Bool
-    let isAnotherCustomLLMDownloading: (String) -> Bool
-    let isCustomLLMInstalled: (String) -> Bool
-    let isUninstallingModel: (String) -> Bool
-    let isUninstallingWhisperModel: (String) -> Bool
-    let isUninstallingCustomLLM: (String) -> Bool
-    let downloadModel: (String) -> Void
-    let pauseModelDownload: (String) -> Void
-    let cancelModelDownload: (String) -> Void
-    let deleteModel: (String) -> Void
-    let openMLXModelDirectory: (String) -> Void
-    let presentMLXSettings: (String) -> Void
-    let downloadWhisperModel: (String) -> Void
-    let cancelWhisperDownload: (String) -> Void
-    let deleteWhisperModel: (String) -> Void
-    let openWhisperModelDirectory: (String) -> Void
-    let presentWhisperSettings: () -> Void
-    let downloadCustomLLM: (String) -> Void
-    let cancelCustomLLMDownload: (String) -> Void
-    let deleteCustomLLM: (String) -> Void
-    let openCustomLLMModelDirectory: (String) -> Void
-    let configureCustomLLMGeneration: (String) -> Void
+    let mlxInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let whisperInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let customLLMInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let catalogPrimaryAction: (LocalModelInstallSnapshot) -> ModelTableAction?
+    let catalogSecondaryActions: (LocalModelInstallSnapshot) -> [ModelTableAction]
     let configureASRProvider: (RemoteASRProvider) -> Void
     let configureLLMProvider: (RemoteLLMProvider) -> Void
     let showASRHintTarget: (ASRHintTarget) -> Void
@@ -108,73 +82,30 @@ struct ModelCatalogBuilder {
         entries.append(contentsOf: CustomLLMModelManager.availableModels.map { model in
             let repo = model.id
             let selectionID = FeatureModelSelectionID.localLLM(repo)
-            let isInstalled = isCustomLLMInstalled(repo)
-            let badge = customLLMBadgeText(repo)
-            let status = isUninstallingCustomLLM(repo) ? localizedModelCatalog("Uninstalling…") : customLLMStatusText(repo)
+            let snapshot = customLLMInstallSnapshot(repo)
             let decoration = catalogDecoration(
                 base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
-                installed: isInstalled,
+                installed: snapshot.isInstalled,
                 requiresConfiguration: false,
                 configured: true,
                 selectionID: selectionID
             )
-            let primaryAction: ModelTableAction?
-            let secondaryActions: [ModelTableAction]
-            if isUninstallingCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Uninstalling…"), isEnabled: false) {}
-                secondaryActions = []
-            } else if isDownloadingCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Pause")) {
-                    customLLMManager.pauseDownload()
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
-                        customLLMManager.cancelDownload()
-                    }
-                ]
-            } else if isPausedCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Continue")) {
-                    downloadCustomLLM(repo)
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
-                        cancelCustomLLMDownload(repo)
-                    }
-                ]
-            } else if isInstalled {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Uninstall"), role: .destructive) {
-                    deleteCustomLLM(repo)
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Open Location")) {
-                        openCustomLLMModelDirectory(repo)
-                    },
-                    ModelTableAction(title: localizedModelCatalog("Configure")) {
-                        configureCustomLLMGeneration(repo)
-                    }
-                ]
-            } else {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Install"), isEnabled: !isAnotherCustomLLMDownloading(repo)) {
-                    downloadCustomLLM(repo)
-                }
-                secondaryActions = []
-            }
 
             return ModelCatalogEntry(
                 id: "local-llm:\(repo)",
                 title: customLLMManager.displayTitle(for: repo),
                 engine: localizedModelCatalog("Local LLM"),
-                sizeText: isInstalled
+                sizeText: snapshot.isInstalled
                     ? (customLLMManager.cachedModelSizeText(repo: repo) ?? customLLMManager.remoteSizeText(repo: repo))
                     : customLLMManager.remoteSizeText(repo: repo),
                 ratingText: CustomLLMModelManager.ratingText(for: repo),
                 filterTags: decoration.filterTags,
                 displayTags: decoration.displayTags,
-                statusText: status,
+                statusText: snapshot.statusText,
                 usageLocations: decoration.usageLocations,
-                badgeText: badge,
-                primaryAction: primaryAction,
-                secondaryActions: secondaryActions
+                badgeText: snapshot.badgeText,
+                primaryAction: catalogPrimaryAction(snapshot),
+                secondaryActions: catalogSecondaryActions(snapshot)
             )
         })
 

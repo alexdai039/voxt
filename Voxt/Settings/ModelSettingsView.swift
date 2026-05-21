@@ -115,8 +115,10 @@ struct ModelSettingsView: View {
     @State private var isCatalogRefreshScheduled = false
     @State private var isRefreshingCatalogSnapshot = false
     @State private var needsAnotherCatalogRefresh = false
+    @State var lastHandledDownloadLifecycleToken: ModelSettingsDownloadLifecycleToken?
     @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
     @State var uninstallingModelTarget: LocalModelRemovalTarget?
+    @State var cancellingInstallTargets = Set<LocalModelInstallTarget>()
 
     let modelStateRefreshTimer = Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()
 
@@ -202,58 +204,26 @@ struct ModelSettingsView: View {
             remoteLLMConfigurations: remoteLLMConfigurations,
             featureSettings: featureSettings,
             hasIssue: hasIssue(for:),
-            modelStatusText: modelStatusText(for:),
-            whisperModelStatusText: whisperModelStatusText(for:),
-            customLLMStatusText: customLLMStatusText(for:),
             customLLMBadgeText: customLLMBadgeText(for:),
             remoteASRStatusText: { provider, configuration in
                 remoteASRStatusText(for: provider, configuration: configuration)
             },
             remoteLLMBadgeText: remoteLLMBadgeText(for:),
             primaryUserLanguageCode: selectedUserLanguageCodes.first,
-            isDownloadingModel: isDownloadingModel,
-            isPausedModel: isPausedModel,
-            isDownloadingWhisperModel: isDownloadingWhisperModel,
-            isPausedWhisperModel: isPausedWhisperModel,
-            isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
-            isDownloadingCustomLLM: isDownloadingCustomLLM,
-            isPausedCustomLLM: isPausedCustomLLM,
-            isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
-            isCustomLLMInstalled: { customLLMManager.isModelDownloaded(repo: $0) },
-            isUninstallingModel: isUninstallingModel,
-            isUninstallingWhisperModel: isUninstallingWhisperModel,
-            isUninstallingCustomLLM: isUninstallingCustomLLM,
-            downloadModel: downloadModel,
-            pauseModelDownload: { mlxModelManager.pauseDownload(repo: $0) },
-            cancelModelDownload: {
-                mlxModelManager.cancelDownload(repo: $0)
-                refreshCatalogSnapshot()
+            mlxInstallSnapshot: mlxInstallSnapshot(for:),
+            whisperInstallSnapshot: whisperInstallSnapshot(for:),
+            customLLMInstallSnapshot: customLLMInstallSnapshot(for:),
+            catalogPrimaryAction: {
+                ModelSettingsInstallActionResolver.catalogPrimaryAction(
+                    for: $0,
+                    perform: performInstallAction(_:kind:)
+                )
             },
-            deleteModel: requestDeleteModel,
-            openMLXModelDirectory: openMLXModelDirectory,
-            presentMLXSettings: { repo in
-                activeLocalASRConfigurationTarget = .mlx(repo: repo)
-            },
-            downloadWhisperModel: downloadWhisperModel,
-            cancelWhisperDownload: {
-                whisperModelManager.cancelDownload(id: $0)
-                refreshCatalogSnapshot()
-            },
-            deleteWhisperModel: requestDeleteWhisperModel,
-            openWhisperModelDirectory: openWhisperModelDirectory,
-            presentWhisperSettings: {
-                activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
-            },
-            downloadCustomLLM: downloadCustomLLM,
-            cancelCustomLLMDownload: {
-                customLLMManager.cancelDownload(repo: $0)
-                refreshCatalogSnapshot()
-            },
-            deleteCustomLLM: requestDeleteCustomLLM,
-            openCustomLLMModelDirectory: openCustomLLMModelDirectory,
-            configureCustomLLMGeneration: { repo in
-                customLLMConfigurationRepo = repo
-                isCustomLLMConfigurationPresented = true
+            catalogSecondaryActions: {
+                ModelSettingsInstallActionResolver.catalogSecondaryActions(
+                    for: $0,
+                    perform: performInstallAction(_:kind:)
+                )
             },
             configureASRProvider: { editingASRProvider = $0 },
             configureLLMProvider: { editingLLMProvider = $0 },
@@ -481,6 +451,8 @@ struct ModelSettingsView: View {
                 refreshCatalogSnapshot()
             }
         }
+
+        reconcileCancellingInstallTargets()
 
         let entries = switch catalogTab {
         case .asr:
@@ -818,7 +790,12 @@ struct ModelSettingsView: View {
     var shouldPollModelState: Bool {
         ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: mlxModelManager.state,
-            mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+            mlxHasActiveDownloadingRepos: mlxModelManager.activeDownloadRepos.contains { repo in
+                if case .downloading = mlxModelManager.state(for: repo) {
+                    return true
+                }
+                return false
+            },
             whisperState: whisperModelManager.state,
             whisperActiveDownload: whisperModelManager.activeDownload,
             customLLMState: customLLMManager.state

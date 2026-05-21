@@ -266,6 +266,19 @@ extension ModelSettingsView {
         ) else {
             return
         }
+
+        let token = ModelSettingsManagerRefreshSupport.downloadLifecycleToken(
+            mlxState: mlxModelManager.state,
+            mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+            whisperState: whisperModelManager.state,
+            whisperActiveDownload: whisperModelManager.activeDownload,
+            customLLMState: customLLMManager.state
+        )
+        guard lastHandledDownloadLifecycleToken != token else {
+            return
+        }
+        lastHandledDownloadLifecycleToken = token
+
         refreshModelInstallStateIfNeeded()
         pruneSelectedTags()
         refreshCatalogSnapshot()
