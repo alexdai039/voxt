@@ -982,8 +982,8 @@ enum CustomLLMModelStorageSupport {
         return false
     }
 
-    nonisolated static func clearHubCache(for repoID: Repo.ID) {
-        let cache = HubCache.default
+    nonisolated static func clearHubCache(for repoID: Repo.ID, rootDirectory: URL = HubCache.default.cacheDirectory) {
+        let cache = HubCache(cacheDirectory: rootDirectory)
         let repoDir = cache.repoDirectory(repo: repoID, kind: .model)
         let metadataDir = cache.metadataDirectory(repo: repoID, kind: .model)
         try? FileManager.default.removeItem(at: repoDir)

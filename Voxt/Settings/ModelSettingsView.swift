@@ -519,9 +519,6 @@ struct ModelSettingsView: View {
     func refreshModelStorageDisplayPath() {
         let resolved = ModelStorageDirectoryManager.resolvedRootURL().path
         modelStorageDisplayPath = resolved
-        if modelStorageRootPath != resolved {
-            modelStorageRootPath = resolved
-        }
     }
 
     private func openModelStorageInFinder() {

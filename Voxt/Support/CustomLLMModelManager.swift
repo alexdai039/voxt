@@ -900,7 +900,10 @@ class CustomLLMModelManager: ObservableObject {
             try? FileManager.default.removeItem(at: modelDir)
         }
         if let repoID = Repo.ID(rawValue: canonicalRepo) {
-            CustomLLMModelStorageSupport.clearHubCache(for: repoID)
+            CustomLLMModelStorageSupport.clearHubCache(
+                for: repoID,
+                rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+            )
         }
         invalidateLocalCache(for: canonicalRepo)
     }
@@ -972,7 +975,10 @@ class CustomLLMModelManager: ObservableObject {
                 "Primary custom LLM download endpoint failed. Retrying with mirror. repo=\(modelRepo), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
             )
             if let repoID = Repo.ID(rawValue: modelRepo) {
-                CustomLLMModelStorageSupport.clearHubCache(for: repoID)
+                CustomLLMModelStorageSupport.clearHubCache(
+                    for: repoID,
+                    rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+                )
             }
             return try await performDownload(using: fallbackBaseURL)
         }
@@ -1133,7 +1139,10 @@ class CustomLLMModelManager: ObservableObject {
             releaseInferenceResources(resetActiveInferenceCount: true)
         }
         if let repoID = Repo.ID(rawValue: canonicalRepo) {
-            CustomLLMModelStorageSupport.clearHubCache(for: repoID)
+            CustomLLMModelStorageSupport.clearHubCache(
+                for: repoID,
+                rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+            )
         }
         if let modelDir = cacheDirectory(for: canonicalRepo) {
             do {

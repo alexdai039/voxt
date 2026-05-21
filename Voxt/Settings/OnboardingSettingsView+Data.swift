@@ -392,9 +392,6 @@ extension OnboardingSettingsView {
     func refreshModelStorageDisplayPath() {
         let resolved = ModelStorageDirectoryManager.resolvedRootURL().path
         modelStorageDisplayPath = resolved
-        if modelStorageRootPath != resolved {
-            modelStorageRootPath = resolved
-        }
     }
 
     func chooseModelStorageDirectory() {

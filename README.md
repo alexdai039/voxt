@@ -376,7 +376,7 @@ This group controls three different layers:
 This is especially important for local model users.
 
 > [!IMPORTANT]
-> After you change the model storage path, previously downloaded models are not migrated automatically, and models in the old path are not detected in the new one. In most cases, you will need to download local models again.
+> When you manually change the model storage path, previously downloaded models are not migrated automatically, and models in the old path are not detected in the new one. In most cases, you will need to move or download local models again. Legacy installs that still used the old default cache location are migrated automatically during upgrade.
 
 ### Output
 
