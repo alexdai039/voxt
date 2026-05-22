@@ -34,7 +34,6 @@ enum AppPreferenceKey {
     static let mlxLocalASRTuningSettings = "mlxLocalASRTuningSettings"
     static let modelStorageRootPath = "modelStorageRootPath"
     static let modelStorageRootBookmark = "modelStorageRootBookmark"
-    static let modelStorageRootMigrationVersion = "modelStorageRootMigrationVersion"
     static let useHfMirror = "useHfMirror"
     static let hotkeyInputType = "hotkeyInputType"
     static let hotkeyKeyCode = "hotkeyKeyCode"

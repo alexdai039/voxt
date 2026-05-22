@@ -307,7 +307,116 @@ final class ModelCatalogBuilderTests: XCTestCase {
         cancelModelDownload: @escaping (String) -> Void = { _ in },
         configureCustomLLMGeneration: @escaping (String) -> Void = { _ in }
     ) -> ModelCatalogBuilder {
-        ModelCatalogBuilder(
+        let performAction: (LocalModelInstallTarget, LocalModelInstallActionKind) -> Void = { target, action in
+            switch (target, action) {
+            case let (.mlx(repo), .pause):
+                pauseModelDownload(repo)
+            case let (.mlx(repo), .cancel):
+                cancelModelDownload(repo)
+            case let (.customLLM(repo), .configure):
+                configureCustomLLMGeneration(repo)
+            default:
+                break
+            }
+        }
+
+        let mlxInstallSnapshot: (String) -> LocalModelInstallSnapshot = { repo in
+            let canonicalRepo = MLXModelManager.canonicalModelRepo(repo)
+            let isDownloading = isDownloadingModel(canonicalRepo)
+            let isPaused = isPausedModel(canonicalRepo)
+            let isUninstalling = isUninstallingModel(canonicalRepo)
+            let isInstalled = !isDownloading && !isPaused && !isUninstalling
+            let state: LocalModelInstallState
+            if isUninstalling {
+                state = .uninstalling
+            } else if isDownloading {
+                state = .downloading
+            } else if isPaused {
+                state = .paused
+            } else if isInstalled {
+                state = .installed
+            } else {
+                state = .installable(isEnabled: true)
+            }
+            return LocalModelInstallSnapshot(
+                target: .mlx(canonicalRepo),
+                state: state,
+                isInstalled: isInstalled,
+                isCurrentSelection: featureSettings.transcription.asrSelectionID == .mlx(canonicalRepo),
+                statusText: "",
+                badgeText: nil,
+                downloadStatus: nil,
+                canOpenLocation: isInstalled,
+                canConfigure: false,
+                configureActionTitle: nil
+            )
+        }
+
+        let whisperInstallSnapshot: (String) -> LocalModelInstallSnapshot = { modelID in
+            let canonicalModelID = WhisperKitModelManager.canonicalModelID(modelID)
+            let isDownloading = isDownloadingWhisperModel(canonicalModelID)
+            let isPaused = isPausedWhisperModel(canonicalModelID)
+            let isUninstalling = isUninstallingWhisperModel(canonicalModelID)
+            let isInstalled = !isDownloading && !isPaused && !isUninstalling
+            let state: LocalModelInstallState
+            if isUninstalling {
+                state = .uninstalling
+            } else if isDownloading {
+                state = .downloading
+            } else if isPaused {
+                state = .paused
+            } else if isInstalled {
+                state = .installed
+            } else {
+                state = .installable(isEnabled: !isAnotherWhisperModelDownloading(canonicalModelID))
+            }
+            return LocalModelInstallSnapshot(
+                target: .whisper(canonicalModelID),
+                state: state,
+                isInstalled: isInstalled,
+                isCurrentSelection: featureSettings.transcription.asrSelectionID == .whisper(canonicalModelID),
+                statusText: "",
+                badgeText: nil,
+                downloadStatus: nil,
+                canOpenLocation: isInstalled,
+                canConfigure: false,
+                configureActionTitle: nil
+            )
+        }
+
+        let customLLMInstallSnapshot: (String) -> LocalModelInstallSnapshot = { repo in
+            let canonicalRepo = CustomLLMModelManager.canonicalModelRepo(repo)
+            let isDownloading = isDownloadingCustomLLM(canonicalRepo)
+            let isPaused = isPausedCustomLLM(canonicalRepo)
+            let isUninstalling = isUninstallingCustomLLM(canonicalRepo)
+            let isInstalled = !isDownloading && !isPaused && !isUninstalling && isCustomLLMInstalled(canonicalRepo)
+            let state: LocalModelInstallState
+            if isUninstalling {
+                state = .uninstalling
+            } else if isDownloading {
+                state = .downloading
+            } else if isPaused {
+                state = .paused
+            } else if isInstalled {
+                state = .installed
+            } else {
+                state = .installable(isEnabled: !isAnotherCustomLLMDownloading(canonicalRepo))
+            }
+            return LocalModelInstallSnapshot(
+                target: .customLLM(canonicalRepo),
+                state: state,
+                isInstalled: isInstalled,
+                isCurrentSelection: featureSettings.translation.modelSelectionID == .localLLM(canonicalRepo),
+                statusText: "",
+                badgeText: nil,
+                downloadStatus: nil,
+                canOpenLocation: isInstalled,
+                canConfigure: isInstalled,
+                configureActionTitle: isInstalled ? AppLocalization.localizedString("Configure") : nil
+            )
+        }
+
+        return ModelCatalogBuilder(
             mlxModelManager: TestModelManagers.mlx,
             whisperModelManager: TestModelManagers.whisper,
             customLLMManager: TestModelManagers.customLLM,
@@ -315,41 +424,25 @@ final class ModelCatalogBuilderTests: XCTestCase {
             remoteLLMConfigurations: remoteLLMConfigurations,
             featureSettings: featureSettings,
             hasIssue: hasIssue,
-            modelStatusText: { _ in "" },
-            whisperModelStatusText: { _ in "" },
-            customLLMStatusText: { _ in "" },
             customLLMBadgeText: { _ in nil },
             remoteASRStatusText: { _, _ in "" },
             remoteLLMBadgeText: { _ in nil },
             primaryUserLanguageCode: primaryUserLanguageCode,
-            isDownloadingModel: isDownloadingModel,
-            isPausedModel: isPausedModel,
-            isDownloadingWhisperModel: isDownloadingWhisperModel,
-            isPausedWhisperModel: isPausedWhisperModel,
-            isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
-            isDownloadingCustomLLM: isDownloadingCustomLLM,
-            isPausedCustomLLM: isPausedCustomLLM,
-            isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
-            isCustomLLMInstalled: isCustomLLMInstalled,
-            isUninstallingModel: isUninstallingModel,
-            isUninstallingWhisperModel: isUninstallingWhisperModel,
-            isUninstallingCustomLLM: isUninstallingCustomLLM,
-            downloadModel: { _ in },
-            pauseModelDownload: pauseModelDownload,
-            cancelModelDownload: cancelModelDownload,
-            deleteModel: { _ in },
-            openMLXModelDirectory: { _ in },
-            presentMLXSettings: { _ in },
-            downloadWhisperModel: { _ in },
-            cancelWhisperDownload: { _ in },
-            deleteWhisperModel: { _ in },
-            openWhisperModelDirectory: { _ in },
-            presentWhisperSettings: {},
-            downloadCustomLLM: { _ in },
-            cancelCustomLLMDownload: { _ in },
-            deleteCustomLLM: { _ in },
-            openCustomLLMModelDirectory: { _ in },
-            configureCustomLLMGeneration: configureCustomLLMGeneration,
+            mlxInstallSnapshot: mlxInstallSnapshot,
+            whisperInstallSnapshot: whisperInstallSnapshot,
+            customLLMInstallSnapshot: customLLMInstallSnapshot,
+            catalogPrimaryAction: { snapshot in
+                ModelSettingsInstallActionResolver.catalogPrimaryAction(
+                    for: snapshot,
+                    perform: performAction
+                )
+            },
+            catalogSecondaryActions: { snapshot in
+                ModelSettingsInstallActionResolver.catalogSecondaryActions(
+                    for: snapshot,
+                    perform: performAction
+                )
+            },
             configureASRProvider: { _ in },
             configureLLMProvider: { _ in },
             showASRHintTarget: { _ in }

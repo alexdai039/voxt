@@ -135,8 +135,6 @@ final class ModelSettingsManagerRefreshSupportTests: XCTestCase {
                 completed: 20,
                 total: 100,
                 currentFile: "weights.bin",
-                currentFileCompleted: 10,
-                currentFileTotal: 50,
                 completedFiles: 1,
                 totalFiles: 2
             ),
@@ -151,8 +149,6 @@ final class ModelSettingsManagerRefreshSupportTests: XCTestCase {
                 completed: 20,
                 total: 100,
                 currentFile: "weights.bin",
-                currentFileCompleted: 10,
-                currentFileTotal: 50,
                 completedFiles: 1,
                 totalFiles: 2
             ),

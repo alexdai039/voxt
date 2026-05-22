@@ -216,13 +216,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindowPresentationState = MainWindowPresentationState()
 
     override init() {
-        let didMigrateModelStorage = ModelStorageDirectoryManager.migrateLegacyDefaultRootIfNeeded()
-        if didMigrateModelStorage {
-            VoxtLog.info(
-                "Migrated local model storage root from legacy cache directory to Application Support. " +
-                "newRoot=\(ModelStorageDirectoryManager.defaultRootURL.path)"
-            )
-        }
         let storedRepo = UserDefaults.standard.string(forKey: AppPreferenceKey.mlxModelRepo)
             ?? MLXModelManager.defaultModelRepo
         let repo = MLXModelManager.canonicalModelRepo(storedRepo)

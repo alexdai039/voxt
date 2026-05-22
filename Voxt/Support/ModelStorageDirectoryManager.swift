@@ -2,17 +2,18 @@ import Foundation
 import AppKit
 
 enum ModelStorageDirectoryManager {
-    private enum MigrationError: Error {
-        case unableToMergeConflictingFile(URL)
+    struct RootResolution {
+        let writeRootURL: URL
+        let readableRootURLs: [URL]
+        let derivedRootURL: URL
     }
 
     private struct ResolvedRootCache {
         let bookmarkData: Data?
         let path: String?
-        let rootURL: URL
+        let resolution: RootResolution
     }
 
-    private static let modelStorageMigrationVersion = 1
     private static let lock = NSLock()
     private static var securityScopedURL: URL?
     private static var resolvedRootCache: ResolvedRootCache?
@@ -27,38 +28,77 @@ enum ModelStorageDirectoryManager {
     }
 
     static func resolvedRootURL() -> URL {
-        resolvedRootURL(defaults: .standard)
+        resolvedWriteRootURL(defaults: .standard)
     }
 
     static func resolvedRootURL(defaults: UserDefaults) -> URL {
+        resolvedWriteRootURL(defaults: defaults)
+    }
+
+    static func resolvedWriteRootURL(defaults: UserDefaults = .standard) -> URL {
+        resolvedRootResolution(defaults: defaults).writeRootURL
+    }
+
+    static func resolvedReadableRootURLs(defaults: UserDefaults = .standard) -> [URL] {
+        resolvedRootResolution(defaults: defaults).readableRootURLs
+    }
+
+    static func resolvedDerivedRootURL(defaults: UserDefaults = .standard) -> URL {
+        resolvedRootResolution(defaults: defaults).derivedRootURL
+    }
+
+    static func resolvedRootResolution(defaults: UserDefaults = .standard) -> RootResolution {
         let bookmarkData = defaults.data(forKey: AppPreferenceKey.modelStorageRootBookmark)
         let storedPath = normalizedStoredPath(defaults.string(forKey: AppPreferenceKey.modelStorageRootPath))
         lock.lock()
         if let resolvedRootCache,
            resolvedRootCache.bookmarkData == bookmarkData,
            resolvedRootCache.path == storedPath {
-            let cachedRootURL = resolvedRootCache.rootURL
+            let cachedResolution = resolvedRootCache.resolution
             lock.unlock()
-            return cachedRootURL
+            return cachedResolution
         }
         lock.unlock()
 
-        let rootURL: URL
+        let resolution: RootResolution
         if let bookmarkData,
            let bookmarkedURL = resolveSecurityScopedURL(from: bookmarkData, defaults: defaults) {
-            rootURL = bookmarkedURL
+            resolution = RootResolution(
+                writeRootURL: bookmarkedURL,
+                readableRootURLs: [bookmarkedURL],
+                derivedRootURL: derivedRootURL(forWriteRoot: bookmarkedURL)
+            )
         } else if let storedPath {
-            rootURL = URL(fileURLWithPath: storedPath, isDirectory: true)
+            let rootURL = URL(fileURLWithPath: storedPath, isDirectory: true)
+            if rootURL.standardizedFileURL.path == legacyDefaultRootURL.standardizedFileURL.path {
+                let writeRootURL = defaultRootURL
+                resolution = RootResolution(
+                    writeRootURL: writeRootURL,
+                    readableRootURLs: uniqueRootURLs([writeRootURL, legacyDefaultRootURL]),
+                    derivedRootURL: derivedRootURL(forWriteRoot: writeRootURL)
+                )
+            } else {
+                resolution = RootResolution(
+                    writeRootURL: rootURL,
+                    readableRootURLs: [rootURL],
+                    derivedRootURL: derivedRootURL(forWriteRoot: rootURL)
+                )
+            }
         } else {
-            rootURL = defaultRootURL
+            let writeRootURL = defaultRootURL
+            resolution = RootResolution(
+                writeRootURL: writeRootURL,
+                readableRootURLs: uniqueRootURLs([writeRootURL, legacyDefaultRootURL]),
+                derivedRootURL: derivedRootURL(forWriteRoot: writeRootURL)
+            )
         }
 
         updateResolvedRootCache(
             bookmarkData: bookmarkData,
             path: storedPath,
-            rootURL: rootURL
+            resolution: resolution
         )
-        return rootURL
+        return resolution
     }
 
     static func saveUserSelectedRootURL(_ url: URL) throws {
@@ -75,76 +115,20 @@ enum ModelStorageDirectoryManager {
         updateResolvedRootCache(
             bookmarkData: bookmark,
             path: normalized.path,
-            rootURL: normalized
+            resolution: RootResolution(
+                writeRootURL: normalized,
+                readableRootURLs: [normalized],
+                derivedRootURL: derivedRootURL(forWriteRoot: normalized)
+            )
         )
 
         _ = resolveSecurityScopedURL(from: bookmark, defaults: defaults)
     }
 
     static func openRootInFinder() {
-        let url = resolvedRootURL()
+        let url = resolvedWriteRootURL()
         try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    @discardableResult
-    static func migrateLegacyDefaultRootIfNeeded(
-        defaults: UserDefaults = .standard,
-        fileManager: FileManager = .default
-    ) -> Bool {
-        let currentVersion = defaults.integer(forKey: AppPreferenceKey.modelStorageRootMigrationVersion)
-        let legacyRoot = legacyDefaultRootURL(fileManager: fileManager).standardizedFileURL
-        let newRoot = defaultRootURL(fileManager: fileManager).standardizedFileURL
-
-        let bookmarkData = defaults.data(forKey: AppPreferenceKey.modelStorageRootBookmark)
-        guard bookmarkData == nil else {
-            if currentVersion < modelStorageMigrationVersion {
-                defaults.set(modelStorageMigrationVersion, forKey: AppPreferenceKey.modelStorageRootMigrationVersion)
-            }
-            return false
-        }
-
-        let storedPath = normalizedStoredPath(defaults.string(forKey: AppPreferenceKey.modelStorageRootPath))
-        let isLegacyAutomaticLocation = storedPath == nil || storedPath == legacyRoot.path
-        guard isLegacyAutomaticLocation else {
-            if currentVersion < modelStorageMigrationVersion {
-                defaults.set(modelStorageMigrationVersion, forKey: AppPreferenceKey.modelStorageRootMigrationVersion)
-            }
-            return false
-        }
-
-        guard fileManager.fileExists(atPath: legacyRoot.path) else {
-            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootPath)
-            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
-            defaults.set(modelStorageMigrationVersion, forKey: AppPreferenceKey.modelStorageRootMigrationVersion)
-            updateResolvedRootCache(bookmarkData: nil, path: nil, rootURL: newRoot)
-            return false
-        }
-
-        do {
-            try fileManager.createDirectory(
-                at: newRoot.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-
-            if fileManager.fileExists(atPath: newRoot.path) {
-                try mergeDirectoryContents(from: legacyRoot, to: newRoot, fileManager: fileManager)
-                try? fileManager.removeItem(at: legacyRoot)
-            } else {
-                try fileManager.moveItem(at: legacyRoot, to: newRoot)
-            }
-
-            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootPath)
-            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
-            defaults.set(modelStorageMigrationVersion, forKey: AppPreferenceKey.modelStorageRootMigrationVersion)
-            updateResolvedRootCache(bookmarkData: nil, path: nil, rootURL: newRoot)
-            return true
-        } catch {
-            defaults.set(legacyRoot.path, forKey: AppPreferenceKey.modelStorageRootPath)
-            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
-            updateResolvedRootCache(bookmarkData: nil, path: legacyRoot.path, rootURL: legacyRoot)
-            return false
-        }
     }
 
     static func resetForTesting() {
@@ -183,7 +167,11 @@ enum ModelStorageDirectoryManager {
             updateResolvedRootCache(
                 bookmarkData: refreshed,
                 path: normalizedStoredPath(defaults.string(forKey: AppPreferenceKey.modelStorageRootPath)),
-                rootURL: resolved
+                resolution: RootResolution(
+                    writeRootURL: resolved,
+                    readableRootURLs: [resolved],
+                    derivedRootURL: derivedRootURL(forWriteRoot: resolved)
+                )
             )
         }
 
@@ -214,118 +202,29 @@ enum ModelStorageDirectoryManager {
         return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL.path
     }
 
-    private static func mergeDirectoryContents(from source: URL, to destination: URL, fileManager: FileManager) throws {
-        try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
-        try validateMergeCompatibility(from: source, to: destination, fileManager: fileManager)
-
-        var copiedItems: [URL] = []
-        do {
-            try copyMissingDirectoryContents(
-                from: source,
-                to: destination,
-                fileManager: fileManager,
-                copiedItems: &copiedItems
-            )
-        } catch {
-            rollbackCopiedItems(copiedItems, fileManager: fileManager)
-            throw error
-        }
-    }
-
-    private static func validateMergeCompatibility(from source: URL, to destination: URL, fileManager: FileManager) throws {
-        let children = try fileManager.contentsOfDirectory(
-            at: source,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: []
-        )
-
-        for child in children {
-            let target = destination.appendingPathComponent(child.lastPathComponent, isDirectory: false)
-            guard fileManager.fileExists(atPath: target.path) else {
-                continue
-            }
-
-            let childValues = try child.resourceValues(forKeys: [.isDirectoryKey])
-            let targetValues = try target.resourceValues(forKeys: [.isDirectoryKey])
-            if childValues.isDirectory == true && targetValues.isDirectory == true {
-                try validateMergeCompatibility(from: child, to: target, fileManager: fileManager)
-                continue
-            }
-
-            throw MigrationError.unableToMergeConflictingFile(target)
-        }
-    }
-
-    private static func copyMissingDirectoryContents(
-        from source: URL,
-        to destination: URL,
-        fileManager: FileManager,
-        copiedItems: inout [URL]
-    ) throws {
-        let children = try fileManager.contentsOfDirectory(
-            at: source,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: []
-        )
-
-        for child in children {
-            let target = destination.appendingPathComponent(child.lastPathComponent, isDirectory: false)
-            if !fileManager.fileExists(atPath: target.path) {
-                try copyItemRecursively(from: child, to: target, fileManager: fileManager)
-                copiedItems.append(target)
-                continue
-            }
-
-            let childValues = try child.resourceValues(forKeys: [.isDirectoryKey])
-            let targetValues = try target.resourceValues(forKeys: [.isDirectoryKey])
-            if childValues.isDirectory == true && targetValues.isDirectory == true {
-                try copyMissingDirectoryContents(
-                    from: child,
-                    to: target,
-                    fileManager: fileManager,
-                    copiedItems: &copiedItems
-                )
-                continue
-            }
-
-            throw MigrationError.unableToMergeConflictingFile(target)
-        }
-    }
-
-    private static func copyItemRecursively(from source: URL, to destination: URL, fileManager: FileManager) throws {
-        do {
-            try fileManager.copyItem(at: source, to: destination)
-        } catch {
-            let values = try source.resourceValues(forKeys: [.isDirectoryKey])
-            guard values.isDirectory == true else {
-                throw error
-            }
-
-            try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
-            let children = try fileManager.contentsOfDirectory(
-                at: source,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: []
-            )
-            for child in children {
-                let nestedDestination = destination.appendingPathComponent(child.lastPathComponent, isDirectory: false)
-                try copyItemRecursively(from: child, to: nestedDestination, fileManager: fileManager)
+    private static func uniqueRootURLs(_ urls: [URL]) -> [URL] {
+        var seenPaths = Set<String>()
+        var uniqueURLs: [URL] = []
+        for url in urls {
+            let normalizedURL = url.standardizedFileURL
+            if seenPaths.insert(normalizedURL.path).inserted {
+                uniqueURLs.append(normalizedURL)
             }
         }
+        return uniqueURLs
     }
 
-    private static func rollbackCopiedItems(_ copiedItems: [URL], fileManager: FileManager) {
-        for item in copiedItems.reversed() {
-            try? fileManager.removeItem(at: item)
-        }
+    private static func derivedRootURL(forWriteRoot writeRootURL: URL) -> URL {
+        writeRootURL
+            .appendingPathComponent(".derived-model-artifacts", isDirectory: true)
     }
 
-    private static func updateResolvedRootCache(bookmarkData: Data?, path: String?, rootURL: URL) {
+    private static func updateResolvedRootCache(bookmarkData: Data?, path: String?, resolution: RootResolution) {
         lock.lock()
         resolvedRootCache = ResolvedRootCache(
             bookmarkData: bookmarkData,
             path: path,
-            rootURL: rootURL
+            resolution: resolution
         )
         lock.unlock()
     }

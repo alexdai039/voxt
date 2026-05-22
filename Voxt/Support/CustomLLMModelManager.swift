@@ -598,7 +598,7 @@ class CustomLLMModelManager: ObservableObject {
             return cached
         }
 
-        guard let directory = cacheDirectory(for: repo) else {
+        guard let directory = readableCacheDirectory(for: repo, requireValid: true) else {
             throw NSError(
                 domain: "Voxt.CustomLLM",
                 code: -10,
@@ -607,14 +607,16 @@ class CustomLLMModelManager: ObservableObject {
         }
         let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
             ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
-        await CustomLLMModelDownloadSupport.repairMissingChatTemplateIfNeeded(
-            repo: repo,
-            directory: directory,
-            preferredBaseURL: hubBaseURL,
-            mirrorBaseURL: Self.mirrorHubBaseURL,
-            userAgent: Self.hubUserAgent,
-            token: token
-        )
+        if shouldRepairModelDirectory(directory, for: repo) {
+            await CustomLLMModelDownloadSupport.repairMissingChatTemplateIfNeeded(
+                repo: repo,
+                directory: directory,
+                preferredBaseURL: hubBaseURL,
+                mirrorBaseURL: Self.mirrorHubBaseURL,
+                userAgent: Self.hubUserAgent,
+                token: token
+            )
+        }
         let container = try await loadModelContainer(
             from: directory,
             using: LocalTokenizerLoader()
@@ -703,7 +705,7 @@ class CustomLLMModelManager: ObservableObject {
         if let cached = downloadedStateByRepo[repo] {
             return cached
         }
-        guard let modelDir = cacheDirectory(for: repo) else { return false }
+        guard let modelDir = readableCacheDirectory(for: repo, requireValid: true) else { return false }
         let isDownloaded = CustomLLMModelStorageSupport.isModelDirectoryValid(modelDir)
         downloadedStateByRepo[repo] = isDownloaded
         return isDownloaded
@@ -712,7 +714,7 @@ class CustomLLMModelManager: ObservableObject {
     func hasResumableDownload(repo: String) -> Bool {
         let canonicalRepo = Self.canonicalModelRepo(repo)
         guard !isModelDownloaded(repo: canonicalRepo),
-              let modelDir = cacheDirectory(for: canonicalRepo),
+              let modelDir = writeCacheDirectory(for: canonicalRepo),
               FileManager.default.fileExists(atPath: modelDir.path) else {
             return false
         }
@@ -723,7 +725,7 @@ class CustomLLMModelManager: ObservableObject {
         if let cached = localSizeTextByRepo[repo] {
             return cached
         }
-        guard let modelDir = cacheDirectory(for: repo),
+        guard let modelDir = readableCacheDirectory(for: repo, requireValid: true),
               let size = try? FileManager.default.allocatedSizeOfDirectory(at: modelDir),
               size > 0
         else {
@@ -739,7 +741,11 @@ class CustomLLMModelManager: ObservableObject {
     }
 
     func modelDirectoryURL(repo: String) -> URL? {
-        guard let modelDir = cacheDirectory(for: repo),
+        if let modelDir = readableCacheDirectory(for: repo, requireValid: true),
+           FileManager.default.fileExists(atPath: modelDir.path) {
+            return modelDir
+        }
+        guard let modelDir = readableCacheDirectory(for: repo, requireValid: false),
               FileManager.default.fileExists(atPath: modelDir.path)
         else { return nil }
         return modelDir
@@ -772,7 +778,7 @@ class CustomLLMModelManager: ObservableObject {
     }
 
     func checkExistingModel() {
-        guard let modelDir = cacheDirectory(for: modelRepo) else {
+        guard writeCacheDirectory(for: modelRepo) != nil else {
             setStateIfNeeded(.error("Invalid model identifier"))
             downloadedStateByRepo[modelRepo] = false
             if lastInvalidRepoLogged != modelRepo {
@@ -782,7 +788,7 @@ class CustomLLMModelManager: ObservableObject {
             return
         }
         lastInvalidRepoLogged = nil
-        let isDownloaded = CustomLLMModelStorageSupport.isModelDirectoryValid(modelDir)
+        let isDownloaded = readableCacheDirectory(for: modelRepo, requireValid: true) != nil
         downloadedStateByRepo[modelRepo] = isDownloaded
         if isDownloaded {
             setStateIfNeeded(.downloaded)
@@ -855,7 +861,7 @@ class CustomLLMModelManager: ObservableObject {
                     VoxtLog.model("Custom LLM download paused: \(modelRepo)")
                 case .cancel, .none:
                     pausedStatusMessage = nil
-                    if let modelDir = cacheDirectory(for: modelRepo) {
+                    if let modelDir = writeCacheDirectory(for: modelRepo) {
                         try? FileManager.default.removeItem(at: modelDir)
                     }
                     invalidateLocalCache(for: modelRepo)
@@ -886,15 +892,10 @@ class CustomLLMModelManager: ObservableObject {
             return
         }
 
-        if let modelDir = cacheDirectory(for: canonicalRepo) {
+        if let modelDir = writeCacheDirectory(for: canonicalRepo) {
             try? FileManager.default.removeItem(at: modelDir)
         }
-        if let repoID = Repo.ID(rawValue: canonicalRepo) {
-            CustomLLMModelStorageSupport.clearHubCache(
-                for: repoID,
-                rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
-            )
-        }
+        clearHubCache(for: canonicalRepo)
         invalidateLocalCache(for: canonicalRepo)
     }
 
@@ -936,7 +937,7 @@ class CustomLLMModelManager: ObservableObject {
 
         guard pausedDownloadSnapshot != nil else { return }
         pausedStatusMessage = nil
-        if let modelDir = cacheDirectory(for: modelRepo) {
+        if let modelDir = writeCacheDirectory(for: modelRepo) {
             try? FileManager.default.removeItem(at: modelDir)
         }
         invalidateLocalCache(for: modelRepo)
@@ -964,12 +965,7 @@ class CustomLLMModelManager: ObservableObject {
             VoxtLog.warning(
                 "Primary custom LLM download endpoint failed. Retrying with mirror. repo=\(modelRepo), baseURL=\(hubBaseURL.absoluteString), error=\(error.localizedDescription)"
             )
-            if let repoID = Repo.ID(rawValue: modelRepo) {
-                CustomLLMModelStorageSupport.clearHubCache(
-                    for: repoID,
-                    rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
-                )
-            }
+            clearHubCache(for: modelRepo)
             return try await performDownload(using: fallbackBaseURL)
         }
     }
@@ -989,7 +985,7 @@ class CustomLLMModelManager: ObservableObject {
         let totalFiles = context.entries.count
         var completedBytes: Int64 = 0
 
-        guard let modelDir = cacheDirectory(for: modelRepo) else {
+        guard let modelDir = writeCacheDirectory(for: modelRepo) else {
             throw NSError(
                 domain: "Voxt.CustomLLM",
                 code: 1002,
@@ -1128,13 +1124,12 @@ class CustomLLMModelManager: ObservableObject {
         if canonicalRepo == inferenceModelRepo {
             releaseInferenceResources(resetActiveInferenceCount: true)
         }
-        if let repoID = Repo.ID(rawValue: canonicalRepo) {
-            CustomLLMModelStorageSupport.clearHubCache(
-                for: repoID,
-                rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
-            )
+        let modelDirectories = allReadableCacheDirectories(for: canonicalRepo, requireValid: false)
+        let rootDirectories = Set(modelDirectories.compactMap { rootDirectory(forModelDirectory: $0, repo: canonicalRepo) })
+        for rootDirectory in rootDirectories {
+            clearHubCache(for: canonicalRepo, rootDirectory: rootDirectory)
         }
-        if let modelDir = cacheDirectory(for: canonicalRepo) {
+        for modelDir in modelDirectories {
             do {
                 try FileManager.default.removeItem(at: modelDir)
                 VoxtLog.info("Deleted custom LLM model directory. repo=\(canonicalRepo), path=\(modelDir.path)")
@@ -1164,7 +1159,7 @@ class CustomLLMModelManager: ObservableObject {
         for model in Self.supportedModels {
             let canonicalRepo = Self.canonicalModelRepo(model.id)
             guard downloadedStateByRepo[canonicalRepo] == nil else { continue }
-            guard let modelDir = cacheDirectory(for: canonicalRepo),
+            guard let modelDir = readableCacheDirectory(for: canonicalRepo, requireValid: true),
                   FileManager.default.fileExists(atPath: modelDir.path) else {
                 downloadedStateByRepo[canonicalRepo] = false
                 continue
@@ -1461,11 +1456,66 @@ class CustomLLMModelManager: ObservableObject {
         return cleaned
     }
 
-    private func cacheDirectory(for repo: String) -> URL? {
+    private func writeCacheDirectory(for repo: String) -> URL? {
         CustomLLMModelStorageSupport.cacheDirectory(
             for: repo,
-            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+            rootDirectory: writeRootURL()
         )
+    }
+
+    private func readableCacheDirectory(for repo: String, requireValid: Bool) -> URL? {
+        allReadableCacheDirectories(for: repo, requireValid: requireValid).first
+    }
+
+    private func allReadableCacheDirectories(for repo: String, requireValid: Bool) -> [URL] {
+        readableRootURLs().compactMap { rootDirectory in
+            guard let modelDir = CustomLLMModelStorageSupport.cacheDirectory(for: repo, rootDirectory: rootDirectory),
+                  FileManager.default.fileExists(atPath: modelDir.path) else {
+                return nil
+            }
+            if requireValid && !CustomLLMModelStorageSupport.isModelDirectoryValid(modelDir) {
+                return nil
+            }
+            return modelDir
+        }
+    }
+
+    private func rootDirectory(forModelDirectory modelDirectory: URL, repo: String) -> URL? {
+        for rootDirectory in readableRootURLs() {
+            guard let expectedDirectory = CustomLLMModelStorageSupport.cacheDirectory(for: repo, rootDirectory: rootDirectory) else {
+                continue
+            }
+            if expectedDirectory.standardizedFileURL.path == modelDirectory.standardizedFileURL.path {
+                return rootDirectory
+            }
+        }
+        if let expectedDirectory = writeCacheDirectory(for: repo),
+           expectedDirectory.standardizedFileURL.path == modelDirectory.standardizedFileURL.path {
+            return writeRootURL()
+        }
+        return nil
+    }
+
+    private func clearHubCache(for repo: String) {
+        clearHubCache(for: repo, rootDirectory: writeRootURL())
+    }
+
+    private func clearHubCache(for repo: String, rootDirectory: URL) {
+        guard let repoID = Repo.ID(rawValue: repo) else { return }
+        CustomLLMModelStorageSupport.clearHubCache(for: repoID, rootDirectory: rootDirectory)
+    }
+
+    private func shouldRepairModelDirectory(_ directory: URL, for repo: String) -> Bool {
+        guard let writableDirectory = writeCacheDirectory(for: repo) else { return false }
+        return writableDirectory.standardizedFileURL.path == directory.standardizedFileURL.path
+    }
+
+    private func writeRootURL() -> URL {
+        ModelStorageDirectoryManager.resolvedWriteRootURL()
+    }
+
+    private func readableRootURLs() -> [URL] {
+        ModelStorageDirectoryManager.resolvedReadableRootURLs()
     }
 
     private func withActiveInference<T>(
