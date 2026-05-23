@@ -116,6 +116,8 @@ extension TranscriptionHistoryEntry {
             llmDurationSeconds: llmDurationSeconds.resolved(current: self.llmDurationSeconds),
             focusedAppName: focusedAppName,
             focusedAppBundleID: focusedAppBundleID,
+            browserURLHost: browserURLHost,
+            browserURLOrigin: browserURLOrigin,
             matchedGroupID: matchedGroupID,
             matchedGroupName: matchedGroupName,
             matchedAppGroupName: matchedAppGroupName,

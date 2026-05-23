@@ -25,7 +25,10 @@ struct HistoryAudioSettingsSheet: View {
                 .font(.title3.weight(.semibold))
 
             GeneralSettingsCard(titleText: localizedHistoryAudioSettings("Cleanup")) {
-                Toggle(localizedHistoryAudioSettings("History Cleanup"), isOn: $historyCleanupEnabled)
+                GeneralToggleRow(
+                    title: LocalizedStringKey(localizedHistoryAudioSettings("History Cleanup")),
+                    isOn: $historyCleanupEnabled
+                )
 
                 if historyCleanupEnabled {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -49,38 +52,21 @@ struct HistoryAudioSettingsSheet: View {
             }
 
             GeneralSettingsCard(titleText: localizedHistoryAudioSettings("Audio Storage")) {
-                Toggle(localizedHistoryAudioSettings("Save history audio"), isOn: $historyAudioStorageEnabled)
+                GeneralToggleRow(
+                    title: LocalizedStringKey(localizedHistoryAudioSettings("Save history audio")),
+                    isOn: $historyAudioStorageEnabled
+                )
 
                 if historyAudioStorageEnabled {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(localizedHistoryAudioSettings("Storage Path"))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button(action: onOpenHistoryAudioStorageInFinder) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "folder")
-                                    .font(.caption)
-                                Text(
-                                    historyAudioStorageDisplayPath.isEmpty
-                                    ? HistoryAudioStorageDirectoryManager.defaultRootURL.path
-                                    : historyAudioStorageDisplayPath
-                                )
-                                .underline()
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .multilineTextAlignment(.trailing)
-                                Image(systemName: "arrow.up.forward.square")
-                                    .font(.caption)
-                            }
-                        }
-                        .buttonStyle(SettingsInlineSelectorButtonStyle())
-                        .help(localizedHistoryAudioSettings("Open folder"))
-
-                        Button(localizedHistoryAudioSettings("Choose")) {
-                            onChooseHistoryAudioStorageDirectory()
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
-                    }
+                    SettingsPathSelectionRow(
+                        title: LocalizedStringKey(localizedHistoryAudioSettings("Storage Path")),
+                        displayedPath: historyAudioStorageDisplayPath,
+                        fallbackPath: HistoryAudioStorageDirectoryManager.defaultRootURL.path,
+                        openButtonHelp: localizedHistoryAudioSettings("Open folder"),
+                        chooseButtonTitle: localizedHistoryAudioSettings("Choose"),
+                        onOpen: onOpenHistoryAudioStorageInFinder,
+                        onChoose: onChooseHistoryAudioStorageDirectory
+                    )
 
                     Text(localizedHistoryAudioSettings("New history audio is stored here. Switching the path will not move existing audio files."))
                         .font(.caption)
@@ -134,7 +120,6 @@ struct HistoryAudioSettingsSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 560)
+        .settingsDialogChrome(width: 560, onClose: { isPresented = false })
     }
 }

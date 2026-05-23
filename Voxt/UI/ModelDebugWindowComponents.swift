@@ -112,19 +112,12 @@ struct ASRDebugAudioSelectorSheet: View {
             HStack {
                 Text(modelDebugLocalized("Recorded Audio"))
                     .font(.title3.weight(.semibold))
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
             }
 
             if clips.isEmpty {
                 debugEmptyState(
                     title: modelDebugLocalized("No audio clips yet"),
-                    detail: modelDebugLocalized("Record audio in this window first, then reuse the same clip across different models.")
+                    detail: modelDebugLocalized("Record audio here, then reuse it across models.")
                 )
             } else {
                 ScrollView {
@@ -190,9 +183,7 @@ struct ASRDebugAudioSelectorSheet: View {
                 }
             }
         }
-        .padding(18)
-        .frame(width: 580, height: 470)
-        .background(DetailPanelUIStyle.windowFillColor)
+        .settingsDialogChrome(width: 580, height: 470, onClose: { dismiss() })
     }
 }
 
@@ -208,13 +199,6 @@ struct LLMDebugPresetSelectorSheet: View {
             HStack {
                 Text(modelDebugLocalized("Choose Preset"))
                     .font(.title3.weight(.semibold))
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
             }
 
             ScrollView {
@@ -260,9 +244,7 @@ struct LLMDebugPresetSelectorSheet: View {
                 }
             }
         }
-        .padding(18)
-        .frame(width: 520, height: 470)
-        .background(DetailPanelUIStyle.windowFillColor)
+        .settingsDialogChrome(width: 520, height: 470, onClose: { dismiss() })
     }
 }
 
@@ -294,23 +276,20 @@ struct LLMDebugPromptSettingsSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if !isCustomPreset {
-                    Button(modelDebugLocalized("Apply")) {
-                        onApply(draftPrompt)
+                HStack(spacing: 8) {
+                    if !isCustomPreset {
+                        Button(modelDebugLocalized("Apply")) {
+                            onApply(draftPrompt)
+                        }
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
                     }
-                    .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
+                    Button(modelDebugLocalized("Save")) {
+                        onSave(draftPrompt)
+                        dismiss()
+                    }
+                    .buttonStyle(DetailPrimaryButtonStyle())
                 }
-                Button(modelDebugLocalized("Save")) {
-                    onSave(draftPrompt)
-                    dismiss()
-                }
-                .buttonStyle(DetailPrimaryButtonStyle())
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
+                .padding(.trailing, 56)
             }
 
             ScrollView {
@@ -359,9 +338,7 @@ struct LLMDebugPromptSettingsSheet: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(18)
-        .frame(width: 720, height: 450)
-        .background(DetailPanelUIStyle.windowFillColor)
+        .settingsDialogChrome(width: 720, height: 450, onClose: { dismiss() })
         .onAppear {
             draftPrompt = preset.promptTemplate
         }

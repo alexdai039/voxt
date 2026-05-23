@@ -14,7 +14,7 @@ protocol HistoryRepositoryProtocol: AnyObject, Sendable {
     func entryCount(kind: TranscriptionHistoryKind?, query: String) throws -> Int
     func pendingNormalEntryCount(after checkpoint: DictionaryHistoryScanCheckpoint?) throws -> Int
     func pendingNormalEntries(after checkpoint: DictionaryHistoryScanCheckpoint?) throws -> [TranscriptionHistoryEntry]
-    func reportMetrics(dayStarts: [Date]) throws -> HistoryReportMetrics
+    func reportMetrics(dayStarts: [Date], branchStartDate: Date?) throws -> HistoryReportMetrics
     func upsert(_ entry: TranscriptionHistoryEntry) throws
     func delete(id: UUID) throws -> TranscriptionHistoryEntry?
     func clearAll() throws
@@ -203,7 +203,7 @@ final class HistoryRepository: HistoryRepositoryProtocol, @unchecked Sendable {
         }
     }
 
-    func reportMetrics(dayStarts: [Date]) throws -> HistoryReportMetrics {
+    func reportMetrics(dayStarts: [Date], branchStartDate: Date? = nil) throws -> HistoryReportMetrics {
         try database.dbQueue.read { db in
             let totals = try Row.fetchOne(
                 db,
@@ -235,13 +235,95 @@ final class HistoryRepository: HistoryRepositoryProtocol, @unchecked Sendable {
                 dailyCharacters[dayStart] = count
             }
 
+            let branchItems = try fetchBranchItems(db: db, startDate: branchStartDate)
+
             return HistoryReportMetrics(
                 totalDictationSeconds: totals?["totalDuration"] ?? 0,
                 totalCharacters: totals?["totalCharacters"] ?? 0,
                 totalTranslationCharacters: totals?["totalTranslationCharacters"] ?? 0,
-                dailyCharacters: dailyCharacters
+                dailyCharacters: dailyCharacters,
+                branchItems: branchItems
             )
         }
+    }
+
+    private func fetchBranchItems(db: Database, startDate: Date?) throws -> [HistoryBranchMetricItem] {
+        var arguments: StatementArguments = []
+        let dateFilter: String
+        if let startDate {
+            dateFilter = "WHERE createdAt >= ?"
+            arguments += [startDate.timeIntervalSince1970]
+        } else {
+            dateFilter = ""
+        }
+
+        let appRows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT
+                    COALESCE(NULLIF(focusedAppName, ''), NULLIF(focusedAppBundleID, ''), 'Unknown App') AS title,
+                    NULLIF(focusedAppBundleID, '') AS bundleID,
+                    COALESCE(SUM(LENGTH(text)), 0) AS characterCount
+                FROM history_entries
+                \(dateFilter)
+                GROUP BY COALESCE(NULLIF(focusedAppBundleID, ''), NULLIF(focusedAppName, ''), 'Unknown App')
+                HAVING characterCount > 0
+                """,
+            arguments: arguments
+        )
+        var items = appRows.map { row in
+            let title: String = row["title"] ?? "Unknown App"
+            let bundleID: String? = row["bundleID"]
+            return HistoryBranchMetricItem(
+                kind: .app,
+                title: title,
+                subtitle: bundleID,
+                bundleID: bundleID,
+                urlHost: nil,
+                urlOrigin: nil,
+                characterCount: row["characterCount"] ?? 0
+            )
+        }
+
+        let urlRows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT
+                    browserURLHost AS host,
+                    MIN(browserURLOrigin) AS origin,
+                    COALESCE(SUM(LENGTH(text)), 0) AS characterCount
+                FROM history_entries
+                \(dateFilter)
+                \(dateFilter.isEmpty ? "WHERE" : "AND") browserURLHost IS NOT NULL AND browserURLHost != ''
+                GROUP BY browserURLHost
+                HAVING characterCount > 0
+                """,
+            arguments: arguments
+        )
+        items += urlRows.map { row in
+            let host: String = row["host"] ?? ""
+            let origin: String? = row["origin"]
+            return HistoryBranchMetricItem(
+                kind: .url,
+                title: host,
+                subtitle: origin,
+                bundleID: nil,
+                urlHost: host,
+                urlOrigin: origin,
+                characterCount: row["characterCount"] ?? 0
+            )
+        }
+
+        return Array(
+            items
+                .sorted {
+                    if $0.characterCount == $1.characterCount {
+                        return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                    }
+                    return $0.characterCount > $1.characterCount
+                }
+                .prefix(10)
+        )
     }
 
     func upsert(_ entry: TranscriptionHistoryEntry) throws {
@@ -315,11 +397,12 @@ final class HistoryRepository: HistoryRepositoryProtocol, @unchecked Sendable {
                     id, text, createdAt, kind, transcriptionEngine, transcriptionModel,
                     enhancementMode, enhancementModel, isTranslation, audioDurationSeconds,
                     transcriptionProcessingDurationSeconds, llmDurationSeconds, focusedAppName,
-                    focusedAppBundleID, matchedGroupID, matchedGroupName, matchedAppGroupName,
-                    matchedURLGroupName, remoteASRProvider, remoteASRModel, remoteASREndpoint,
+                    focusedAppBundleID, browserURLHost, browserURLOrigin, matchedGroupID,
+                    matchedGroupName, matchedAppGroupName, matchedURLGroupName,
+                    remoteASRProvider, remoteASRModel, remoteASREndpoint,
                     remoteLLMProvider, remoteLLMModel, remoteLLMEndpoint, audioRelativePath,
                     transcriptAudioRelativePath, displayTitle, dictionaryTermsText, entryJSON
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     text = excluded.text,
                     createdAt = excluded.createdAt,
@@ -334,6 +417,8 @@ final class HistoryRepository: HistoryRepositoryProtocol, @unchecked Sendable {
                     llmDurationSeconds = excluded.llmDurationSeconds,
                     focusedAppName = excluded.focusedAppName,
                     focusedAppBundleID = excluded.focusedAppBundleID,
+                    browserURLHost = excluded.browserURLHost,
+                    browserURLOrigin = excluded.browserURLOrigin,
                     matchedGroupID = excluded.matchedGroupID,
                     matchedGroupName = excluded.matchedGroupName,
                     matchedAppGroupName = excluded.matchedAppGroupName,
@@ -365,6 +450,8 @@ final class HistoryRepository: HistoryRepositoryProtocol, @unchecked Sendable {
                 entry.llmDurationSeconds,
                 entry.focusedAppName,
                 entry.focusedAppBundleID,
+                entry.browserURLHost,
+                entry.browserURLOrigin,
                 entry.matchedGroupID?.uuidString,
                 entry.matchedGroupName,
                 entry.matchedAppGroupName,

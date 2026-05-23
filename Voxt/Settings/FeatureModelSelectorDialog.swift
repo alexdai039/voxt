@@ -78,15 +78,6 @@ struct FeatureModelSelectorDialog: View {
                     Text(title)
                         .font(.title3.weight(.semibold))
                 }
-
-                Spacer(minLength: 0)
-
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(SettingsCompactIconButtonStyle())
             }
 
             if let selectionReminder {
@@ -143,9 +134,7 @@ struct FeatureModelSelectorDialog: View {
             }
             .frame(height: 400)
         }
-        .padding(18)
-        .frame(width: 640)
-        .background(SettingsUIStyle.groupedFillColor)
+        .settingsDialogChrome(width: 640, onClose: { dismiss() })
         .onAppear(perform: initializeDefaultTags)
         .id(interfaceLanguageRaw)
     }
@@ -312,6 +301,8 @@ private struct FeatureModelSelectorRow: View {
     let titleOverride: String?
     let showsEngine: Bool
     let showsTags: Bool
+    let showsIcon: Bool
+    private let surface: FeatureModelSelectorRowSurface
 
     private var hintText: String? {
         if let disabledReason = entry.disabledReason, !entry.isSelectable {
@@ -339,7 +330,9 @@ private struct FeatureModelSelectorRow: View {
         onSelect: @escaping () -> Void,
         titleOverride: String? = nil,
         showsEngine: Bool = true,
-        showsTags: Bool = true
+        showsTags: Bool = true,
+        showsIcon: Bool = true,
+        surface: FeatureModelSelectorRowSurface = .card
     ) {
         self.entry = entry
         self.isSelected = isSelected
@@ -347,12 +340,22 @@ private struct FeatureModelSelectorRow: View {
         self.titleOverride = titleOverride
         self.showsEngine = showsEngine
         self.showsTags = showsTags
+        self.showsIcon = showsIcon
+        self.surface = surface
     }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 8) {
+                    if showsIcon {
+                        ModelLogoView(
+                            key: entry.modelLogoKey,
+                            fallbackTitle: titleOverride ?? entry.title,
+                            size: 18
+                        )
+                    }
+
                     Text(titleOverride ?? entry.title)
                         .font(.headline)
 
@@ -438,14 +441,38 @@ private struct FeatureModelSelectorRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor.opacity(0.94))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(isSelected ? Color.accentColor.opacity(0.45) : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-        )
+        .modifier(FeatureModelSelectorRowSurfaceModifier(surface: surface, isSelected: isSelected))
+    }
+}
+
+private enum FeatureModelSelectorRowSurface {
+    case card
+    case listItem
+}
+
+private struct FeatureModelSelectorRowSurfaceModifier: ViewModifier {
+    let surface: FeatureModelSelectorRowSurface
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        switch surface {
+        case .card:
+            content
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(SettingsUIStyle.controlFillColor.opacity(0.94))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(
+                            isSelected ? Color.accentColor.opacity(0.34) : SettingsUIStyle.modelCardBorderColor,
+                            lineWidth: 1
+                        )
+                )
+        case .listItem:
+            content
+                .background(Color.clear)
+        }
     }
 }
 
@@ -458,13 +485,14 @@ private struct FeatureModelSelectorGroupCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button(action: onToggle) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    onToggle()
+                }
+            } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 8) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 14)
+                        ModelLogoView(key: group.modelLogoKey, fallbackTitle: group.title, size: 18)
 
                         Text(group.title)
                             .font(.headline)
@@ -492,6 +520,11 @@ private struct FeatureModelSelectorGroupCard: View {
                             )
 
                         Spacer(minLength: 0)
+
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 18)
                     }
 
                     HStack(spacing: 12) {
@@ -516,30 +549,50 @@ private struct FeatureModelSelectorGroupCard: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(spacing: 10) {
-                    ForEach(group.entries) { entry in
+                VStack(spacing: 0) {
+                    ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
                         FeatureModelSelectorRow(
                             entry: entry,
                             isSelected: entry.selectionID == selectedID,
                             onSelect: { onSelect(entry.selectionID) },
                             titleOverride: entry.groupedVariantTitle,
                             showsEngine: false,
-                            showsTags: false
+                            showsTags: false,
+                            showsIcon: false,
+                            surface: .listItem
                         )
+
+                        if index < group.entries.count - 1 {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(SettingsUIStyle.modelGroupListFillColor)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(SettingsUIStyle.modelCardBorderColor, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipped()
+                .transition(.opacity)
             }
         }
+        .clipped()
+        .animation(.easeInOut(duration: 0.18), value: isExpanded)
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(SettingsUIStyle.controlFillColor.opacity(0.94))
+                .fill(SettingsUIStyle.modelGroupFillColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                .strokeBorder(SettingsUIStyle.modelCardBorderColor, lineWidth: 1)
         )
     }
 }
@@ -572,6 +625,7 @@ private struct FeatureModelTagChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -581,14 +635,17 @@ private struct FeatureModelTagChip: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.18) : SettingsUIStyle.controlFillColor)
+                        .fill(isSelected || isHovered ? Color.accentColor.opacity(0.18) : SettingsUIStyle.controlFillColor)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(isSelected ? Color.accentColor.opacity(0.28) : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+                        .stroke(isSelected || isHovered ? Color.accentColor.opacity(0.28) : SettingsUIStyle.subtleBorderColor, lineWidth: 1)
                 )
+                .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
+        .foregroundStyle(isSelected || isHovered ? Color.accentColor : .primary)
+        .onHover { isHovered = $0 }
     }
 }
 

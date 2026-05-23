@@ -12,7 +12,8 @@ struct SettingsSearchDialog: View {
                 .font(.title3.weight(.semibold))
 
             TextField(placeholder, text: $query)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .settingsFieldSurface(minHeight: 34)
 
             HStack(spacing: 8) {
                 Button(AppLocalization.localizedString("Clear")) {
@@ -30,7 +31,6 @@ struct SettingsSearchDialog: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 420)
+        .settingsDialogChrome(width: 420, onClose: { isPresented = false })
     }
 }

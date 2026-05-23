@@ -8,54 +8,22 @@ private func localizedKey(_ key: String) -> LocalizedStringKey {
     LocalizedStringKey(localized(key))
 }
 
-struct GeneralConfigurationCard: View {
-    let message: String?
-    let onExport: () -> Void
-    let onImport: () -> Void
-    let onOpenSetupGuide: (() -> Void)?
-
-    var body: some View {
-        GeneralSettingsCard(title: localizedKey("Configuration")) {
-            HStack(spacing: 8) {
-                Button(localized("Export Configuration"), action: onExport)
-                    .buttonStyle(SettingsPillButtonStyle())
-                Button(localized("Import Configuration"), action: onImport)
-                    .buttonStyle(SettingsPillButtonStyle())
-                if let onOpenSetupGuide {
-                    Button(localized("Open Setup Guide"), action: onOpenSetupGuide)
-                        .buttonStyle(SettingsPillButtonStyle())
-                }
-            }
-
-            Text(localized("Export or import your setup as JSON. Sensitive fields are cleared and need to be filled in again after import."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if let message {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
 struct GeneralAudioCard: View {
     let microphoneState: MicrophoneResolvedState
     @Binding var interactionSoundsEnabled: Bool
     @Binding var muteSystemAudioWhileRecording: Bool
     let systemAudioPermissionMessage: String?
     @Binding var interactionSoundPreset: InteractionSoundPreset
-    let onTrySound: () -> Void
+    let onTrySound: () -> TimeInterval
     let onManageMicrophones: () -> Void
     let onViewPriorityList: () -> Void
 
     var body: some View {
         GeneralSettingsCard(title: localizedKey("Audio")) {
-            HStack(alignment: .center) {
-                Text(localized("Microphone"))
-                    .foregroundStyle(.secondary)
-                Spacer()
+            GeneralFieldRow(
+                title: localizedKey("Microphone"),
+                description: localizedKey("Reorder microphones to control device priority. Auto Switch only applies when devices connect or disconnect.")
+            ) {
                 if microphoneState.hasAvailableDevices {
                     SettingsSelectionButton(width: 272, action: onManageMicrophones) {
                         HStack(spacing: 0) {
@@ -76,10 +44,6 @@ struct GeneralAudioCard: View {
                 }
             }
 
-            Text(localized("Reorder microphones to control device priority. Auto Switch only applies when devices connect or disconnect."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             if !microphoneState.hasAvailableDevices, microphoneState.hasTrackedDevices {
                 HStack {
                     Spacer()
@@ -88,10 +52,10 @@ struct GeneralAudioCard: View {
                 }
             }
 
-            GeneralToggleRow(
-                title: localizedKey("Interaction Sounds"),
-                description: localizedKey("Play a short start chime when recording begins and an end chime when transcription completes."),
-                isOn: $interactionSoundsEnabled
+            GeneralInteractionSoundsRow(
+                interactionSoundsEnabled: $interactionSoundsEnabled,
+                interactionSoundPreset: $interactionSoundPreset,
+                onTrySound: onTrySound
             )
 
             GeneralToggleRow(
@@ -106,22 +70,86 @@ struct GeneralAudioCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack(alignment: .center) {
-                Text(localized("Sound Preset"))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                SettingsMenuPicker(
-                    selection: $interactionSoundPreset,
-                    options: InteractionSoundPreset.allCases.map { preset in
-                        SettingsMenuOption(value: preset, title: preset.title)
-                    },
-                    selectedTitle: interactionSoundPreset.title,
-                    width: 220
-                )
+        }
+    }
+}
 
-                Button(localized("Try Sound"), action: onTrySound)
-                    .buttonStyle(SettingsPillButtonStyle())
+private struct GeneralInteractionSoundsRow: View {
+    @Binding var interactionSoundsEnabled: Bool
+    @Binding var interactionSoundPreset: InteractionSoundPreset
+    let onTrySound: () -> TimeInterval
+
+    @State private var isPreviewPlaying = false
+    @State private var previewToken = UUID()
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localizedKey("Interaction Sounds"))
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
+
+                Text(localizedKey("Play start and completion sounds."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer(minLength: 18)
+
+            HStack(alignment: .center, spacing: 13) {
+                if interactionSoundsEnabled {
+                    HStack(spacing: 5) {
+                        SettingsMenuPicker(
+                            selection: $interactionSoundPreset,
+                            options: InteractionSoundPreset.allCases.map { preset in
+                                SettingsMenuOption(value: preset, title: preset.title)
+                            },
+                            selectedTitle: interactionSoundPreset.title,
+                            width: 150,
+                            allowsCompactWidth: true
+                        )
+
+                        Button(action: playPreview) {
+                            SoundPreviewIcon()
+                                .foregroundStyle(isPreviewPlaying ? Color.accentColor : Color.primary.opacity(0.86))
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(SettingsCompactIconButtonStyle(size: 34))
+                        .help(localized("Try Sound"))
+                    }
+                }
+
+                Toggle("", isOn: $interactionSoundsEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+        }
+    }
+
+    private func playPreview() {
+        let duration = max(onTrySound(), 0.65)
+        let token = UUID()
+        previewToken = token
+        isPreviewPlaying = true
+
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            await MainActor.run {
+                guard previewToken == token else { return }
+                isPreviewPlaying = false
+            }
+        }
+    }
+}
+
+private struct SoundPreviewIcon: View {
+    var body: some View {
+        ZStack {
+            SVGPathShape(pathData: "M7.96997 22.75C5.34997 22.75 3.21997 20.62 3.21997 18C3.21997 15.38 5.34997 13.25 7.96997 13.25C10.59 13.25 12.72 15.38 12.72 18C12.72 20.62 10.59 22.75 7.96997 22.75ZM7.96997 14.75C6.17997 14.75 4.71997 16.21 4.71997 18C4.71997 19.79 6.17997 21.25 7.96997 21.25C9.75997 21.25 11.22 19.79 11.22 18C11.22 16.21 9.76997 14.75 7.96997 14.75Z")
+            SVGPathShape(pathData: "M11.97 18.75C11.56 18.75 11.22 18.41 11.22 18V4C11.22 3.59 11.56 3.25 11.97 3.25C12.38 3.25 12.72 3.59 12.72 4V18C12.72 18.41 12.39 18.75 11.97 18.75Z")
+            SVGPathShape(pathData: "M19.13 10.2304C18.8 10.2304 18.45 10.1704 18.11 10.0604L13.69 8.59043C12.31 8.13043 11.23 6.63043 11.23 5.18043V4.00043C11.23 3.03043 11.63 2.19043 12.31 1.69043C13 1.19043 13.92 1.09043 14.84 1.39043L19.26 2.86043C20.64 3.32043 21.72 4.82043 21.72 6.27043V7.44043C21.72 8.41043 21.32 9.25043 20.64 9.75043C20.21 10.0804 19.68 10.2304 19.13 10.2304ZM13.82 2.72043C13.58 2.72043 13.36 2.78043 13.19 2.91043C12.89 3.12043 12.73 3.51043 12.73 4.00043V5.17043C12.73 5.97043 13.4 6.90043 14.16 7.16043L18.58 8.63043C19.04 8.79043 19.47 8.75043 19.76 8.54043C20.06 8.33043 20.22 7.94043 20.22 7.45043V6.28043C20.22 5.48043 19.55 4.55043 18.79 4.29043L14.37 2.82043C14.18 2.75043 13.99 2.72043 13.82 2.72043Z")
         }
     }
 }
@@ -133,45 +161,76 @@ struct GeneralTranscriptionUICard: View {
     @Binding var overlayScreenEdgeInset: Int
 
     var body: some View {
-        GeneralSettingsCard(title: localizedKey("Transcription UI")) {
-            HStack(alignment: .center) {
-                Text(localized("Position"))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                SettingsMenuPicker(
-                    selection: $overlayPosition,
-                    options: OverlayPosition.allCases.map { position in
-                        SettingsMenuOption(value: position, title: position.title)
-                    },
-                    selectedTitle: overlayPosition.title,
-                    width: 180
+        GeneralSettingsCard(title: localizedKey("Floating Window Style")) {
+            GeneralOverlayStylePreviewCard(
+                opacity: overlayCardOpacity,
+                cornerRadius: overlayCardCornerRadius
+            )
+
+            overlayFieldRow {
+                overlayNumberField(
+                    title: localizedKey("Opacity"),
+                    value: $overlayCardOpacity,
+                    range: 0...100,
+                    width: 90,
+                    unit: "%"
+                )
+            } right: {
+                overlayNumberField(
+                    title: localizedKey("Corner Radius"),
+                    value: $overlayCardCornerRadius,
+                    range: 0...40,
+                    width: 90,
+                    unit: "pt"
                 )
             }
 
-            overlayNumberField(
-                title: localizedKey("Opacity"),
-                value: $overlayCardOpacity,
-                range: 0...100,
-                width: 90,
-                unit: "%"
-            )
+            overlayFieldRow {
+                overlayPositionField
+            } right: {
+                overlayNumberField(
+                    title: localizedKey("Edge Distance"),
+                    value: $overlayScreenEdgeInset,
+                    range: 0...120,
+                    width: 90,
+                    unit: "pt"
+                )
+            }
+        }
+    }
 
-            overlayNumberField(
-                title: localizedKey("Corner Radius"),
-                value: $overlayCardCornerRadius,
-                range: 0...40,
-                width: 90,
-                unit: "pt"
-            )
+    private func overlayFieldRow<Left: View, Right: View>(
+        @ViewBuilder left: @escaping () -> Left,
+        @ViewBuilder right: @escaping () -> Right
+    ) -> some View {
+        GeometryReader { proxy in
+            let columnSpacing: CGFloat = 34
+            let columnWidth = max((proxy.size.width - columnSpacing) / 2, 0)
 
-            overlayNumberField(
-                title: localizedKey("Edge Distance"),
-                value: $overlayScreenEdgeInset,
-                range: 0...120,
-                width: 90,
-                unit: "pt"
+            HStack(alignment: .center, spacing: columnSpacing) {
+                left()
+                    .frame(width: columnWidth, alignment: .leading)
+                right()
+                    .frame(width: columnWidth, alignment: .leading)
+            }
+        }
+        .frame(height: 34)
+    }
+
+    private var overlayPositionField: some View {
+        GeneralFieldRow(title: localizedKey("Position")) {
+            SettingsMenuPicker(
+                selection: $overlayPosition,
+                options: OverlayPosition.allCases.map { position in
+                    SettingsMenuOption(value: position, title: position.title)
+                },
+                selectedTitle: overlayPosition.title,
+                width: 110,
+                allowsCompactWidth: true,
+                usesCompactInsets: true
             )
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func overlayNumberField(
@@ -181,22 +240,86 @@ struct GeneralTranscriptionUICard: View {
         width: CGFloat,
         unit: String
     ) -> some View {
-        HStack(alignment: .center) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            HStack(spacing: 6) {
-                ClampedIntegerTextField(
-                    value: value,
-                    range: range,
-                    width: width
-                )
-
-                Text(unit)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        GeneralFieldRow(title: title) {
+            ClampedIntegerTextField(
+                value: value,
+                range: range,
+                width: width,
+                unit: unit
+            )
         }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct GeneralOverlayStylePreviewCard: View {
+    let opacity: Int
+    let cornerRadius: Int
+
+    private var clampedOpacity: Double {
+        Double(min(max(opacity, 0), 100)) / 100.0
+    }
+
+    private var clampedCornerRadius: CGFloat {
+        CGFloat(min(max(cornerRadius, 0), 40))
+    }
+
+    var body: some View {
+        ZStack {
+            Image("OverlayPreviewBackground")
+                .resizable()
+                .scaledToFill()
+
+            overlayPreview
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 150)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var overlayPreview: some View {
+        HStack(spacing: 10) {
+            WaveformCompactLeadingStatusIconView(
+                isCompleting: false,
+                showsInitializationIcon: false,
+                compactLeadingIconImage: nil,
+                sessionIconMode: .transcription,
+                displayMode: .recording
+            )
+            .frame(width: 16, height: 28, alignment: .center)
+
+            HStack(alignment: .center, spacing: 2.5) {
+                ForEach(0..<16, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.98), Color.white.opacity(0.80)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 3.2, height: barHeight(at: index))
+                        .shadow(color: .white.opacity(0.08), radius: 3, x: 0, y: 0)
+                }
+            }
+            .frame(width: 94, height: 28, alignment: .center)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: clampedCornerRadius, style: .continuous)
+                .fill(.black.opacity(clampedOpacity))
+                .overlay(
+                    RoundedRectangle(cornerRadius: clampedCornerRadius, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.20), radius: 18, x: 0, y: 10)
+        )
+    }
+
+    private func barHeight(at index: Int) -> CGFloat {
+        let heights: [CGFloat] = [5, 7, 10, 12, 9, 6, 8, 11]
+        return heights[index % heights.count]
     }
 }
 
@@ -204,49 +327,62 @@ private struct ClampedIntegerTextField: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
     let width: CGFloat
+    let unit: String
 
     @State private var text: String
 
-    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
+    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat, unit: String) {
         _value = value
         self.range = range
         self.width = width
+        self.unit = unit
         _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
     }
 
     var body: some View {
-        TextField("", text: $text)
-            .textFieldStyle(.plain)
-            .settingsFieldSurface(width: width, alignment: .trailing)
-            .multilineTextAlignment(.trailing)
-            .onChange(of: text) { _, newValue in
-                let digits = newValue.filter(\.isNumber)
-                guard !digits.isEmpty else {
-                    return
+        ZStack(alignment: .trailing) {
+            TextField("", text: $text)
+                .textFieldStyle(.plain)
+                .padding(.trailing, unitWidth + 6)
+                .settingsFieldSurface(width: width, alignment: .trailing)
+                .multilineTextAlignment(.trailing)
+                .onChange(of: text) { _, newValue in
+                    let digits = newValue.filter(\.isNumber)
+                    guard !digits.isEmpty else {
+                        return
+                    }
+
+                    let parsed = Int(digits) ?? range.lowerBound
+                    let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                    value = clamped
+
+                    let clampedText = String(clamped)
+                    if text != clampedText {
+                        text = clampedText
+                    }
+                }
+                .onSubmit {
+                    syncTextToValue()
+                }
+                .onChange(of: value) { _, newValue in
+                    let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+                    let normalized = String(clamped)
+                    if text != normalized {
+                        text = normalized
+                    }
+                }
+                .onAppear {
+                    syncTextToValue()
                 }
 
-                let parsed = Int(digits) ?? range.lowerBound
-                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
-                value = clamped
-
-                let clampedText = String(clamped)
-                if text != clampedText {
-                    text = clampedText
-                }
-            }
-            .onSubmit {
-                syncTextToValue()
-            }
-            .onChange(of: value) { _, newValue in
-                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
-                let normalized = String(clamped)
-                if text != normalized {
-                    text = normalized
-                }
-            }
-            .onAppear {
-                syncTextToValue()
-            }
+            Text(unit)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: unitWidth, alignment: .trailing)
+                .padding(.trailing, 10)
+                .allowsHitTesting(false)
+        }
+        .frame(width: visualWidth)
     }
 
     private func syncTextToValue() {
@@ -255,6 +391,14 @@ private struct ClampedIntegerTextField: View {
         let clamped = min(max(parsed, range.lowerBound), range.upperBound)
         value = clamped
         text = String(clamped)
+    }
+
+    private var unitWidth: CGFloat {
+        unit == "%" ? 12 : 16
+    }
+
+    private var visualWidth: CGFloat {
+        width + 20
     }
 }
 
@@ -267,7 +411,7 @@ struct GeneralLanguagesCard: View {
         GeneralSettingsCard(title: localizedKey("Languages"), spacing: 14) {
             GeneralLanguageSettingBlock(
                 title: localizedKey("Interface Language"),
-                description: localizedKey("Supports English, Chinese, and Japanese. Unsupported system languages default to English.")
+                description: nil
             ) {
                 SettingsMenuPicker(
                     selection: $interfaceLanguage,
@@ -279,11 +423,9 @@ struct GeneralLanguagesCard: View {
                 )
             }
 
-            Divider()
-
             GeneralLanguageSettingBlock(
-                title: localizedKey("User Main Language"),
-                description: localizedKey("Used for the {{USER_MAIN_LANGUAGE}} prompt variable in enhancement and translation. You can select multiple languages and mark one as primary.")
+                title: localizedKey("Speech Recognition Language"),
+                description: localizedKey("Used to guide transcription, punctuation, and language-specific cleanup.")
             ) {
                 SettingsSelectionButton(width: 220, action: onEditUserMainLanguage) {
                     HStack(spacing: 0) {
@@ -305,29 +447,15 @@ struct GeneralModelStorageCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: localizedKey("Model Storage")) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(localized("Storage Path"))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: onOpenFinder) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .font(.caption)
-                        Text(displayPath)
-                            .underline()
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .multilineTextAlignment(.trailing)
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(SettingsInlineSelectorButtonStyle())
-                .help(localized("Open folder"))
-
-                Button(localized("Choose"), action: onChoose)
-                    .buttonStyle(SettingsPillButtonStyle())
-            }
+            SettingsPathSelectionRow(
+                title: localizedKey("Storage Path"),
+                displayedPath: displayPath,
+                fallbackPath: ModelStorageDirectoryManager.defaultRootURL.path,
+                openButtonHelp: localized("Open folder"),
+                chooseButtonTitle: localized("Choose"),
+                onOpen: onOpenFinder,
+                onChoose: onChoose
+            )
 
             Text(localized("New model downloads in Model settings are stored in this folder."))
                 .font(.caption)
@@ -345,27 +473,31 @@ struct GeneralModelStorageCard: View {
     }
 }
 
-struct GeneralOutputCard: View {
+struct GeneralAppBehaviorCard: View {
     @Binding var autoCopyWhenNoFocusedInput: Bool
     @Binding var realtimeTextDisplayEnabled: Bool
     @Binding var customPasteHotkeyEnabled: Bool
     let customPasteHotkeyDisplayString: String
+    @Binding var launchAtLogin: Bool
+    @Binding var showInDock: Bool
+    @Binding var autoCheckForUpdates: Bool
+    let launchAtLoginError: String?
 
     private var customPasteDescription: String {
-        String(format: localized("Lets you paste your latest Voxt result into the current input field. Shortcut: %@."), customPasteHotkeyDisplayString)
+        String(format: localized("Paste the latest Voxt result with %@."), customPasteHotkeyDisplayString)
     }
 
     var body: some View {
-        GeneralSettingsCard(title: localizedKey("Output")) {
+        GeneralSettingsCard(title: localizedKey("App Behavior")) {
             GeneralToggleRow(
                 title: localizedKey("Show Realtime Text"),
-                description: localizedKey("Show live transcription text while recording. Turn this off to keep only waveform and status, which can improve ASR speed and performance."),
+                description: localizedKey("Shows live transcription text while recording."),
                 isOn: $realtimeTextDisplayEnabled
             )
 
             GeneralToggleRow(
                 title: localizedKey("Also copy result to clipboard"),
-                description: localizedKey("When enabled, Voxt auto-pastes result text and also keeps it in clipboard."),
+                description: localizedKey("Keeps each completed result in the clipboard."),
                 isOn: $autoCopyWhenNoFocusedInput
             )
 
@@ -374,6 +506,27 @@ struct GeneralOutputCard: View {
                 descriptionText: customPasteDescription,
                 isOn: $customPasteHotkeyEnabled
             )
+
+            GeneralToggleRow(
+                title: localizedKey("Launch at Login"),
+                isOn: $launchAtLogin
+            )
+
+            GeneralToggleRow(
+                title: localizedKey("Show in Dock"),
+                isOn: $showInDock
+            )
+
+            GeneralToggleRow(
+                title: localizedKey("Automatically check for updates"),
+                isOn: $autoCheckForUpdates
+            )
+
+            if let launchAtLoginError {
+                Text(launchAtLoginError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }
@@ -399,42 +552,20 @@ struct GeneralLoggingCard: View {
     }
 }
 
-struct GeneralAppBehaviorCard: View {
-    @Binding var launchAtLogin: Bool
-    @Binding var showInDock: Bool
-    @Binding var autoCheckForUpdates: Bool
+struct GeneralProxyCard: View {
     @Binding var networkProxyMode: VoxtNetworkSession.ProxyMode
     @Binding var customProxyScheme: VoxtNetworkSession.ProxyScheme
     @Binding var customProxyHost: String
     @Binding var customProxyPort: String
     @Binding var customProxyUsername: String
     @Binding var customProxyPassword: String
-    let launchAtLoginError: String?
 
     var body: some View {
-        GeneralSettingsCard(title: localizedKey("App Behavior")) {
-            GeneralToggleRow(
-                title: localizedKey("Launch at Login"),
-                description: localizedKey("Automatically start Voxt when your Mac starts."),
-                isOn: $launchAtLogin
-            )
-
-            GeneralToggleRow(
-                title: localizedKey("Show in Dock"),
-                description: localizedKey("Show Voxt in your Mac Dock for quick access."),
-                isOn: $showInDock
-            )
-
-            GeneralToggleRow(
-                title: localizedKey("Automatically check for updates"),
-                description: localizedKey("Let Sparkle periodically check for updates in the background."),
-                isOn: $autoCheckForUpdates
-            )
-
-            HStack(alignment: .center) {
-                Text(localized("Proxy"))
-                    .foregroundStyle(.secondary)
-                Spacer()
+        GeneralSettingsCard(title: localizedKey("Proxy")) {
+            GeneralFieldRow(
+                title: localizedKey("Proxy"),
+                description: localizedKey("Controls the proxy used by Voxt app network requests.")
+            ) {
                 SettingsMenuPicker(
                     selection: $networkProxyMode,
                     options: [
@@ -446,15 +577,9 @@ struct GeneralAppBehaviorCard: View {
                     width: 220
                 )
             }
-            Text(localized("Follow the macOS proxy settings, disable proxy use entirely, or provide a custom proxy endpoint for Voxt network requests."))
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             if networkProxyMode == .custom {
-                HStack(alignment: .center) {
-                    Text(localized("Protocol"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                GeneralFieldRow(title: localizedKey("Protocol")) {
                     SettingsMenuPicker(
                         selection: $customProxyScheme,
                         options: [
@@ -471,10 +596,7 @@ struct GeneralAppBehaviorCard: View {
                 proxyField(title: localizedKey("Port"), placeholder: "7890", text: $customProxyPort, width: 120)
                 proxyField(title: localizedKey("Username"), placeholder: localized("Optional"), text: $customProxyUsername, width: 220)
 
-                HStack(alignment: .center) {
-                    Text(localized("Password"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+                GeneralFieldRow(title: localizedKey("Password")) {
                     SecureField(localized("Optional"), text: $customProxyPassword)
                         .textFieldStyle(.plain)
                         .settingsFieldSurface(width: 220)
@@ -485,19 +607,11 @@ struct GeneralAppBehaviorCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let launchAtLoginError {
-                Text(launchAtLoginError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
         }
     }
 
     private func proxyField(title: LocalizedStringKey, placeholder: String, text: Binding<String>, width: CGFloat) -> some View {
-        HStack(alignment: .center) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
+        GeneralFieldRow(title: title) {
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
                 .settingsFieldSurface(width: width)
@@ -505,13 +619,60 @@ struct GeneralAppBehaviorCard: View {
     }
 }
 
-private extension GeneralAppBehaviorCard {
+private extension GeneralProxyCard {
     var networkProxyModeTitle: String {
         GeneralSettingsData.networkProxyModeTitle(networkProxyMode)
     }
 
     var customProxySchemeTitle: String {
         GeneralSettingsData.proxySchemeTitle(customProxyScheme)
+    }
+}
+
+struct GeneralAdvancedCard<Content: View>: View {
+    @Binding var isExpanded: Bool
+    var onExpand: (() -> Void)?
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                isExpanded.toggle()
+                if isExpanded {
+                    onExpand?()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.easeInOut(duration: 0.14), value: isExpanded)
+
+                    Text(localizedKey("Advanced"))
+                        .font(.system(size: 14, weight: .semibold))
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 14) {
+                    content()
+                }
+                .transition(.opacity)
+                .clipped()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct GeneralSectionDivider: View {
+    var body: some View {
+        Divider()
     }
 }
 
@@ -522,7 +683,7 @@ struct GeneralSettingsCard<Content: View>: View {
 
     init(
         title: LocalizedStringKey,
-        spacing: CGFloat = 12,
+        spacing: CGFloat = 16,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = Text(title)
@@ -532,7 +693,7 @@ struct GeneralSettingsCard<Content: View>: View {
 
     init(
         titleText: String,
-        spacing: CGFloat = 12,
+        spacing: CGFloat = 16,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = Text(titleText)
@@ -547,35 +708,55 @@ struct GeneralSettingsCard<Content: View>: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .settingsCardSurface()
     }
 }
 
 struct GeneralLanguageSettingBlock<Control: View>: View {
     let title: LocalizedStringKey
-    let description: LocalizedStringKey
+    let description: LocalizedStringKey?
     @ViewBuilder let control: () -> Control
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(title)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                control()
-            }
-
-            Text(description)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        GeneralFieldRow(title: title, description: description) {
+            control()
         }
+    }
+}
+
+struct GeneralFieldRow<TrailingContent: View>: View {
+    let title: LocalizedStringKey
+    var description: LocalizedStringKey? = nil
+    @ViewBuilder let trailingContent: () -> TrailingContent
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
+
+                if let description {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .center, spacing: 8) {
+                trailingContent()
+            }
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 struct GeneralToggleRow: View {
     let title: LocalizedStringKey
-    let description: Text
+    let description: Text?
     @Binding var isOn: Bool
 
     init(title: LocalizedStringKey, description: LocalizedStringKey, isOn: Binding<Bool>) {
@@ -590,17 +771,28 @@ struct GeneralToggleRow: View {
         self._isOn = isOn
     }
 
+    init(title: LocalizedStringKey, isOn: Binding<Bool>) {
+        self.title = title
+        self.description = nil
+        self._isOn = isOn
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                description
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.92))
+                if let description {
+                    description
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 18)
 
             Toggle("", isOn: $isOn)
                 .labelsHidden()

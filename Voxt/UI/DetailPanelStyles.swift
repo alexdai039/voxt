@@ -22,8 +22,8 @@ enum DetailPanelUIStyle {
 
     static var controlFillColor: Color {
         Color(nsColor: dynamicColor(
-            light: NSColor.controlBackgroundColor,
-            dark: NSColor(calibratedWhite: 0.185, alpha: 1)
+            light: NSColor(calibratedWhite: 0.965, alpha: 1),
+            dark: NSColor(calibratedWhite: 0.205, alpha: 1)
         ))
     }
 

@@ -117,7 +117,7 @@ struct ASRHintSettingsSheet: View {
                 Text("Contextual Phrases")
                     .font(.subheadline.weight(.medium))
                 PromptEditorView(text: $draftSettings.contextualPhrasesText, height: 120)
-                Text("Enter one phrase per line. These phrases bias Apple's recognizer toward names, products, and domain terms.")
+                Text("One phrase per line for names and domain terms.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -162,8 +162,7 @@ struct ASRHintSettingsSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 520)
+        .settingsDialogChrome(width: 520, onClose: { dismiss() })
     }
 
     private func infoRow(label: LocalizedStringKey, value: String) -> some View {

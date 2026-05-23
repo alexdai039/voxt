@@ -25,24 +25,18 @@ extension FeatureSettingsView {
     }
 
     var transcriptionPills: [FeatureSummaryPill] {
-        var pills = [
-            FeatureSummaryPill(title: featureSettingsLocalized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.transcription.asrSelectionID)))
-        ]
-        pills.append(
+        [
             FeatureSummaryPill(
-                title: featureSettingsLocalized("LLM"),
+                title: featureSettingsLocalized("Audio Model"),
+                value: shortSummary(asrSelectionSummary(featureSettings.transcription.asrSelectionID), maxLength: 52)
+            ),
+            FeatureSummaryPill(
+                title: featureSettingsLocalized("Enhancement Model"),
                 value: featureSettings.transcription.llmEnabled
-                    ? shortSummary(llmSelectionSummary(featureSettings.transcription.llmSelectionID))
+                    ? shortSummary(llmSelectionSummary(featureSettings.transcription.llmSelectionID), maxLength: 52)
                     : featureSettingsLocalized("Off")
             )
-        )
-        pills.append(
-            FeatureSummaryPill(
-                title: featureSettingsLocalized("App"),
-                value: featureSettings.rewrite.appEnhancementEnabled ? featureSettingsLocalized("Enabled") : featureSettingsLocalized("Disabled")
-            )
-        )
-        return pills
+        ]
     }
 
     var notePills: [FeatureSummaryPill] {
@@ -65,7 +59,7 @@ extension FeatureSettingsView {
 
     var translationPills: [FeatureSummaryPill] {
         [
-            FeatureSummaryPill(title: featureSettingsLocalized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.translation.asrSelectionID))),
+            FeatureSummaryPill(title: featureSettingsLocalized("Audio Model"), value: shortSummary(asrSelectionSummary(featureSettings.translation.asrSelectionID))),
             FeatureSummaryPill(title: featureSettingsLocalized("Model"), value: shortSummary(translationSelectionSummary(featureSettings.translation.modelSelectionID))),
             FeatureSummaryPill(title: featureSettingsLocalized("Target"), value: featureSettings.translation.targetLanguage.title)
         ]
@@ -73,15 +67,15 @@ extension FeatureSettingsView {
 
     var rewritePills: [FeatureSummaryPill] {
         [
-            FeatureSummaryPill(title: featureSettingsLocalized("ASR"), value: shortSummary(asrSelectionSummary(featureSettings.rewrite.asrSelectionID))),
-            FeatureSummaryPill(title: featureSettingsLocalized("LLM"), value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID)))
+            FeatureSummaryPill(title: featureSettingsLocalized("Audio Model"), value: shortSummary(asrSelectionSummary(featureSettings.rewrite.asrSelectionID))),
+            FeatureSummaryPill(title: featureSettingsLocalized("Enhancement Model"), value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID)))
         ]
     }
 
-    func shortSummary(_ text: String) -> String {
+    func shortSummary(_ text: String, maxLength: Int = 28) -> String {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.count > 28 else { return value }
-        return String(value.prefix(25)) + "..."
+        guard value.count > maxLength else { return value }
+        return String(value.prefix(max(maxLength - 3, 1))) + "..."
     }
 
     @ViewBuilder
@@ -105,7 +99,9 @@ extension FeatureSettingsView {
             }
             .padding(.top, 2)
             .padding(.bottom, 12)
+            .padding(.trailing, SettingsUIStyle.contentScrollTrailingGutter)
         }
+        .padding(.trailing, -SettingsUIStyle.contentScrollIndicatorOutset)
         .background(SettingsUIStyle.groupedFillColor.opacity(0.001))
     }
 
@@ -132,7 +128,7 @@ extension FeatureSettingsView {
             if featureSettings.transcription.notes.obsidianSync.enabled {
                 FeatureDirectorySelectionRow(
                     title: featureSettingsLocalized("Vault Folder"),
-                    detail: featureSettingsLocalized("Choose the Obsidian vault root folder that should receive exported Voxt notes."),
+                    detail: "",
                     path: featureSettings.transcription.notes.obsidianSync.vaultPath.isEmpty
                         ? featureSettingsLocalized("Not configured")
                         : featureSettings.transcription.notes.obsidianSync.vaultPath,
@@ -149,13 +145,13 @@ extension FeatureSettingsView {
                         set: { featureSettings.transcription.notes.obsidianSync.relativeFolder = $0 }
                     ),
                     placeholder: "Voxt",
-                    width: 230,
+                    width: 244,
                     isEmbedded: true
                 )
 
                 FeatureInlinePickerRow(
                     title: featureSettingsLocalized("Grouping Mode"),
-                    detail: featureSettingsLocalized("Choose how exported notes are organized inside Obsidian."),
+                    detail: "",
                     isEmbedded: true
                 ) {
                     SettingsMenuPicker(
@@ -167,7 +163,7 @@ extension FeatureSettingsView {
                             SettingsMenuOption(value: $0, title: $0.title)
                         },
                         selectedTitle: featureSettings.transcription.notes.obsidianSync.groupingMode.title,
-                        width: 220
+                        width: 280
                     )
                 }
             }
@@ -193,7 +189,7 @@ extension FeatureSettingsView {
                     detail: featureSettingsLocalized("Choose the Reminders list that should receive synced Voxt notes."),
                     isEmbedded: true
                 ) {
-                    SettingsSelectionButton(width: 220, action: presentRemindersListSelector) {
+                    SettingsSelectionButton(width: 280, action: presentRemindersListSelector) {
                         Text(selectedRemindersListTitle)
                             .lineLimit(1)
                             .truncationMode(.tail)

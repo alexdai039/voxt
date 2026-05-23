@@ -1,6 +1,4 @@
 import SwiftUI
-import AppKit
-import UniformTypeIdentifiers
 
 private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
@@ -13,12 +11,7 @@ private func localizedKey(_ key: String) -> LocalizedStringKey {
 struct AboutSettingsView: View {
     let appUpdateManager: AppUpdateManager
     let navigationRequest: SettingsNavigationRequest?
-    @Environment(\.locale) private var locale
     @AppStorage(AppPreferenceKey.betaUpdatesEnabled) private var betaUpdatesEnabled = false
-
-    @State private var latestLogUpdateDate: Date?
-    @State private var logExportStatus: String?
-    @State private var hostWindow: NSWindow?
 
     private var appVersionText: String {
         let bundle = Bundle.main
@@ -37,201 +30,153 @@ struct AboutSettingsView: View {
         return localized("Version metadata missing")
     }
 
+    private var isBetaVersion: Bool {
+        let bundle = Bundle.main
+        let shortVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        let lowercasedVersionMetadata = "\(shortVersion) \(buildVersion)".lowercased()
+        if lowercasedVersionMetadata.contains("beta") {
+            return true
+        }
+
+        let versionComponents = shortVersion
+            .split(separator: ".")
+            .compactMap { Int($0) }
+        guard versionComponents.count == 3,
+              let major = versionComponents[safe: 0],
+              let minor = versionComponents[safe: 1],
+              let patch = versionComponents[safe: 2],
+              let buildNumber = Int(buildVersion)
+        else {
+            return false
+        }
+
+        let releaseBuildBase = major * 100_000_000 + minor * 100_000 + patch * 100
+        let releaseBuildSuffix = buildNumber - releaseBuildBase
+        return (1...98).contains(releaseBuildSuffix)
+    }
+
     private let feedbackURL = URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Voxt")
-                        .font(.headline)
-                    Text(localized("Voice to Thought"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        HStack(spacing: 4) {
-                            Text(localized("Version"))
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(localizedKey("Version"))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary.opacity(0.92))
+                        HStack(spacing: 8) {
                             Text(appVersionText)
-                        }
-                        Spacer(minLength: 0)
-                        Button(localized("Check for Updates…")) {
-                            appUpdateManager.checkForUpdatesWithUserInterface()
-                        }
-                        .disabled(appUpdateManager.shouldDisableInteractiveUpdateTrigger)
-                        .buttonStyle(SettingsPillButtonStyle())
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
 
-                    GeneralToggleRow(
-                        title: localizedKey("Beta Updates"),
-                        description: localizedKey("Check beta appcast updates when Voxt checks for app updates."),
-                        isOn: $betaUpdatesEnabled
-                    )
-                    .font(.caption)
+                            if isBetaVersion {
+                                Text(localizedKey("Beta"))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(Color.accentColor.opacity(0.11))
+                                    )
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button(localized("Check for Updates")) {
+                            appUpdateManager.checkForUpdatesWithUserInterface()
+                    }
+                    .disabled(appUpdateManager.shouldDisableInteractiveUpdateTrigger)
+                    .buttonStyle(SettingsPillButtonStyle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
+
+                GeneralToggleRow(
+                    title: localizedKey("Beta Updates"),
+                    description: localizedKey("Check beta appcast updates when Voxt checks for app updates."),
+                    isOn: $betaUpdatesEnabled
+                )
+                .font(.caption)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .settingsNavigationAnchor(.aboutVoxt)
 
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localized("Project"))
-                        .font(.headline)
-                    Link("github.com/hehehai/voxt", destination: URL(string: "https://github.com/hehehai/voxt")!)
-                        .font(.caption)
-                    Link(localized("Feedback"), destination: feedbackURL)
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-            }
-            .settingsNavigationAnchor(.aboutProject)
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localized("Author"))
-                        .font(.headline)
-                    Link("hehehai", destination: URL(string: "https://www.hehehai.cn/")!)
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-            }
-            .settingsNavigationAnchor(.aboutAuthor)
-
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(localized("Thanks"))
-                        .font(.headline)
-                    Link(
-                        "github.com/hehehai/mlx-audio-swift",
-                        destination: URL(string: "https://github.com/hehehai/mlx-audio-swift")!
+            HStack(alignment: .top, spacing: 14) {
+                AboutInfoCard(title: localizedKey("Project")) {
+                    AboutExternalLink(
+                        title: "github.com/hehehai/voxt",
+                        destination: URL(string: "https://github.com/hehehai/voxt")!
                     )
-                    .font(.caption)
-                    Link(
-                        "github.com/fayazara/Kaze",
-                        destination: URL(string: "https://github.com/fayazara/Kaze")!
-                    )
-                    .font(.caption)
+                    AboutExternalLink(title: localized("Feedback"), destination: feedbackURL)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-            }
-            .settingsNavigationAnchor(.aboutThanks)
+                .settingsNavigationAnchor(.aboutProject)
 
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(localized("Logs"))
-                            .font(.headline)
-                        Spacer()
-                        Button(localized("Export Latest Logs (2000)")) {
-                            exportLatestLogs()
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
-                    }
-
-                    let value = latestLogUpdateDate?.formatted(
-                        .dateTime
-                            .locale(locale)
-                            .year()
-                            .month(.abbreviated)
-                            .day()
-                            .hour()
-                            .minute()
-                            .second()
-                    ) ?? localized("No logs yet")
-                    Text(localizedFormat("Last updated: %@", value))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if let logExportStatus {
-                        Text(logExportStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text(localized("Exports the most recent 2000 log entries as a .log file."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                AboutInfoCard(title: localizedKey("Author")) {
+                    AboutExternalLink(title: "hehehai", destination: URL(string: "https://www.hehehai.cn/")!)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
+                .settingsNavigationAnchor(.aboutAuthor)
             }
-            .settingsNavigationAnchor(.aboutLogs)
-        }
-        .background(
-            WindowAccessor { window in
-                hostWindow = window
-            }
-        )
-        .onAppear {
-            refreshLogUpdateDate()
         }
         .onChange(of: betaUpdatesEnabled) { _, _ in
             appUpdateManager.betaUpdatesPreferenceDidChange()
         }
     }
+}
 
-    private func refreshLogUpdateDate() {
-        latestLogUpdateDate = VoxtLog.latestLogUpdateDate()
-    }
+private struct AboutInfoCard<Content: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder let content: () -> Content
 
-    private func exportLatestLogs() {
-        logExportStatus = nil
-        let payload = VoxtLog.latestLogExportPayload(limit: 2000)
-        let panel = configuredSavePanel(filename: payload.filename)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary.opacity(0.92))
 
-        if let hostWindow {
-            panel.beginSheetModal(for: hostWindow) { response in
-                handleLogExportResponse(response, panel: panel, payload: payload)
+            VStack(alignment: .leading, spacing: 7) {
+                content()
             }
-            return
+            Spacer(minLength: 0)
         }
-
-        let response = panel.runModal()
-        handleLogExportResponse(response, panel: panel, payload: payload)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                .fill(SettingsUIStyle.controlFillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
+                .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+        )
     }
+}
 
-    private func localizedFormat(_ key: String, _ argument: String) -> String {
-        let format = localized(key)
-        return String(format: format, locale: locale, argument)
+private struct AboutExternalLink: View {
+    let title: String
+    let destination: URL
+
+    var body: some View {
+        Link(destination: destination) {
+            HStack(spacing: 5) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.primary.opacity(0.84))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
+}
 
-    private func configuredSavePanel(filename: String) -> NSSavePanel {
-        let panel = NSSavePanel()
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        panel.nameFieldStringValue = filename
-        panel.allowedContentTypes = [UTType(filenameExtension: "log", conformingTo: .plainText) ?? .plainText]
-        return panel
-    }
-
-    private func handleLogExportResponse(
-        _ response: NSApplication.ModalResponse,
-        panel: NSSavePanel,
-        payload: VoxtLog.ExportPayload
-    ) {
-        defer { refreshLogUpdateDate() }
-
-        guard response == .OK else {
-            logExportStatus = localized("Export canceled")
-            return
-        }
-
-        guard let destinationURL = panel.url else {
-            logExportStatus = localized("Export canceled")
-            return
-        }
-
-        do {
-            try payload.content.write(to: destinationURL, atomically: true, encoding: .utf8)
-            logExportStatus = localizedFormat("Exported to %@", destinationURL.lastPathComponent)
-        } catch {
-            logExportStatus = localizedFormat("Export failed: %@", error.localizedDescription)
-        }
+private extension Collection {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

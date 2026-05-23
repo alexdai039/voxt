@@ -1,12 +1,11 @@
 import SwiftUI
 import CoreAudio
 import AppKit
-import UniformTypeIdentifiers
 
 struct GeneralSettingsView: View {
     let appUpdateManager: AppUpdateManager
     let navigationRequest: SettingsNavigationRequest?
-    let onOpenSetupGuide: (() -> Void)?
+    var onRequestScrollToBottom: (() -> Void)?
     @AppStorage(AppPreferenceKey.interactionSoundsEnabled) private var interactionSoundsEnabled = true
     @AppStorage(AppPreferenceKey.interactionSoundPreset) private var interactionSoundPresetRaw = InteractionSoundPreset.soft.rawValue
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
@@ -37,7 +36,7 @@ struct GeneralSettingsView: View {
     @State private var launchAtLoginError: String?
     @State private var isSyncingLaunchAtLoginState = false
     @State private var interactionSoundPlayer = InteractionSoundPlayer()
-    @State private var configurationTransferMessage: String?
+    @State private var isAdvancedExpanded = false
     @State private var isUserMainLanguageSheetPresented = false
     @State private var isMicrophonePriorityDialogPresented = false
     @State private var systemAudioPermissionMessage: String?
@@ -106,13 +105,24 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            GeneralConfigurationCard(
-                message: configurationTransferMessage,
-                onExport: exportConfiguration,
-                onImport: importConfiguration,
-                onOpenSetupGuide: onOpenSetupGuide
+            GeneralTranscriptionUICard(
+                overlayPosition: overlayPosition,
+                overlayCardOpacity: $overlayCardOpacity,
+                overlayCardCornerRadius: $overlayCardCornerRadius,
+                overlayScreenEdgeInset: $overlayScreenEdgeInset
             )
-            .settingsNavigationAnchor(.generalConfiguration)
+            .settingsNavigationAnchor(.generalTranscriptionUI)
+
+            GeneralSectionDivider()
+
+            GeneralLanguagesCard(
+                interfaceLanguage: interfaceLanguageSelection,
+                userMainLanguageSummary: userMainLanguageSummary,
+                onEditUserMainLanguage: { isUserMainLanguageSheetPresented = true }
+            )
+            .settingsNavigationAnchor(.generalLanguages)
+
+            GeneralSectionDivider()
 
             GeneralAudioCard(
                 microphoneState: microphoneState,
@@ -126,48 +136,45 @@ struct GeneralSettingsView: View {
             )
             .settingsNavigationAnchor(.generalAudio)
 
-            GeneralTranscriptionUICard(
-                overlayPosition: overlayPosition,
-                overlayCardOpacity: $overlayCardOpacity,
-                overlayCardCornerRadius: $overlayCardCornerRadius,
-                overlayScreenEdgeInset: $overlayScreenEdgeInset
-            )
-            .settingsNavigationAnchor(.generalTranscriptionUI)
+            GeneralSectionDivider()
 
-            GeneralLanguagesCard(
-                interfaceLanguage: interfaceLanguageSelection,
-                userMainLanguageSummary: userMainLanguageSummary,
-                onEditUserMainLanguage: { isUserMainLanguageSheetPresented = true }
-            )
-            .settingsNavigationAnchor(.generalLanguages)
-
-            GeneralOutputCard(
+            GeneralAppBehaviorCard(
                 autoCopyWhenNoFocusedInput: $autoCopyWhenNoFocusedInput,
                 realtimeTextDisplayEnabled: $realtimeTextDisplayEnabled,
                 customPasteHotkeyEnabled: $customPasteHotkeyEnabled,
-                customPasteHotkeyDisplayString: currentCustomPasteHotkeyDisplayString
-            )
-            .settingsNavigationAnchor(.generalOutput)
-
-            GeneralLoggingCard(
-                hotkeyDebugLoggingEnabled: $hotkeyDebugLoggingEnabled,
-                llmDebugLoggingEnabled: $llmDebugLoggingEnabled
-            )
-            .settingsNavigationAnchor(.generalLogging)
-
-            GeneralAppBehaviorCard(
+                customPasteHotkeyDisplayString: currentCustomPasteHotkeyDisplayString,
                 launchAtLogin: $launchAtLogin,
                 showInDock: $showInDock,
                 autoCheckForUpdates: $autoCheckForUpdates,
-                networkProxyMode: networkProxyMode,
-                customProxyScheme: customProxyScheme,
-                customProxyHost: $customProxyHost,
-                customProxyPort: $customProxyPort,
-                customProxyUsername: $customProxyUsername,
-                customProxyPassword: $customProxyPassword,
                 launchAtLoginError: launchAtLoginError
             )
             .settingsNavigationAnchor(.generalAppBehavior)
+
+            GeneralSectionDivider()
+
+            GeneralAdvancedCard(
+                isExpanded: $isAdvancedExpanded,
+                onExpand: scrollToBottomAfterAdvancedExpands
+            ) {
+                GeneralLoggingCard(
+                    hotkeyDebugLoggingEnabled: $hotkeyDebugLoggingEnabled,
+                    llmDebugLoggingEnabled: $llmDebugLoggingEnabled
+                )
+                .settingsNavigationAnchor(.generalLogging)
+
+                Divider()
+
+                GeneralProxyCard(
+                    networkProxyMode: networkProxyMode,
+                    customProxyScheme: customProxyScheme,
+                    customProxyHost: $customProxyHost,
+                    customProxyPort: $customProxyPort,
+                    customProxyUsername: $customProxyUsername,
+                    customProxyPassword: $customProxyPassword
+                )
+                .settingsNavigationAnchor(.generalProxy)
+            }
+            .settingsNavigationAnchor(.generalAdvanced)
         }
         .onAppear {
             refreshInputDevices()
@@ -186,6 +193,7 @@ struct GeneralSettingsView: View {
                 autoCheckForUpdates = appUpdateManager.automaticallyChecksForUpdates
             }
             refreshProxyCredentials()
+            syncAdvancedExpansionWithNavigationRequest()
         }
         .onChange(of: launchAtLogin) { _, newValue in
             if isSyncingLaunchAtLoginState { return }
@@ -260,6 +268,9 @@ struct GeneralSettingsView: View {
         .onChange(of: customProxyPassword) { _, _ in
             persistProxyCredentials()
         }
+        .onChange(of: navigationRequest) { _, _ in
+            syncAdvancedExpansionWithNavigationRequest()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .voxtAudioInputDevicesDidChange)) { _ in
             refreshInputDevices()
         }
@@ -320,59 +331,24 @@ struct GeneralSettingsView: View {
         )
     }
 
-    private func exportConfiguration() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "Voxt-Configuration.json"
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        do {
-            let text = try ConfigurationTransferManager.exportJSONString()
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            configurationTransferMessage = String(localized: "Configuration exported successfully.")
-        } catch {
-            configurationTransferMessage = String(format: NSLocalizedString("Configuration export failed: %@", comment: ""), error.localizedDescription)
-        }
-    }
-
-    private func importConfiguration() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        do {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            try ConfigurationTransferManager.importConfiguration(from: text)
-            let defaults = UserDefaults.standard
-            if let appDelegate = AppDelegate.shared {
-                appDelegate.synchronizeAppActivationPolicy()
-            } else {
-                AppBehaviorController.applyDockVisibility(
-                    showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
-                    mainWindowVisible: true
-                )
-            }
-            try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
-            appUpdateManager.syncAutomaticallyChecksForUpdates(defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates))
-            appUpdateManager.betaUpdatesPreferenceDidChange()
-            NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)
-            NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
-            NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
-            NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
-            refreshInputDevices()
-            refreshProxyCredentials()
-            configurationTransferMessage = String(localized: "Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required.")
-        } catch {
-            configurationTransferMessage = String(format: NSLocalizedString("Configuration import failed: %@", comment: ""), error.localizedDescription)
-        }
-    }
-
     private func postOverlayAppearanceDidChange() {
         NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
+    }
+
+    private func syncAdvancedExpansionWithNavigationRequest() {
+        guard let section = navigationRequest?.target.section else { return }
+        if section == .generalAdvanced || section == .generalLogging || section == .generalProxy {
+            isAdvancedExpanded = true
+        }
+    }
+
+    private func scrollToBottomAfterAdvancedExpands() {
+        Task {
+            try? await Task.sleep(nanoseconds: 90_000_000)
+            await MainActor.run {
+                onRequestScrollToBottom?()
+            }
+        }
     }
 
     private func selectMicrophoneManually(uid: String) {

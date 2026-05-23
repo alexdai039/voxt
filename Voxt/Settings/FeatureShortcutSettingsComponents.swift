@@ -1,8 +1,14 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let voxtFeatureSettingsToastRequested = Notification.Name("voxtFeatureSettingsToastRequested")
+}
+
 struct FeatureShortcutCaptureRow: View {
     let title: String
     let detail: String
+    var showsHeader = true
+    var inputWidth: CGFloat = 320
     @Binding var hotkey: HotkeyPreference.Hotkey
     let defaultHotkey: HotkeyPreference.Hotkey
 
@@ -12,13 +18,17 @@ struct FeatureShortcutCaptureRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if showsHeader {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    if !detail.isEmpty {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
 
             SettingsShortcutCaptureField(
@@ -27,9 +37,11 @@ struct FeatureShortcutCaptureRow: View {
                 isRecording: isRecording,
                 isPendingConfirmation: pendingCapturedHotkey != nil,
                 distinguishModifierSides: false,
+                controlWidth: inputWidth,
                 onFocus: {
                     pendingCapturedHotkey = nil
                     isRecording = true
+                    showShortcutToast(featureSettingsLocalized("Type your shortcut now. Press Esc to cancel recording."))
                 },
                 onReset: {
                     hotkey = defaultHotkey
@@ -41,6 +53,7 @@ struct FeatureShortcutCaptureRow: View {
                     pendingCapturedHotkey = nil
                     isRecording = false
                     recorderMessage = nil
+                    dismissShortcutToast()
                 },
                 onConfirmPending: {
                     if let pendingCapturedHotkey {
@@ -49,50 +62,50 @@ struct FeatureShortcutCaptureRow: View {
                     self.pendingCapturedHotkey = nil
                     isRecording = false
                     recorderMessage = nil
+                    dismissShortcutToast()
                 }
             )
-
-            if let recorderMessage, !recorderMessage.isEmpty {
-                Text(featureSettingsLocalized(recorderMessage))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if pendingCapturedHotkey != nil {
-                Text(featureSettingsLocalized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if isRecording {
-                Text(featureSettingsLocalized("Type your shortcut now. Press Esc to cancel recording."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
             HotkeyRecorderView(
                 isRecording: $isRecording,
                 onCapture: { capturedHotkey in
                     pendingCapturedHotkey = capturedHotkey
                     recorderMessage = nil
+                    showShortcutToast(featureSettingsLocalized("Shortcut captured. Press another shortcut to replace it, or choose Confirm / Cancel."))
                 },
                 onCancelCapture: {
                     pendingCapturedHotkey = nil
                     isRecording = false
                     recorderMessage = nil
+                    dismissShortcutToast()
                 },
                 onRecorderMessageChange: { messageKey in
                     DispatchQueue.main.async {
                         recorderMessage = messageKey
+                        if let messageKey {
+                            showShortcutToast(featureSettingsLocalized(messageKey))
+                        }
                     }
                 }
             )
             .frame(width: 0, height: 0)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                .fill(SettingsUIStyle.groupedFillColor)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func showShortcutToast(_ message: String) {
+        NotificationCenter.default.post(
+            name: .voxtFeatureSettingsToastRequested,
+            object: nil,
+            userInfo: ["message": message]
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsUIStyle.compactCornerRadius, style: .continuous)
-                .stroke(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
+    }
+
+    private func dismissShortcutToast() {
+        NotificationCenter.default.post(
+            name: .voxtFeatureSettingsToastRequested,
+            object: nil,
+            userInfo: ["message": ""]
         )
     }
 }
@@ -100,12 +113,16 @@ struct FeatureShortcutCaptureRow: View {
 struct FeatureNoteShortcutRow: View {
     let title: String
     let detail: String
+    var showsHeader = false
+    var inputWidth: CGFloat = 263.2
     @Binding var shortcut: TranscriptionNoteTriggerSettings
 
     var body: some View {
         FeatureShortcutCaptureRow(
             title: title,
             detail: detail,
+            showsHeader: showsHeader,
+            inputWidth: inputWidth,
             hotkey: Binding(
                 get: { shortcut.hotkey },
                 set: { capturedHotkey in

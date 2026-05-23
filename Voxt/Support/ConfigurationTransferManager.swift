@@ -27,14 +27,15 @@ struct ConfigurationExportDocument: FileDocument {
 
 enum ConfigurationTransferManager {
     static let sensitivePlaceholder = "__VOXT_REQUIRED__"
+    static let storedRemoteSensitivePlaceholder = "__stored__"
 
     struct FileEnvironment {
         let dictionaryEntriesURL: () throws -> URL
         let dictionarySuggestionsURL: () throws -> URL
 
         static let live = FileEnvironment(
-            dictionaryEntriesURL: { try dictionaryFileURL() },
-            dictionarySuggestionsURL: { try dictionarySuggestionsFileURL() }
+            dictionaryEntriesURL: { try ConfigurationTransferManager.dictionaryFileURL() },
+            dictionarySuggestionsURL: { try ConfigurationTransferManager.dictionarySuggestionsFileURL() }
         )
     }
 
@@ -345,8 +346,8 @@ enum ConfigurationTransferManager {
         var translationRemoteLLMProvider: String
         var rewriteRemoteLLMProvider: String
         var useHfMirror: Bool
-        var remoteASRProviderConfigurations: [SanitizedRemoteProviderConfiguration]
-        var remoteLLMProviderConfigurations: [SanitizedRemoteProviderConfiguration]
+        var remoteASRProviderConfigurations: [RemoteProviderConfiguration]
+        var remoteLLMProviderConfigurations: [RemoteProviderConfiguration]
 
         private enum CodingKeys: String, CodingKey {
             case transcriptionEngine
@@ -412,8 +413,8 @@ enum ConfigurationTransferManager {
             translationRemoteLLMProvider: String,
             rewriteRemoteLLMProvider: String,
             useHfMirror: Bool,
-            remoteASRProviderConfigurations: [SanitizedRemoteProviderConfiguration],
-            remoteLLMProviderConfigurations: [SanitizedRemoteProviderConfiguration]
+            remoteASRProviderConfigurations: [RemoteProviderConfiguration],
+            remoteLLMProviderConfigurations: [RemoteProviderConfiguration]
         ) {
             self.transcriptionEngine = transcriptionEngine
             self.enhancementMode = enhancementMode
@@ -504,8 +505,8 @@ enum ConfigurationTransferManager {
             translationRemoteLLMProvider = try container.decode(String.self, forKey: .translationRemoteLLMProvider)
             rewriteRemoteLLMProvider = try container.decode(String.self, forKey: .rewriteRemoteLLMProvider)
             useHfMirror = try container.decode(Bool.self, forKey: .useHfMirror)
-            remoteASRProviderConfigurations = try container.decode([SanitizedRemoteProviderConfiguration].self, forKey: .remoteASRProviderConfigurations)
-            remoteLLMProviderConfigurations = try container.decode([SanitizedRemoteProviderConfiguration].self, forKey: .remoteLLMProviderConfigurations)
+            remoteASRProviderConfigurations = try container.decode([RemoteProviderConfiguration].self, forKey: .remoteASRProviderConfigurations)
+            remoteLLMProviderConfigurations = try container.decode([RemoteProviderConfiguration].self, forKey: .remoteLLMProviderConfigurations)
             whisperLocalASRTuningSettings = WhisperLocalTuningSettingsStore.storageValue(
                 for: WhisperLocalTuningSettingsStore.resolvedSettings(from: whisperLocalASRTuningSettings)
             )
@@ -874,7 +875,6 @@ enum ConfigurationTransferManager {
 
         return Array(Set(issues)).sorted { $0.id < $1.id }
     }
-
     private static func makeExportPayload(
         defaults: UserDefaults,
         environment: FileEnvironment
@@ -925,108 +925,116 @@ enum ConfigurationTransferManager {
             customProxyPassword: sanitizeSensitive(proxyCredentials.password)
         )
 
+        let model = ModelSettings(
+            transcriptionEngine: defaults.string(forKey: AppPreferenceKey.transcriptionEngine) ?? TranscriptionEngine.mlxAudio.rawValue,
+            enhancementMode: defaults.string(forKey: AppPreferenceKey.enhancementMode) ?? EnhancementMode.off.rawValue,
+            enhancementSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
+                kind: .enhancement,
+                defaults: defaults
+            ),
+            translationSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
+                kind: .translation,
+                defaults: defaults
+            ),
+            rewriteSystemPrompt: AppPromptDefaults.resolvedStoredText(
+                defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
+                kind: .rewrite,
+                defaults: defaults
+            ),
+            asrHintSettings: defaults.string(forKey: AppPreferenceKey.asrHintSettings) ?? ASRHintSettingsStore.defaultStoredValue(),
+            whisperLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
+                ?? WhisperLocalTuningSettingsStore.defaultStoredValue(),
+            mlxLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.mlxLocalASRTuningSettings) ?? "{}",
+            mlxModelRepo: MLXModelManager.canonicalModelRepo(
+                defaults.string(forKey: AppPreferenceKey.mlxModelRepo) ?? MLXModelManager.defaultModelRepo
+            ),
+            whisperModelID: defaults.string(forKey: AppPreferenceKey.whisperModelID) ?? WhisperKitModelManager.defaultModelID,
+            whisperTemperature: defaults.object(forKey: AppPreferenceKey.whisperTemperature) as? Double ?? 0.0,
+            whisperVADEnabled: defaults.object(forKey: AppPreferenceKey.whisperVADEnabled) as? Bool ?? true,
+            whisperTimestampsEnabled: defaults.object(forKey: AppPreferenceKey.whisperTimestampsEnabled) as? Bool ?? false,
+            whisperRealtimeEnabled: defaults.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) as? Bool ?? false,
+            localModelIdleUnloadDelaySeconds: AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds(defaults: defaults),
+            customLLMModelRepo: defaults.string(forKey: AppPreferenceKey.customLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
+            customLLMGenerationSettings: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
+                ?? CustomLLMGenerationSettingsStore.defaultStoredValue(),
+            customLLMGenerationSettingsByRepo: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
+                ?? CustomLLMGenerationSettingsStore.defaultByRepoStoredValue(),
+            translationCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
+            rewriteCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
+            translationModelProvider: defaults.string(forKey: AppPreferenceKey.translationModelProvider) ?? TranslationModelProvider.customLLM.rawValue,
+            translationFallbackModelProvider: defaults.string(forKey: AppPreferenceKey.translationFallbackModelProvider) ?? TranslationModelProvider.customLLM.rawValue,
+            rewriteModelProvider: defaults.string(forKey: AppPreferenceKey.rewriteModelProvider) ?? RewriteModelProvider.customLLM.rawValue,
+            remoteASRSelectedProvider: defaults.string(forKey: AppPreferenceKey.remoteASRSelectedProvider) ?? RemoteASRProvider.openAIWhisper.rawValue,
+            remoteLLMSelectedProvider: defaults.string(forKey: AppPreferenceKey.remoteLLMSelectedProvider) ?? RemoteLLMProvider.openAI.rawValue,
+            translationRemoteLLMProvider: defaults.string(forKey: AppPreferenceKey.translationRemoteLLMProvider) ?? "",
+            rewriteRemoteLLMProvider: defaults.string(forKey: AppPreferenceKey.rewriteRemoteLLMProvider) ?? "",
+            useHfMirror: defaults.bool(forKey: AppPreferenceKey.useHfMirror),
+            remoteASRProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? ""),
+            remoteLLMProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "")
+        )
+
+        let dictionary = DictionarySettings(
+            recognitionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) as? Bool ?? true,
+            autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
+            autoLearningPrompt: AppPromptDefaults.canonicalStoredText(
+                AppPromptDefaults.resolvedStoredText(
+                    defaults.string(forKey: AppPreferenceKey.dictionaryAutoLearningPrompt),
+                    kind: .dictionaryAutoLearning,
+                    defaults: defaults
+                ),
+                kind: .dictionaryAutoLearning
+            ),
+            highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
+            suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
+            suggestionIngestModelOptionID: defaults.string(forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID) ?? "",
+            historyScanCheckpoint: loadDictionaryHistoryScanCheckpoint(defaults: defaults),
+            entries: loadDictionaryEntries(environment: environment),
+            suggestions: loadDictionarySuggestions(environment: environment)
+        )
+
+        let appBranch = AppBranchSettings(
+            appEnhancementEnabled: defaults.bool(forKey: AppPreferenceKey.appEnhancementEnabled),
+            groups: loadAppBranchGroups(defaults: defaults),
+            urls: loadBranchURLs(defaults: defaults),
+            customBrowsersJSON: defaults.string(forKey: AppPreferenceKey.appBranchCustomBrowsers) ?? "[]"
+        )
+
+        let hotkey = HotkeySettings(
+            hotkeyInputType: defaults.string(forKey: AppPreferenceKey.hotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
+            hotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.hotkeyKeyCode),
+            hotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.hotkeyMouseButtonNumber) as? Int,
+            hotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeyModifiers),
+            hotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeySidedModifiers),
+            translationHotkeyInputType: defaults.string(forKey: AppPreferenceKey.translationHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
+            translationHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.translationHotkeyKeyCode),
+            translationHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.translationHotkeyMouseButtonNumber) as? Int,
+            translationHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeyModifiers),
+            translationHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeySidedModifiers),
+            rewriteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.rewriteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
+            rewriteHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyKeyCode),
+            rewriteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber) as? Int,
+            rewriteHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyModifiers),
+            rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
+            customPasteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.customPasteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
+            customPasteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber) as? Int,
+            rewriteHotkeyActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults).rawValue,
+            hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
+            hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
+            hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
+            escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
+        )
+
         return ExportPayload(
             version: 20,
             exportedAt: ISO8601DateFormatter().string(from: Date()),
             general: general,
-            model: .init(
-                transcriptionEngine: defaults.string(forKey: AppPreferenceKey.transcriptionEngine) ?? TranscriptionEngine.mlxAudio.rawValue,
-                enhancementMode: defaults.string(forKey: AppPreferenceKey.enhancementMode) ?? EnhancementMode.off.rawValue,
-                enhancementSystemPrompt: AppPromptDefaults.resolvedStoredText(
-                    defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
-                    kind: .enhancement,
-                    defaults: defaults
-                ),
-                translationSystemPrompt: AppPromptDefaults.resolvedStoredText(
-                    defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
-                    kind: .translation,
-                    defaults: defaults
-                ),
-                rewriteSystemPrompt: AppPromptDefaults.resolvedStoredText(
-                    defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
-                    kind: .rewrite,
-                    defaults: defaults
-                ),
-                asrHintSettings: defaults.string(forKey: AppPreferenceKey.asrHintSettings) ?? ASRHintSettingsStore.defaultStoredValue(),
-                whisperLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.whisperLocalASRTuningSettings)
-                    ?? WhisperLocalTuningSettingsStore.defaultStoredValue(),
-                mlxLocalASRTuningSettings: defaults.string(forKey: AppPreferenceKey.mlxLocalASRTuningSettings) ?? "{}",
-                mlxModelRepo: MLXModelManager.canonicalModelRepo(
-                    defaults.string(forKey: AppPreferenceKey.mlxModelRepo) ?? MLXModelManager.defaultModelRepo
-                ),
-                whisperModelID: defaults.string(forKey: AppPreferenceKey.whisperModelID) ?? WhisperKitModelManager.defaultModelID,
-                whisperTemperature: defaults.object(forKey: AppPreferenceKey.whisperTemperature) as? Double ?? 0.0,
-                whisperVADEnabled: defaults.object(forKey: AppPreferenceKey.whisperVADEnabled) as? Bool ?? true,
-                whisperTimestampsEnabled: defaults.object(forKey: AppPreferenceKey.whisperTimestampsEnabled) as? Bool ?? false,
-                whisperRealtimeEnabled: defaults.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) as? Bool ?? false,
-                localModelIdleUnloadDelaySeconds: AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds(defaults: defaults),
-                customLLMModelRepo: defaults.string(forKey: AppPreferenceKey.customLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
-                customLLMGenerationSettings: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettings)
-                    ?? CustomLLMGenerationSettingsStore.defaultStoredValue(),
-                customLLMGenerationSettingsByRepo: defaults.string(forKey: AppPreferenceKey.customLLMGenerationSettingsByRepo)
-                    ?? CustomLLMGenerationSettingsStore.defaultByRepoStoredValue(),
-                translationCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.translationCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
-                rewriteCustomLLMModelRepo: defaults.string(forKey: AppPreferenceKey.rewriteCustomLLMModelRepo) ?? CustomLLMModelManager.defaultModelRepo,
-                translationModelProvider: defaults.string(forKey: AppPreferenceKey.translationModelProvider) ?? TranslationModelProvider.customLLM.rawValue,
-                translationFallbackModelProvider: defaults.string(forKey: AppPreferenceKey.translationFallbackModelProvider) ?? TranslationModelProvider.customLLM.rawValue,
-                rewriteModelProvider: defaults.string(forKey: AppPreferenceKey.rewriteModelProvider) ?? RewriteModelProvider.customLLM.rawValue,
-                remoteASRSelectedProvider: defaults.string(forKey: AppPreferenceKey.remoteASRSelectedProvider) ?? RemoteASRProvider.openAIWhisper.rawValue,
-                remoteLLMSelectedProvider: defaults.string(forKey: AppPreferenceKey.remoteLLMSelectedProvider) ?? RemoteLLMProvider.openAI.rawValue,
-                translationRemoteLLMProvider: defaults.string(forKey: AppPreferenceKey.translationRemoteLLMProvider) ?? "",
-                rewriteRemoteLLMProvider: defaults.string(forKey: AppPreferenceKey.rewriteRemoteLLMProvider) ?? "",
-                useHfMirror: defaults.bool(forKey: AppPreferenceKey.useHfMirror),
-                remoteASRProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteASRProviderConfigurations) ?? ""),
-                remoteLLMProviderConfigurations: sanitizeRemoteConfigurations(defaults.string(forKey: AppPreferenceKey.remoteLLMProviderConfigurations) ?? "")
-            ),
+            model: model,
             feature: FeatureSettingsStore.load(defaults: defaults),
-            dictionary: .init(
-                recognitionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryRecognitionEnabled) as? Bool ?? true,
-                autoLearningEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryAutoLearningEnabled) as? Bool ?? true,
-                autoLearningPrompt: AppPromptDefaults.canonicalStoredText(
-                    AppPromptDefaults.resolvedStoredText(
-                        defaults.string(forKey: AppPreferenceKey.dictionaryAutoLearningPrompt),
-                        kind: .dictionaryAutoLearning,
-                        defaults: defaults
-                    ),
-                    kind: .dictionaryAutoLearning
-                ),
-                highConfidenceCorrectionEnabled: defaults.object(forKey: AppPreferenceKey.dictionaryHighConfidenceCorrectionEnabled) as? Bool ?? true,
-                suggestionFilterSettings: loadDictionarySuggestionFilterSettings(defaults: defaults),
-                suggestionIngestModelOptionID: defaults.string(forKey: AppPreferenceKey.dictionarySuggestionIngestModelOptionID) ?? "",
-                historyScanCheckpoint: loadDictionaryHistoryScanCheckpoint(defaults: defaults),
-                entries: loadDictionaryEntries(environment: environment),
-                suggestions: loadDictionarySuggestions(environment: environment)
-            ),
-            appBranch: .init(
-                appEnhancementEnabled: defaults.bool(forKey: AppPreferenceKey.appEnhancementEnabled),
-                groups: loadAppBranchGroups(defaults: defaults),
-                urls: loadBranchURLs(defaults: defaults),
-                customBrowsersJSON: defaults.string(forKey: AppPreferenceKey.appBranchCustomBrowsers) ?? "[]"
-            ),
-            hotkey: .init(
-                hotkeyInputType: defaults.string(forKey: AppPreferenceKey.hotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
-                hotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.hotkeyKeyCode),
-                hotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.hotkeyMouseButtonNumber) as? Int,
-                hotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeyModifiers),
-                hotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.hotkeySidedModifiers),
-                translationHotkeyInputType: defaults.string(forKey: AppPreferenceKey.translationHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
-                translationHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.translationHotkeyKeyCode),
-                translationHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.translationHotkeyMouseButtonNumber) as? Int,
-                translationHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeyModifiers),
-                translationHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.translationHotkeySidedModifiers),
-                rewriteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.rewriteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
-                rewriteHotkeyKeyCode: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyKeyCode),
-                rewriteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.rewriteHotkeyMouseButtonNumber) as? Int,
-                rewriteHotkeyModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeyModifiers),
-                rewriteHotkeySidedModifiers: defaults.integer(forKey: AppPreferenceKey.rewriteHotkeySidedModifiers),
-                customPasteHotkeyInputType: defaults.string(forKey: AppPreferenceKey.customPasteHotkeyInputType) ?? HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue,
-                customPasteHotkeyMouseButtonNumber: defaults.object(forKey: AppPreferenceKey.customPasteHotkeyMouseButtonNumber) as? Int,
-                rewriteHotkeyActivationMode: HotkeyPreference.loadRewriteActivationMode(defaults: defaults).rawValue,
-                hotkeyTriggerMode: HotkeyPreference.loadTriggerMode(defaults: defaults).rawValue,
-                hotkeyDistinguishModifierSides: defaults.object(forKey: AppPreferenceKey.hotkeyDistinguishModifierSides) as? Bool ?? HotkeyPreference.defaultDistinguishModifierSides,
-                hotkeyPreset: defaults.string(forKey: AppPreferenceKey.hotkeyPreset) ?? HotkeyPreference.defaultPreset.rawValue,
-                escapeKeyCancelsOverlaySession: defaults.object(forKey: AppPreferenceKey.escapeKeyCancelsOverlaySession) as? Bool ?? true
-            )
+            dictionary: dictionary,
+            appBranch: appBranch,
+            hotkey: hotkey
         )
     }
 
@@ -1220,29 +1228,5 @@ enum ConfigurationTransferManager {
     static func resolveImportedSensitive(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed == sensitivePlaceholder ? "" : trimmed
-    }
-
-    private static func dictionaryFileURL() throws -> URL {
-        let appSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        return appSupport
-            .appendingPathComponent("Voxt", isDirectory: true)
-            .appendingPathComponent("dictionary.json")
-    }
-
-    private static func dictionarySuggestionsFileURL() throws -> URL {
-        let appSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        return appSupport
-            .appendingPathComponent("Voxt", isDirectory: true)
-            .appendingPathComponent("dictionary-suggestions.json")
     }
 }

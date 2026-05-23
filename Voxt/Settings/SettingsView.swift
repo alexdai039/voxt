@@ -23,12 +23,19 @@ struct SettingsView: View {
     @ObservedObject var appUpdateManager: AppUpdateManager
     @ObservedObject var mainWindowState: MainWindowVisibilityState
     @AppStorage(AppPreferenceKey.interfaceLanguage) private var interfaceLanguageRaw = AppInterfaceLanguage.system.rawValue
-    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
+    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
     @AppStorage(AppPreferenceKey.transcriptionEngine) private var transcriptionEngineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
     @AppStorage(AppPreferenceKey.remoteASRProviderConfigurations) private var remoteASRProviderConfigurationsRaw = ""
     @AppStorage(AppPreferenceKey.remoteLLMProviderConfigurations) private var remoteLLMProviderConfigurationsRaw = ""
+    @AppStorage(AppPreferenceKey.hotkeyInputType) private var hotkeyInputType = HotkeyPreference.Hotkey.Input.Kind.keyboard.rawValue
+    @AppStorage(AppPreferenceKey.hotkeyKeyCode) private var hotkeyKeyCode = Int(HotkeyPreference.defaultKeyCode)
+    @AppStorage(AppPreferenceKey.hotkeyMouseButtonNumber) private var hotkeyMouseButtonNumber = HotkeyPreference.middleMouseButtonNumber
+    @AppStorage(AppPreferenceKey.hotkeyModifiers) private var hotkeyModifiers = Int(HotkeyPreference.defaultModifiers.rawValue)
+    @AppStorage(AppPreferenceKey.hotkeySidedModifiers) private var hotkeySidedModifiers = 0
+    @AppStorage(AppPreferenceKey.hotkeyDistinguishModifierSides) private var hotkeyDistinguishModifierSides = HotkeyPreference.defaultDistinguishModifierSides
+    @AppStorage(AppPreferenceKey.hotkeyPreset) private var hotkeyPreset = HotkeyPreference.defaultPreset.rawValue
     @State private var selectedTab: SettingsTab
     @State private var selectedFeatureTab: FeatureSettingsTab
     @State private var sidebarMode: SettingsSidebarMode
@@ -40,6 +47,12 @@ struct SettingsView: View {
     @State private var displayMode: SettingsDisplayMode
     @State private var initializedStaticTabs: Set<SettingsTab>
     @State private var activeModelDownloadCount = 0
+    @State private var isFeedbackDialogPresented = false
+
+    private static let officialWebsiteURL = URL(string: "https://voxt.actnow.dev")!
+    private static let changelogURL = URL(string: "https://voxt.actnow.dev/changelog")!
+    private static let feedbackURL = URL(string: "https://github.com/hehehai/voxt/issues/new/choose")!
+    private static let scrollBottomAnchorID = "settings-scroll-bottom-anchor"
 
     init(
         availableDictionaryHistoryScanModels: @escaping () -> [DictionaryHistoryScanModelOption],
@@ -71,7 +84,7 @@ struct SettingsView: View {
         self.mainWindowState = mainWindowState
         _selectedTab = State(initialValue: initialNavigationTarget.tab)
         _selectedFeatureTab = State(initialValue: initialNavigationTarget.featureTab ?? .transcription)
-        _sidebarMode = State(initialValue: initialNavigationTarget.tab == .feature ? .feature : .root)
+        _sidebarMode = State(initialValue: Self.initialSidebarMode(for: initialNavigationTarget.tab))
         _navigationRequest = State(initialValue: SettingsNavigationRequest(target: initialNavigationTarget))
         _displayMode = State(initialValue: initialDisplayMode)
         _initializedStaticTabs = State(initialValue: Self.initializedStaticTabs(for: initialNavigationTarget.tab))
@@ -86,13 +99,7 @@ struct SettingsView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
-                )
-
+            SettingsUIStyle.windowBackgroundColor
             Group {
                 switch displayMode {
                 case .normal:
@@ -105,11 +112,21 @@ struct SettingsView: View {
             .padding(.bottom, 10)
             .padding(.top, 10)
         }
-        .clipShape(RoundedRectangle(cornerRadius: SettingsUIStyle.windowCornerRadius, style: .continuous))
-        .frame(minWidth: 760, minHeight: 560)
+        .frame(minWidth: 820, minHeight: 560)
         .environment(\.locale, interfaceLanguage.locale)
         .groupBoxStyle(SettingsPanelGroupBoxStyle())
         .id(languageRefreshToken)
+        .sheet(isPresented: $isFeedbackDialogPresented) {
+            FeedbackDialogView(
+                onClose: {
+                    isFeedbackDialogPresented = false
+                },
+                onOpenFeedback: {
+                    isFeedbackDialogPresented = false
+                    openFeedbackPage()
+                }
+            )
+        }
         .ignoresSafeArea(.container, edges: .top)
         .onAppear {
             refreshPermissionBadge()
@@ -147,12 +164,6 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voxtInterfaceLanguageDidChange)) { _ in
             AppLocalization.refreshLanguageCache()
             languageRefreshToken = UUID()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
-            refreshPermissionBadge()
-            refreshModelConfigurationBadge()
-            dictionaryStore.reloadAsync()
-            dictionarySuggestionStore.reloadAsync()
         }
         .onReceive(NotificationCenter.default.publisher(for: .voxtRemoteProviderConfigurationsDidChange)) { _ in
             refreshModelConfigurationBadge()
@@ -216,7 +227,7 @@ struct SettingsView: View {
                 onReturnToRoot: {
                     navigationRequest = nil
                     sidebarMode = .root
-                    if selectedTab == .feature {
+                    if selectedTab == .feature || Self.isSettingsTab(selectedTab) {
                         selectedTab = .report
                     }
                 },
@@ -229,9 +240,11 @@ struct SettingsView: View {
                 updateBadgeState: updateBadgeState,
                 onTapPermissionBadge: {
                     navigationRequest = nil
+                    sidebarMode = .settings
                     selectedTab = .permissions
                 },
                 onTapMicrophoneBadge: {
+                    sidebarMode = .settings
                     selectedTab = .general
                     navigationRequest = SettingsNavigationRequest(
                         target: SettingsNavigationTarget(tab: .general, section: .generalAudio)
@@ -239,34 +252,87 @@ struct SettingsView: View {
                 },
                 onTapModelBadge: {
                     navigationRequest = nil
+                    sidebarMode = .settings
                     selectedTab = .model
                 },
                 onTapUpdateBadge: {
                     appUpdateManager.checkForUpdatesWithUserInterface()
+                },
+                onTapWebsite: {
+                    openOfficialWebsite()
+                },
+                onTapFeedback: {
+                    isFeedbackDialogPresented = true
+                },
+                onTapSettings: {
+                    navigationRequest = nil
+                    if sidebarMode == .settings {
+                        sidebarMode = .root
+                        if Self.isSettingsTab(selectedTab) {
+                            selectedTab = .report
+                        }
+                    } else {
+                        sidebarMode = .settings
+                        selectedTab = .general
+                    }
                 }
             )
             .frame(width: SettingsUIStyle.sidebarWidth)
             .frame(maxHeight: .infinity, alignment: .top)
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 12) {
-                    Text(currentTitle)
-                        .font(.title3.weight(.semibold))
-
-                    Spacer(minLength: 0)
-
-                    if sidebarMode == .root, selectedTab == .report {
-                        Button(settingsLocalized("Guide")) {
-                            enterOnboarding(step: .language)
+            VStack(alignment: .leading, spacing: 0) {
+                if showsContentHeader {
+                    HStack(alignment: selectedTab == .report && sidebarMode == .root ? .top : .center, spacing: 12) {
+                        if sidebarMode == .root, selectedTab == .report {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(settingsLocalized("Speak clearly. Adapt to context."))
+                                    .font(.system(size: 18, weight: .bold))
+                                    .lineLimit(1)
+                                HomeShortcutPrompt(shortcut: currentTranscriptionHotkeyDisplayString)
+                            }
+                        } else {
+                            Text(currentTitle)
+                                .font(.title3.weight(.semibold))
                         }
-                        .buttonStyle(SettingsPillButtonStyle())
+
+                        Spacer(minLength: 0)
+
+                        if sidebarMode == .root, selectedTab == .report {
+                            Button(settingsLocalized("Guide")) {
+                                enterOnboarding(step: .language)
+                            }
+                            .buttonStyle(SettingsPillButtonStyle())
+                        }
                     }
                 }
-                .padding(.horizontal, 8)
 
                 tabContent
+                    .padding(.top, contentTopPadding)
+
+                if selectedTab == .report && sidebarMode == .root {
+                    HStack {
+                        Spacer(minLength: 0)
+
+                        Button(settingsLocalized("Changelog")) {
+                            openChangelog()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+                }
             }
+            .padding(16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.panelCornerRadius, style: .continuous)
+                    .fill(SettingsUIStyle.panelFillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsUIStyle.panelCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsUIStyle.panelBorderColor, lineWidth: 1)
+            )
         }
     }
 
@@ -288,6 +354,22 @@ struct SettingsView: View {
 
     private var featureSettings: FeatureSettings {
         FeatureSettingsStore.load(defaults: .standard)
+    }
+
+    private var currentTranscriptionHotkeyDisplayString: String {
+        _ = hotkeyInputType
+        _ = hotkeyKeyCode
+        _ = hotkeyMouseButtonNumber
+        _ = hotkeyModifiers
+        _ = hotkeySidedModifiers
+        _ = hotkeyDistinguishModifierSides
+        _ = hotkeyPreset
+
+        return HotkeyPreference.displayString(
+            for: HotkeyPreference.load(),
+            distinguishModifierSides: HotkeyPreference.loadDistinguishModifierSides()
+        )
+        .replacingOccurrences(of: "fn", with: "FN")
     }
 
     private var noteEnabled: Bool {
@@ -353,7 +435,12 @@ struct SettingsView: View {
         ZStack(alignment: .topLeading) {
             if initializedStaticTabs.contains(.report) {
                 staticTabLayer(for: .report) {
-                    ReportSettingsView(historyStore: historyStore)
+                    ReportSettingsView(
+                        historyStore: historyStore,
+                        dictionaryStore: dictionaryStore,
+                        mainWindowState: mainWindowState,
+                        isActive: selectedTab == .report && sidebarMode == .root
+                    )
                 }
             }
 
@@ -410,8 +497,6 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 8)
-        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -428,51 +513,60 @@ struct SettingsView: View {
     private var scrollableTabContent: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                Group {
-                    switch selectedTab {
-                    case .general:
-                        GeneralSettingsView(
-                            appUpdateManager: appUpdateManager,
-                            navigationRequest: navigationRequest,
-                            onOpenSetupGuide: {
-                                enterOnboarding(step: .language)
-                            }
-                        )
-                    case .permissions:
-                        PermissionsSettingsView(navigationRequest: navigationRequest)
-                    case .report:
-                        EmptyView()
-                    case .model:
-                        ModelSettingsView(
-                            mlxModelManager: mlxModelManager,
-                            whisperModelManager: whisperModelManager,
-                            customLLMManager: customLLMManager,
-                            mainWindowState: mainWindowState,
-                            missingConfigurationIssues: missingModelConfigurationIssues,
-                            navigationRequest: navigationRequest,
-                            isActive: true
-                        )
-                    case .dictionary:
-                        EmptyView()
-                    case .feature:
-                        EmptyView()
-                    case .appEnhancement:
-                        EmptyView()
-                    case .hotkey:
-                        HotkeySettingsView()
-                    case .about:
-                        AboutSettingsView(
-                            appUpdateManager: appUpdateManager,
-                            navigationRequest: navigationRequest
-                        )
-                    case .history:
-                        EmptyView()
+                VStack(alignment: .leading, spacing: 0) {
+                    Group {
+                        switch selectedTab {
+                        case .general:
+                            GeneralSettingsView(
+                                appUpdateManager: appUpdateManager,
+                                navigationRequest: navigationRequest,
+                                onRequestScrollToBottom: {
+                                    withAnimation(.easeInOut(duration: 0.18)) {
+                                        proxy.scrollTo(Self.scrollBottomAnchorID, anchor: .bottom)
+                                    }
+                                }
+                            )
+                        case .permissions:
+                            PermissionsSettingsView(navigationRequest: navigationRequest)
+                        case .report:
+                            EmptyView()
+                        case .model:
+                            ModelSettingsView(
+                                mlxModelManager: mlxModelManager,
+                                whisperModelManager: whisperModelManager,
+                                customLLMManager: customLLMManager,
+                                mainWindowState: mainWindowState,
+                                missingConfigurationIssues: missingModelConfigurationIssues,
+                                navigationRequest: navigationRequest,
+                                isActive: true
+                            )
+                        case .dictionary:
+                            EmptyView()
+                        case .feature:
+                            EmptyView()
+                        case .appEnhancement:
+                            EmptyView()
+                        case .hotkey:
+                            HotkeySettingsView()
+                        case .about:
+                            AboutSettingsView(
+                                appUpdateManager: appUpdateManager,
+                                navigationRequest: navigationRequest
+                            )
+                        case .history:
+                            EmptyView()
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.trailing, SettingsUIStyle.contentScrollTrailingGutter)
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.scrollBottomAnchorID)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(.horizontal, 8)
-                .padding(.top, 2)
             }
+            .padding(.trailing, -SettingsUIStyle.contentScrollIndicatorOutset)
             .onAppear {
                 scrollScrollableContentIfNeeded(with: navigationRequest, proxy: proxy)
             }
@@ -547,6 +641,20 @@ struct SettingsView: View {
         sidebarMode == .feature ? selectedFeatureTab.titleKey : selectedTab.titleKey
     }
 
+    private var showsContentHeader: Bool {
+        true
+    }
+
+    private var contentTopPadding: CGFloat {
+        if sidebarMode == .root, selectedTab == .report {
+            return 24
+        }
+        if !showsContentHeader {
+            return 0
+        }
+        return 12
+    }
+
     private func applyNavigationTarget(_ target: SettingsNavigationTarget) {
         navigationRequest = SettingsNavigationRequest(target: target)
         if let featureTab = target.featureTab {
@@ -562,6 +670,9 @@ struct SettingsView: View {
         if target.tab == .feature {
             sidebarMode = .feature
             selectedTab = .feature
+        } else if Self.isSettingsTab(target.tab) {
+            sidebarMode = .settings
+            selectedTab = target.tab
         } else {
             sidebarMode = .root
             selectedTab = target.tab
@@ -580,6 +691,11 @@ struct SettingsView: View {
             }
             return
         }
+        if Self.isSettingsTab(tab) {
+            sidebarMode = .settings
+            selectedTab = tab
+            return
+        }
         sidebarMode = .root
         selectedTab = tab
     }
@@ -590,14 +706,99 @@ struct SettingsView: View {
         selectedFeatureTab = tab
     }
 
+    private func openOfficialWebsite() {
+        NSWorkspace.shared.open(Self.officialWebsiteURL)
+    }
+
+    private func openChangelog() {
+        NSWorkspace.shared.open(Self.changelogURL)
+    }
+
+    private func openFeedbackPage() {
+        NSWorkspace.shared.open(Self.feedbackURL)
+    }
+
+    private struct FeedbackDialogView: View {
+        let onClose: () -> Void
+        let onOpenFeedback: () -> Void
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(settingsLocalized("Feedback"))
+                    .font(.title3.weight(.semibold))
+
+                Text(settingsLocalized("Feedback Dialog Message"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                SettingsDialogActionRow {
+                    Button(settingsLocalized("Cancel"), action: onClose)
+                        .buttonStyle(SettingsPillButtonStyle())
+                        .keyboardShortcut(.cancelAction)
+
+                    Button(settingsLocalized("Open Feedback Page"), action: onOpenFeedback)
+                        .buttonStyle(SettingsPrimaryButtonStyle())
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .settingsDialogChrome(width: 420, onClose: onClose)
+        }
+    }
+
     private static func initializedStaticTabs(for tab: SettingsTab) -> Set<SettingsTab> {
         isStaticTab(tab) ? [tab] : []
+    }
+
+    private static func initialSidebarMode(for tab: SettingsTab) -> SettingsSidebarMode {
+        if tab == .feature {
+            return .feature
+        }
+        if isSettingsTab(tab) {
+            return .settings
+        }
+        return .root
     }
 
     private static func isStaticTab(_ tab: SettingsTab) -> Bool {
         tab == .history || tab == .report || tab == .feature || tab == .dictionary || tab == .model
     }
 
+    private static func isSettingsTab(_ tab: SettingsTab) -> Bool {
+        SettingsTab.settingsTabs.contains(tab)
+    }
+
+}
+
+private struct HomeShortcutPrompt: View {
+    let shortcut: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 5) {
+            let prefix = settingsLocalized("Home Shortcut Prompt Prefix")
+            let suffix = settingsLocalized("Home Shortcut Prompt Suffix")
+            if !prefix.isEmpty {
+                Text(prefix)
+            }
+            Text(shortcut)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 7)
+                .frame(minHeight: 18)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(SettingsUIStyle.controlFillColor)
+                )
+            if !suffix.isEmpty {
+                Text(suffix)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
 }
 
 private struct SettingsSidebar: View {
@@ -618,176 +819,120 @@ private struct SettingsSidebar: View {
     let onTapMicrophoneBadge: () -> Void
     let onTapModelBadge: () -> Void
     let onTapUpdateBadge: () -> Void
+    let onTapWebsite: () -> Void
+    let onTapFeedback: () -> Void
+    let onTapSettings: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if sidebarMode == .root {
-                ForEach(visibleTabs) { tab in
-                    Button {
-                        onSelectTab(tab)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: tab.iconName)
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSidebarHeader(
+                sidebarMode: sidebarMode,
+                updateBadgeState: updateBadgeState,
+                onTapUpdateBadge: onTapUpdateBadge,
+                onReturnToRoot: onReturnToRoot
+            )
+
+            SettingsSidebarMenuPager(
+                sidebarMode: sidebarMode,
+                rootTabs: visibleRootTabs,
+                featureTabs: visibleFeatureTabs,
+                settingsTabs: visibleSettingsTabs,
+                selectedTab: selectedTab,
+                selectedFeatureTab: selectedFeatureTab,
+                onSelectTab: onSelectTab,
+                onSelectFeatureTab: onSelectFeatureTab
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            VStack(alignment: .leading, spacing: 8) {
+                if sidebarMode == .root, hasMissingPermissions {
+                    Button(action: onTapPermissionBadge) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 13, weight: .semibold))
-                                .frame(width: SettingsUIStyle.sidebarItemIconWidth)
-                            Text(tab.titleKey)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .allowsTightening(true)
-                                .layoutPriority(1)
+                                .foregroundStyle(.red)
+                            Text(settingsLocalized("Permissions Disabled"))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.red)
                             Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(SettingsSidebarItemButtonStyle(isActive: tab == selectedTab))
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .red))
                 }
-            } else {
-                ForEach(visibleFeatureTabs) { tab in
-                    Button {
-                        onSelectFeatureTab(tab)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: tab.iconName)
+
+                if sidebarMode == .root, hasNoAvailableMicrophones {
+                    Button(action: onTapMicrophoneBadge) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "mic.slash.fill")
                                 .font(.system(size: 13, weight: .semibold))
-                                .frame(width: SettingsUIStyle.sidebarItemIconWidth)
-                            Text(tab.titleKey)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .allowsTightening(true)
-                                .layoutPriority(1)
+                                .foregroundStyle(.red)
+                            Text(settingsLocalized("No Microphone Available"))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.red)
                             Spacer(minLength: 0)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(SettingsSidebarItemButtonStyle(isActive: tab == selectedFeatureTab))
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .red))
                 }
-            }
 
-            Spacer(minLength: 8)
-
-            if sidebarMode == .root, hasMissingPermissions {
-                Button(action: onTapPermissionBadge) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.red)
-                        Text(settingsLocalized("Permissions Disabled"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.red)
-                        Spacer(minLength: 0)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(SettingsStatusButtonStyle(tint: .red))
-            }
-
-            if sidebarMode == .root, hasNoAvailableMicrophones {
-                Button(action: onTapMicrophoneBadge) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "mic.slash.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.red)
-                        Text(settingsLocalized("No Microphone Available"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.red)
-                        Spacer(minLength: 0)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(SettingsStatusButtonStyle(tint: .red))
-            }
-
-            if sidebarMode == .root, activeModelDownloadCount > 0 {
-                Button(action: onTapModelBadge) {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.accentColor)
-                            .frame(width: 13, height: 13)
-                        Text(settingsLocalized("Downloading"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text("\(activeModelDownloadCount)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.accentColor)
-                            .padding(.horizontal, 7)
-                            .frame(minWidth: 22, minHeight: 20)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.14))
-                            )
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(SettingsStatusButtonStyle(tint: .accentColor))
-            }
-
-            if sidebarMode == .root, hasMissingModelConfigurationIssues {
-                Button(action: onTapModelBadge) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.orange)
-                        Text(settingsLocalized("Model Setup Required"))
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.orange)
-                        Spacer(minLength: 0)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(SettingsStatusButtonStyle(tint: .orange))
-            }
-
-            if sidebarMode == .root, updateBadgeState != .none {
-                Button(action: onTapUpdateBadge) {
-                    HStack(spacing: 8) {
-                        if updateBadgeState.showsSpinner {
+                if sidebarMode == .root, activeModelDownloadCount > 0 {
+                    Button(action: onTapModelBadge) {
+                        HStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(updateBadgeState.tintColor)
+                                .tint(.accentColor)
                                 .frame(width: 13, height: 13)
-                        } else {
-                            Image(systemName: updateBadgeState.iconName)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(updateBadgeState.tintColor)
+                            Text(settingsLocalized("Downloading"))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            Text("\(activeModelDownloadCount)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 7)
+                                .frame(minWidth: 22, minHeight: 20)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(Color.accentColor.opacity(0.14))
+                                )
                         }
-                        Text(updateBadgeState.title)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(updateBadgeState.tintColor)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .allowsTightening(true)
-                        Spacer(minLength: 0)
                     }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .accentColor))
                 }
-                .frame(maxWidth: .infinity)
-                .disabled(updateBadgeState.isTriggerDisabled)
-                .buttonStyle(SettingsStatusButtonStyle(tint: updateBadgeState.tintColor))
-            }
 
-            if sidebarMode == .feature {
-                Button(action: onReturnToRoot) {
-                    Label(settingsLocalized("Back"), systemImage: "chevron.left")
-                        .frame(maxWidth: .infinity)
+                if sidebarMode == .root, hasMissingModelConfigurationIssues {
+                    Button(action: onTapModelBadge) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.orange)
+                            Text(settingsLocalized("Model Setup Required"))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.orange)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .buttonStyle(SettingsStatusButtonStyle(tint: .orange))
                 }
-                .buttonStyle(SettingsPillButtonStyle())
+
+                SettingsSidebarInfoBlock(
+                    onTapWebsite: onTapWebsite,
+                    onTapFeedback: onTapFeedback,
+                    onTapSettings: onTapSettings
+                )
             }
+            .frame(maxWidth: .infinity)
 
         }
-        .padding(.horizontal, SettingsUIStyle.sidebarHorizontalPadding)
-        .padding(.bottom, 10)
-        .padding(.top, 34)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .settingsSidebarSurface()
     }
 
-    private var visibleTabs: [SettingsTab] {
+    private var visibleRootTabs: [SettingsTab] {
         SettingsTab.visibleTabs(appEnhancementEnabled: appEnhancementEnabled)
     }
 
@@ -796,6 +941,463 @@ private struct SettingsSidebar: View {
             appEnhancementEnabled: appEnhancementEnabled,
             noteEnabled: noteEnabled
         )
+    }
+
+    private var visibleSettingsTabs: [SettingsTab] {
+        SettingsTab.settingsTabs
+    }
+}
+
+private struct SettingsSidebarMenuPager: View {
+    let sidebarMode: SettingsSidebarMode
+    let rootTabs: [SettingsTab]
+    let featureTabs: [FeatureSettingsTab]
+    let settingsTabs: [SettingsTab]
+    let selectedTab: SettingsTab
+    let selectedFeatureTab: FeatureSettingsTab
+    let onSelectTab: (SettingsTab) -> Void
+    let onSelectFeatureTab: (FeatureSettingsTab) -> Void
+
+    @State private var visibleSubmenuKind: SettingsSidebarSubmenuKind = .feature
+    @State private var visiblePageIndex: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { proxy in
+            let pageWidth = proxy.size.width
+
+            HStack(alignment: .top, spacing: 0) {
+                rootMenu
+                    .frame(width: pageWidth, alignment: .topLeading)
+
+                subMenu(kind: visibleSubmenuKind)
+                    .frame(width: pageWidth, alignment: .topLeading)
+            }
+            .frame(width: pageWidth * 2, alignment: .leading)
+            .offset(x: -pageWidth * visiblePageIndex)
+            .onAppear {
+                if let submenuKind = sidebarMode.submenuKind {
+                    visibleSubmenuKind = submenuKind
+                    visiblePageIndex = 1
+                } else {
+                    visiblePageIndex = 0
+                }
+            }
+            .onChange(of: sidebarMode) { oldMode, newMode in
+                if let submenuKind = newMode.submenuKind {
+                    updateVisibleSubmenuKind(submenuKind)
+                    animateToSubmenu()
+                } else {
+                    if oldMode != .root, let submenuKind = oldMode.submenuKind {
+                        updateVisibleSubmenuKind(submenuKind)
+                    }
+                    animateToRoot()
+                }
+            }
+        }
+        .clipped()
+    }
+
+    private func updateVisibleSubmenuKind(_ submenuKind: SettingsSidebarSubmenuKind) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+            visibleSubmenuKind = submenuKind
+        }
+    }
+
+    private func animateToSubmenu() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            visiblePageIndex = 1
+        }
+    }
+
+    private func animateToRoot() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            visiblePageIndex = 0
+        }
+    }
+
+    private var rootMenu: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(rootTabs) { tab in
+                SettingsSidebarTabButton(
+                    iconKind: tab.sidebarIconKind,
+                    title: tab.titleKey,
+                    isActive: tab == selectedTab,
+                    action: { onSelectTab(tab) }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func subMenu(kind: SettingsSidebarSubmenuKind) -> some View {
+        switch kind {
+        case .feature:
+            featureMenu
+        case .settings:
+            settingsMenu
+        }
+    }
+
+    private var featureMenu: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(featureTabs) { tab in
+                SettingsSidebarTabButton(
+                    iconKind: tab.sidebarIconKind,
+                    systemImageName: tab.sidebarIconKind == nil ? tab.iconName : nil,
+                    title: tab.titleKey,
+                    isActive: tab == selectedFeatureTab,
+                    action: { onSelectFeatureTab(tab) }
+                )
+            }
+        }
+    }
+
+    private var settingsMenu: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(settingsTabs) { tab in
+                SettingsSidebarTabButton(
+                    iconKind: tab.sidebarIconKind,
+                    title: tab.titleKey,
+                    isActive: tab == selectedTab,
+                    action: { onSelectTab(tab) }
+                )
+            }
+        }
+    }
+}
+
+private enum SettingsSidebarSubmenuKind {
+    case feature
+    case settings
+}
+
+private extension SettingsSidebarMode {
+    var submenuKind: SettingsSidebarSubmenuKind? {
+        switch self {
+        case .root:
+            return nil
+        case .feature:
+            return .feature
+        case .settings:
+            return .settings
+        }
+    }
+}
+
+private struct SettingsSidebarTabButton: View {
+    let iconKind: SettingsSidebarIconKind?
+    var systemImageName: String?
+    let title: LocalizedStringKey
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if let iconKind {
+                    SettingsSidebarIconView(kind: iconKind)
+                        .frame(width: SettingsUIStyle.sidebarItemIconWidth)
+                } else if let systemImageName {
+                    Image(systemName: systemImageName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: SettingsUIStyle.sidebarItemIconWidth)
+                }
+
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .allowsTightening(true)
+                    .layoutPriority(1)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SettingsSidebarItemButtonStyle(isActive: isActive))
+    }
+}
+
+private struct SettingsSidebarHeader: View {
+    let sidebarMode: SettingsSidebarMode
+    let updateBadgeState: UpdateBadgeState
+    let onTapUpdateBadge: () -> Void
+    let onReturnToRoot: () -> Void
+
+    private var appVersionText: String {
+        let bundle = Bundle.main
+        let shortVersion = (bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let shortVersion, !shortVersion.isEmpty {
+            return "v\(shortVersion)"
+        }
+        return ""
+    }
+
+    private var showsNewVersionTag: Bool {
+        if case .newVersion = updateBadgeState {
+            return true
+        }
+        return false
+    }
+
+    private var headerBadgeHeight: CGFloat {
+        19
+    }
+
+    var body: some View {
+        HStack {
+            switch sidebarMode {
+            case .root:
+                Spacer(minLength: 0)
+
+                if !appVersionText.isEmpty {
+                    if showsNewVersionTag {
+                        Button(action: onTapUpdateBadge) {
+                            badgeContent
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        badgeContent
+                    }
+                }
+
+            case .feature, .settings:
+                Spacer(minLength: 0)
+
+                Button(action: onReturnToRoot) {
+                    SettingsSidebarBackIcon()
+                        .frame(width: 16, height: 16)
+                        .frame(width: 26, height: headerBadgeHeight)
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(SettingsSidebarHeaderBackButtonStyle())
+                .accessibilityLabel(settingsLocalized("Back"))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.top, 5)
+        .padding(.bottom, 14)
+    }
+
+    private var badgeContent: some View {
+        HStack(spacing: 4) {
+            if showsNewVersionTag {
+                Text("new")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.green)
+                    .lineLimit(1)
+                    .padding(.horizontal, 7)
+                    .frame(height: headerBadgeHeight)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.green.opacity(0.12))
+                    )
+            }
+
+            Text(appVersionText)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 7)
+                .frame(height: headerBadgeHeight)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.055))
+                )
+        }
+        .contentShape(Capsule(style: .continuous))
+    }
+}
+
+private struct SettingsSidebarBackIcon: View {
+    var body: some View {
+        SettingsSidebarBackIconShape()
+            .stroke(
+                style: StrokeStyle(
+                    lineWidth: 1.35,
+                    lineCap: .round,
+                    lineJoin: .round,
+                    miterLimit: 10
+                )
+            )
+    }
+}
+
+private struct SettingsSidebarBackIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width / 24, rect.height / 24)
+        let xOffset = rect.midX - 12 * scale
+        let yOffset = rect.midY - 12 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: xOffset + x * scale, y: yOffset + y * scale)
+        }
+
+        var path = Path()
+        path.move(to: point(7.12988, 18.3096))
+        path.addLine(to: point(15.1299, 18.3096))
+        path.addCurve(
+            to: point(20.1299, 13.3096),
+            control1: point(17.8899, 18.3096),
+            control2: point(20.1299, 16.0696)
+        )
+        path.addCurve(
+            to: point(15.1299, 8.30957),
+            control1: point(20.1299, 10.5496),
+            control2: point(17.8899, 8.30957)
+        )
+        path.addLine(to: point(4.12988, 8.30957))
+
+        path.move(to: point(6.43012, 10.8104))
+        path.addLine(to: point(3.87012, 8.25043))
+        path.addLine(to: point(6.43012, 5.69043))
+
+        return path
+    }
+}
+
+private struct SettingsSidebarHeaderBackButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SettingsSidebarHeaderBackButtonBody(configuration: configuration)
+    }
+}
+
+private struct SettingsSidebarHeaderBackButtonBody: View {
+    let configuration: SettingsSidebarHeaderBackButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .foregroundStyle(Color.secondary.opacity(configuration.isPressed ? 0.72 : 1))
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(backgroundOpacity))
+            )
+            .contentShape(Capsule(style: .continuous))
+            .onHover { isHovered = $0 }
+    }
+
+    private var backgroundOpacity: Double {
+        if configuration.isPressed {
+            return 0.11
+        }
+        if isHovered {
+            return 0.075
+        }
+        return 0.055
+    }
+}
+
+private struct SettingsSidebarInfoBlock: View {
+    let onTapWebsite: () -> Void
+    let onTapFeedback: () -> Void
+    let onTapSettings: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: onTapWebsite) {
+                HStack(spacing: 6) {
+                    SettingsWebsiteIconView()
+                        .frame(width: 14, height: 14)
+                    Text("Voxt")
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .buttonStyle(SettingsSidebarInfoTextButtonStyle())
+
+            Spacer(minLength: 6)
+
+            Button(action: onTapFeedback) {
+                SettingsSidebarIconView(kind: .feedback)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(SettingsSidebarInfoIconButtonStyle())
+            .accessibilityLabel(settingsLocalized("Feedback"))
+
+            Button(action: onTapSettings) {
+                SettingsSidebarIconView(kind: .settings)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(SettingsSidebarInfoIconButtonStyle())
+            .accessibilityLabel(settingsLocalized("Settings"))
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct SettingsSidebarInfoTextButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SettingsSidebarInfoTextButtonBody(configuration: configuration)
+    }
+}
+
+private struct SettingsSidebarInfoTextButtonBody: View {
+    let configuration: SettingsSidebarInfoTextButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .foregroundStyle(Color.primary.opacity(configuration.isPressed ? 0.72 : 0.92))
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(backgroundFill)
+            )
+            .contentShape(Capsule(style: .continuous))
+            .onHover { isHovered = $0 }
+    }
+
+    private var backgroundFill: Color {
+        if configuration.isPressed {
+            return SettingsUIStyle.sidebarItemPressedFillColor
+        }
+        if isHovered {
+            return SettingsUIStyle.sidebarItemPressedFillColor
+        }
+        return SettingsUIStyle.sidebarItemFillColor
+    }
+}
+
+private struct SettingsSidebarInfoIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SettingsSidebarInfoIconButtonBody(configuration: configuration)
+    }
+}
+
+private struct SettingsSidebarInfoIconButtonBody: View {
+    let configuration: SettingsSidebarInfoIconButtonStyle.Configuration
+    @State private var isHovered = false
+
+    var body: some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color.secondary.opacity(configuration.isPressed ? 0.72 : 1))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(backgroundFill)
+            )
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+    }
+
+    private var backgroundFill: Color {
+        if configuration.isPressed {
+            return SettingsUIStyle.sidebarItemPressedFillColor
+        }
+        if isHovered {
+            return SettingsUIStyle.sidebarItemFillColor
+        }
+        return .clear
     }
 }
 

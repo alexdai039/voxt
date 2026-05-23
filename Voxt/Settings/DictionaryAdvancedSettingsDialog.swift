@@ -42,9 +42,9 @@ struct DictionaryAdvancedSettingsDialog: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: dialogWidth)
-        .frame(maxHeight: dialogMaxHeight)
+        .settingsDialogChrome(width: dialogWidth, maxHeight: dialogMaxHeight, onClose: {
+            isPresented = false
+        })
     }
 }
 
@@ -60,7 +60,7 @@ private struct DictionaryAutoCorrectionToggleSection: View {
         .controlSize(.small)
         .toggleStyle(.switch)
 
-        Text(AppLocalization.localizedString("When enabled, the final output can replace very high-confidence near matches with exact dictionary terms before the text is inserted."))
+        Text(AppLocalization.localizedString("Use exact dictionary terms for very high-confidence matches."))
             .font(.caption)
             .foregroundStyle(.secondary)
 
@@ -71,7 +71,7 @@ private struct DictionaryAutoCorrectionToggleSection: View {
         .controlSize(.small)
         .toggleStyle(.switch)
 
-        Text(AppLocalization.localizedString("When enabled, Voxt watches the edited input for a short time after inserting transcription text and can add confirmed corrected terms to the dictionary automatically."))
+        Text(AppLocalization.localizedString("Learn confirmed corrections after text insertion."))
             .font(.caption)
             .foregroundStyle(.secondary)
     }
@@ -138,7 +138,7 @@ private struct DictionaryAutomaticLearningPromptSection: View {
                 variables: variables
             )
 
-            Text(AppLocalization.localizedString("This prompt is used when Voxt compares inserted text with the user's later correction and asks the LLM which corrected terms are worth adding."))
+            Text(AppLocalization.localizedString("Used to decide which user corrections should become dictionary terms."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -58,6 +58,7 @@ struct SVGPathParser {
         var command: Character?
         var currentPoint = CGPoint.zero
         var subpathStart = CGPoint.zero
+        var previousCubicControlPoint: CGPoint?
 
         while true {
             skipSeparators()
@@ -76,8 +77,22 @@ struct SVGPathParser {
                 path.move(to: point)
                 currentPoint = point
                 subpathStart = point
+                previousCubicControlPoint = nil
 
                 while let point = readPoint() {
+                    path.addLine(to: point)
+                    currentPoint = point
+                }
+            case "m":
+                guard let offset = readPoint() else { break }
+                var point = CGPoint(x: currentPoint.x + offset.x, y: currentPoint.y + offset.y)
+                path.move(to: point)
+                currentPoint = point
+                subpathStart = point
+                previousCubicControlPoint = nil
+
+                while let offset = readPoint() {
+                    point = CGPoint(x: currentPoint.x + offset.x, y: currentPoint.y + offset.y)
                     path.addLine(to: point)
                     currentPoint = point
                 }
@@ -86,32 +101,114 @@ struct SVGPathParser {
                     path.addLine(to: point)
                     currentPoint = point
                 }
+                previousCubicControlPoint = nil
+            case "l":
+                while let offset = readPoint() {
+                    currentPoint = CGPoint(x: currentPoint.x + offset.x, y: currentPoint.y + offset.y)
+                    path.addLine(to: currentPoint)
+                }
+                previousCubicControlPoint = nil
             case "C":
                 while let control1 = readPoint(),
                       let control2 = readPoint(),
                       let point = readPoint() {
                     path.addCurve(to: point, control1: control1, control2: control2)
                     currentPoint = point
+                    previousCubicControlPoint = control2
+                }
+            case "c":
+                while let control1Offset = readPoint(),
+                      let control2Offset = readPoint(),
+                      let pointOffset = readPoint() {
+                    let control1 = CGPoint(
+                        x: currentPoint.x + control1Offset.x,
+                        y: currentPoint.y + control1Offset.y
+                    )
+                    let control2 = CGPoint(
+                        x: currentPoint.x + control2Offset.x,
+                        y: currentPoint.y + control2Offset.y
+                    )
+                    let point = CGPoint(
+                        x: currentPoint.x + pointOffset.x,
+                        y: currentPoint.y + pointOffset.y
+                    )
+                    path.addCurve(to: point, control1: control1, control2: control2)
+                    currentPoint = point
+                    previousCubicControlPoint = control2
+                }
+            case "S":
+                while let control2 = readPoint(),
+                      let point = readPoint() {
+                    let control1 = reflectedControlPoint(
+                        previousCubicControlPoint,
+                        around: currentPoint
+                    )
+                    path.addCurve(to: point, control1: control1, control2: control2)
+                    currentPoint = point
+                    previousCubicControlPoint = control2
+                }
+            case "s":
+                while let control2Offset = readPoint(),
+                      let pointOffset = readPoint() {
+                    let control1 = reflectedControlPoint(
+                        previousCubicControlPoint,
+                        around: currentPoint
+                    )
+                    let control2 = CGPoint(
+                        x: currentPoint.x + control2Offset.x,
+                        y: currentPoint.y + control2Offset.y
+                    )
+                    let point = CGPoint(
+                        x: currentPoint.x + pointOffset.x,
+                        y: currentPoint.y + pointOffset.y
+                    )
+                    path.addCurve(to: point, control1: control1, control2: control2)
+                    currentPoint = point
+                    previousCubicControlPoint = control2
                 }
             case "H":
                 while let x = readNumber() {
                     currentPoint = CGPoint(x: x, y: currentPoint.y)
                     path.addLine(to: currentPoint)
                 }
+                previousCubicControlPoint = nil
+            case "h":
+                while let x = readNumber() {
+                    currentPoint = CGPoint(x: currentPoint.x + x, y: currentPoint.y)
+                    path.addLine(to: currentPoint)
+                }
+                previousCubicControlPoint = nil
             case "V":
                 while let y = readNumber() {
                     currentPoint = CGPoint(x: currentPoint.x, y: y)
                     path.addLine(to: currentPoint)
                 }
+                previousCubicControlPoint = nil
+            case "v":
+                while let y = readNumber() {
+                    currentPoint = CGPoint(x: currentPoint.x, y: currentPoint.y + y)
+                    path.addLine(to: currentPoint)
+                }
+                previousCubicControlPoint = nil
             case "Z", "z":
                 path.closeSubpath()
                 currentPoint = subpathStart
+                previousCubicControlPoint = nil
             default:
                 index += 1
+                previousCubicControlPoint = nil
             }
         }
 
         return path
+    }
+
+    private func reflectedControlPoint(_ point: CGPoint?, around currentPoint: CGPoint) -> CGPoint {
+        guard let point else { return currentPoint }
+        return CGPoint(
+            x: currentPoint.x * 2 - point.x,
+            y: currentPoint.y * 2 - point.y
+        )
     }
 
     private mutating func currentCommandCharacter() -> Character? {

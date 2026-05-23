@@ -62,13 +62,15 @@ struct ResettablePromptSection: View {
     var guidance: String? = nil
     var variablesTitle: String? = nil
     var promptHeight: CGFloat = 124
+    var titleUsesFeatureRowStyle = false
     var onTextChange: ((String) -> Void)?
     var onFocusChange: ((Bool) -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
-                .font(.subheadline.weight(.medium))
+                .font(titleUsesFeatureRowStyle ? .body.weight(.semibold) : .subheadline.weight(.medium))
+                .foregroundStyle(Color.primary.opacity(titleUsesFeatureRowStyle ? 0.92 : 1))
             Spacer()
             Button(AppLocalization.localizedString("Reset to Default")) {
                 text = defaultText
@@ -133,31 +135,11 @@ struct ModelTaskSettingsCard: View {
                         Text(modelDisplayText)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 34)
-                            .background(
-                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                                    .fill(SettingsUIStyle.controlFillColor)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-                            )
+                            .settingsFieldSurface(minHeight: 34, horizontalPadding: 12)
                     } else if modelOptions.isEmpty {
                         Text(AppLocalization.localizedString("Not available"))
                             .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 34)
-                            .background(
-                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                                    .fill(SettingsUIStyle.controlFillColor)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SettingsUIStyle.controlCornerRadius, style: .continuous)
-                                    .strokeBorder(SettingsUIStyle.subtleBorderColor, lineWidth: 1)
-                            )
+                            .settingsFieldSurface(minHeight: 34, horizontalPadding: 12)
                     } else {
                         SettingsMenuPicker(
                             selection: selectedModelBinding,
@@ -193,7 +175,6 @@ struct ModelTaskSettingsCard: View {
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
         }
     }
 }

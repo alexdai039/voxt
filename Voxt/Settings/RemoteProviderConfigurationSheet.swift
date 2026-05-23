@@ -68,15 +68,15 @@ struct RemoteProviderConfigurationSheet: View {
     @State var testResultIsSuccess = false
 
     private var dialogWidth: CGFloat {
-        showsLargeAdvancedProviderSection ? 520 : 440
+        SettingsUIStyle.modelConfigurationDialogWidth
     }
 
     private var dialogMaxHeight: CGFloat {
-        showsLargeAdvancedProviderSection ? 720 : 560
+        SettingsUIStyle.modelConfigurationDialogMaxHeight
     }
 
     private var scrollContentMaxHeight: CGFloat {
-        showsLargeAdvancedProviderSection ? 600 : 440
+        SettingsUIStyle.modelConfigurationScrollMaxHeight
     }
 
     var body: some View {
@@ -152,9 +152,7 @@ struct RemoteProviderConfigurationSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(18)
-        .frame(width: dialogWidth)
-        .frame(maxHeight: dialogMaxHeight, alignment: .top)
+        .settingsDialogChrome(width: dialogWidth, maxHeight: dialogMaxHeight, onClose: { dismiss() })
         .onAppear {
             configureModelSelection()
             customModelID = configuration.model

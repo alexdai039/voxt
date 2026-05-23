@@ -37,17 +37,44 @@ struct PagedVerticalList<Item: Identifiable, Row: View>: NSViewRepresentable {
     let totalCount: Int
     let rowHeight: CGFloat
     let rowSpacing: CGFloat
+    let rowHeightForItem: ((Item) -> CGFloat)?
     let isLoading: Bool
     let onLoadMore: () -> Void
-    @ViewBuilder let row: (Item) -> Row
+    let row: (Item) -> Row
+
+    init(
+        items: [Item],
+        totalCount: Int,
+        rowHeight: CGFloat,
+        rowSpacing: CGFloat = 8,
+        rowHeightForItem: ((Item) -> CGFloat)? = nil,
+        isLoading: Bool,
+        onLoadMore: @escaping () -> Void,
+        @ViewBuilder row: @escaping (Item) -> Row
+    ) {
+        self.items = items
+        self.totalCount = totalCount
+        self.rowHeight = rowHeight
+        self.rowSpacing = rowSpacing
+        self.rowHeightForItem = rowHeightForItem
+        self.isLoading = isLoading
+        self.onLoadMore = onLoadMore
+        self.row = row
+    }
 
     private var state: PagedVerticalListState {
         let items = items
+        let rowHeight = rowHeight
+        let rowHeightForItem = rowHeightForItem
         return PagedVerticalListState(
             itemCount: items.count,
             totalCount: totalCount,
             rowHeight: rowHeight,
             rowSpacing: rowSpacing,
+            rowHeightForIndex: { index in
+                guard index >= 0, index < items.count else { return rowHeight }
+                return rowHeightForItem?(items[index]) ?? rowHeight
+            },
             isLoading: isLoading,
             onLoadMore: onLoadMore,
             row: { index in AnyView(row(items[index])) }
@@ -127,7 +154,7 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        isFooterRow(row) ? 40 : state.rowHeight
+        isFooterRow(row) ? 40 : state.height(for: row)
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row rowIndex: Int) -> NSView? {
@@ -145,7 +172,7 @@ final class PagedVerticalListCoordinator: NSObject, NSTableViewDataSource, NSTab
             rootView: AnyView(
                 state.row(rowIndex)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: state.rowHeight)
+                    .frame(height: state.height(for: rowIndex))
             )
         )
     }
@@ -200,7 +227,12 @@ struct PagedVerticalListState {
     let totalCount: Int
     let rowHeight: CGFloat
     let rowSpacing: CGFloat
+    let rowHeightForIndex: (Int) -> CGFloat
     let isLoading: Bool
     let onLoadMore: () -> Void
     let row: (Int) -> AnyView
+
+    func height(for index: Int) -> CGFloat {
+        rowHeightForIndex(index)
+    }
 }

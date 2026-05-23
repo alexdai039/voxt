@@ -19,6 +19,8 @@ struct FeatureSettingsView: View {
     @State var remindersListDescriptors: [RemindersListDescriptor] = []
     @State var isRemindersListSheetPresented = false
     @State var interactionSoundPlayer = InteractionSoundPlayer()
+    @State private var toastMessage = ""
+    @State private var toastDismissTask: Task<Void, Never>?
 
     var body: some View {
         Group {
@@ -36,6 +38,16 @@ struct FeatureSettingsView: View {
             }
         }
         .id(selectedTab)
+        .overlay(alignment: .top) {
+            if !toastMessage.isEmpty {
+                ModelDebugToast(message: toastMessage) {
+                    dismissToast()
+                }
+                .padding(.top, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: toastMessage)
         .sheet(item: $selectorSheet) { sheet in
             FeatureModelSelectorDialog(
                 title: sheet.title,
@@ -65,7 +77,30 @@ struct FeatureSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .voxtPermissionsDidChange)) { _ in
             refreshRemindersLists()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .voxtFeatureSettingsToastRequested)) { notification in
+            guard let message = notification.userInfo?["message"] as? String else { return }
+            if message.isEmpty {
+                dismissToast()
+            } else {
+                showToast(message)
+            }
+        }
         .id(interfaceLanguageRaw)
+    }
+
+    private func showToast(_ message: String, duration: TimeInterval = 2.2) {
+        toastDismissTask?.cancel()
+        toastMessage = message
+        toastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            toastMessage = ""
+        }
+    }
+
+    private func dismissToast() {
+        toastDismissTask?.cancel()
+        toastMessage = ""
     }
 
     func binding<Value>(

@@ -134,9 +134,6 @@ struct DictionarySettingsView: View {
             }
             reloadDictionaryEntries(reset: true)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .voxtConfigurationDidImport)) { _ in
-            reloadContentAsync()
-        }
         .alert(localized("Delete All Dictionary Terms?"), isPresented: $showClearAllConfirmation) {
             Button(localized("Delete"), role: .destructive) {
                 dictionaryStore.clearAll()

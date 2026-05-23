@@ -56,7 +56,7 @@ struct CustomLLMGenerationSettingsSheet: View {
                                 selectedTitle: selectedThinkingTitle,
                                 width: 240
                             )
-                            Text(customLLMLocalized("Model Default keeps Voxt's built-in thinking disable behavior for Qwen3, GLM-Z1, and similar local reasoning models."))
+                            Text(customLLMLocalized("Use Voxt's default thinking behavior for this model."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -126,7 +126,7 @@ struct CustomLLMGenerationSettingsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.trailing, 4)
             }
-            .frame(maxHeight: 440)
+            .frame(maxHeight: SettingsUIStyle.modelConfigurationScrollMaxHeight)
 
             SettingsDialogActionRow {
                 Button(customLLMLocalized("Reset to Default")) {
@@ -148,9 +148,11 @@ struct CustomLLMGenerationSettingsSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(18)
-        .frame(width: 520)
-        .frame(maxHeight: 560, alignment: .top)
+        .settingsDialogChrome(
+            width: SettingsUIStyle.modelConfigurationDialogWidth,
+            maxHeight: SettingsUIStyle.modelConfigurationDialogMaxHeight,
+            onClose: onDone
+        )
         .onAppear {
             applySettings(settings)
         }

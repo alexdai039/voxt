@@ -63,14 +63,9 @@ struct DictionaryTermDialogView: View {
             )
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    Text(verbatim: localizedDictionaryTermDialog("Replacement Match Terms"))
-                        .font(.caption.weight(.semibold))
-
-                    Text(verbatim: localizedDictionaryTermDialog(" (Optional. Without them, Voxt still uses normal dictionary matching and high-confidence correction.)"))
-                        .font(.caption)
-                }
-                .foregroundStyle(.secondary)
+                Text(verbatim: localizedDictionaryTermDialog("Replacement Match Terms"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
                     TextField(
@@ -91,7 +86,7 @@ struct DictionaryTermDialogView: View {
                     .disabled(draftReplacementTermInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
-                Text(verbatim: localizedDictionaryTermDialog("Add phrases that should always resolve to this dictionary term."))
+                Text(verbatim: localizedDictionaryTermDialog("Optional phrases that should resolve to this term."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -139,8 +134,7 @@ struct DictionaryTermDialogView: View {
                 }
             }
         }
-        .padding(20)
-        .frame(width: 520)
+        .settingsDialogChrome(width: 520, onClose: onCancel)
     }
 
     private var dictionaryGroupOptions: [SettingsMenuOption<UUID?>] {

@@ -482,57 +482,6 @@ extension OnboardingSettingsView {
         NotificationCenter.default.post(name: .voxtRemoteProviderConfigurationsDidChange, object: nil)
     }
 
-    func exportConfiguration() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "Voxt-Configuration.json"
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        do {
-            let text = try ConfigurationTransferManager.exportJSONString()
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            configurationTransferMessage = localized("Configuration exported successfully.")
-        } catch {
-            configurationTransferMessage = AppLocalization.format("Configuration export failed: %@", error.localizedDescription)
-        }
-    }
-
-    func importConfiguration() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        do {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            try ConfigurationTransferManager.importConfiguration(from: text)
-            let defaults = UserDefaults.standard
-            if let appDelegate = AppDelegate.shared {
-                appDelegate.synchronizeAppActivationPolicy()
-            } else {
-                AppBehaviorController.applyDockVisibility(
-                    showInDock: defaults.bool(forKey: AppPreferenceKey.showInDock),
-                    mainWindowVisible: true
-                )
-            }
-            try? AppBehaviorController.setLaunchAtLogin(defaults.bool(forKey: AppPreferenceKey.launchAtLogin))
-            appUpdateManager.syncAutomaticallyChecksForUpdates(defaults.bool(forKey: AppPreferenceKey.autoCheckForUpdates))
-            appUpdateManager.betaUpdatesPreferenceDidChange()
-            NotificationCenter.default.post(name: .voxtConfigurationDidImport, object: nil)
-            NotificationCenter.default.post(name: .voxtInterfaceLanguageDidChange, object: nil)
-            NotificationCenter.default.post(name: .voxtSelectedInputDeviceDidChange, object: nil)
-            NotificationCenter.default.post(name: .voxtOverlayAppearanceDidChange, object: nil)
-            refreshInputDevices()
-            refreshModelStorageDisplayPath()
-            configurationTransferMessage = localized("Configuration imported successfully. Included dictionary data was restored, and sensitive fields need to be filled in again if required.")
-        } catch {
-            configurationTransferMessage = AppLocalization.format("Configuration import failed: %@", error.localizedDescription)
-        }
-    }
-
     func syncLocalizedOnboardingSamples() {
         let localeIdentifier = interfaceLanguage.localeIdentifier
         let englishIdentifier = AppInterfaceLanguage.english.localeIdentifier

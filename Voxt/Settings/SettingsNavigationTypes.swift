@@ -1,13 +1,13 @@
 import SwiftUI
 
 enum SettingsNavigationSection: String, Hashable {
-    case generalConfiguration
     case generalAudio
     case generalTranscriptionUI
     case generalLanguages
-    case generalOutput
     case generalLogging
     case generalAppBehavior
+    case generalAdvanced
+    case generalProxy
     case modelEngine
     case modelTextEnhancement
     case modelTranslation
@@ -29,13 +29,13 @@ enum SettingsNavigationSection: String, Hashable {
 
     var tab: SettingsTab {
         switch self {
-        case .generalConfiguration,
-             .generalAudio,
+        case .generalAudio,
              .generalTranscriptionUI,
              .generalLanguages,
-             .generalOutput,
              .generalLogging,
-             .generalAppBehavior:
+             .generalAppBehavior,
+             .generalAdvanced,
+             .generalProxy:
             return .general
         case .modelEngine,
              .modelTextEnhancement,
@@ -66,13 +66,13 @@ enum SettingsNavigationSection: String, Hashable {
 
     var titleKey: String {
         switch self {
-        case .generalConfiguration: return "Configuration"
         case .generalAudio: return "Audio"
-        case .generalTranscriptionUI: return "Transcription UI"
+        case .generalTranscriptionUI: return "Floating Window Style"
         case .generalLanguages: return "Languages"
-        case .generalOutput: return "Output"
         case .generalLogging: return "Logging"
         case .generalAppBehavior: return "App Behavior"
+        case .generalAdvanced: return "Advanced"
+        case .generalProxy: return "Proxy"
         case .modelEngine: return "Engine"
         case .modelTextEnhancement: return "Text Enhancement"
         case .modelTranslation: return "Translation"
@@ -198,9 +198,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .permissions: return "Permissions"
         case .history: return "History"
-        case .report: return "Dashboard"
+        case .report: return "Home"
         case .model: return "Model"
-        case .feature: return "Feature"
+        case .feature: return "Custom"
         case .dictionary: return "Dictionary"
         case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
@@ -215,9 +215,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .permissions: return "Permissions"
         case .history: return "History"
-        case .report: return "Dashboard"
+        case .report: return "Home"
         case .model: return "Model"
-        case .feature: return "Feature"
+        case .feature: return "Custom"
         case .dictionary: return "Dictionary"
         case .appEnhancement: return "App Branch"
         case .hotkey: return "Hotkey"
@@ -230,7 +230,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: return "slider.horizontal.3"
         case .permissions: return "lock.shield"
         case .history: return "clock.arrow.circlepath"
-        case .report: return "chart.bar"
+        case .report: return "house"
         case .model: return "waveform"
         case .feature: return "square.grid.2x2"
         case .dictionary: return "book.closed"
@@ -241,20 +241,29 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
 
     static func visibleTabs(appEnhancementEnabled: Bool) -> [SettingsTab] {
-        allCases.filter { tab in
-            switch tab {
-            case .appEnhancement:
-                return false
-            default:
-                return true
-            }
-        }
+        [
+            .report,
+            .feature,
+            .dictionary,
+            .history
+        ]
+    }
+
+    static var settingsTabs: [SettingsTab] {
+        [
+            .general,
+            .model,
+            .permissions,
+            .hotkey,
+            .about
+        ]
     }
 }
 
 enum SettingsSidebarMode: Equatable {
     case root
     case feature
+    case settings
 }
 
 enum FeatureSettingsTab: String, CaseIterable, Identifiable {

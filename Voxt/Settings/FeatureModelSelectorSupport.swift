@@ -17,13 +17,13 @@ enum FeatureModelSelectorSheet: String, Identifiable {
 
     var title: String {
         switch self {
-        case .transcriptionASR: return localized("Choose Transcription ASR")
-        case .transcriptionLLM: return localized("Choose Transcription LLM")
-        case .transcriptionNoteTitle: return localized("Choose Note Title Model")
-        case .translationASR: return localized("Choose Translation ASR")
+        case .transcriptionASR: return localized("Choose Transcription Audio Model")
+        case .transcriptionLLM: return localized("Choose Transcription Enhancement Model")
+        case .transcriptionNoteTitle: return localized("Choose Summary Model")
+        case .translationASR: return localized("Choose Translation Audio Model")
         case .translationModel: return localized("Choose Translation Model")
-        case .rewriteASR: return localized("Choose Rewrite ASR")
-        case .rewriteLLM: return localized("Choose Rewrite LLM")
+        case .rewriteASR: return localized("Choose Rewrite Audio Model")
+        case .rewriteLLM: return localized("Choose Rewrite Enhancement Model")
         }
     }
 }

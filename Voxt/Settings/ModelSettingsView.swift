@@ -6,45 +6,7 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
-enum LocalASRConfigurationTarget: Equatable, Identifiable {
-    case mlx(repo: String)
-    case whisper(modelID: String)
-
-    var id: String {
-        switch self {
-        case .mlx(let repo):
-            return "mlx:\(repo)"
-        case .whisper(let modelID):
-            return "whisper:\(modelID)"
-        }
-    }
-}
-
-enum LocalModelRemovalTarget: Equatable, Identifiable {
-    case mlx(repo: String)
-    case whisper(modelID: String)
-    case customLLM(repo: String)
-
-    var id: String {
-        switch self {
-        case .mlx(let repo):
-            return "mlx:\(MLXModelManager.canonicalModelRepo(repo))"
-        case .whisper(let modelID):
-            return "whisper:\(WhisperKitModelManager.canonicalModelID(modelID))"
-        case .customLLM(let repo):
-            return "custom-llm:\(CustomLLMModelManager.canonicalModelRepo(repo))"
-        }
-    }
-}
-
 struct ModelSettingsView: View {
-    private struct DownloadEndpointCheckResult: Equatable {
-        let isReachable: Bool
-        let latencyText: String
-        let throughputText: String
-        let detailText: String
-    }
-
     @AppStorage(AppPreferenceKey.transcriptionEngine) var engineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.enhancementMode) var enhancementModeRaw = EnhancementMode.off.rawValue
     @AppStorage(AppPreferenceKey.enhancementSystemPrompt) var systemPrompt = ""
@@ -98,6 +60,7 @@ struct ModelSettingsView: View {
     @State private var modelStorageDisplayPath = ""
     @State private var modelStorageSelectionError: String?
     @State var showMirrorInfo = false
+    @State private var showIdleUnloadDelayInfo = false
     @State var editingASRProvider: RemoteASRProvider?
     @State var editingLLMProvider: RemoteLLMProvider?
     @State private var activeASRHintTarget: ASRHintTarget?
@@ -109,8 +72,8 @@ struct ModelSettingsView: View {
     @State private var isTestingChinaDownloadEndpoint = false
     @State private var expandedModelGroupIDs = Set<String>()
     @State private var collapsedModelGroupIDs = Set<String>()
-    @State private var globalDownloadEndpointResult: DownloadEndpointCheckResult?
-    @State private var chinaDownloadEndpointResult: DownloadEndpointCheckResult?
+    @State private var globalDownloadEndpointResult: ModelDownloadEndpointCheckResult?
+    @State private var chinaDownloadEndpointResult: ModelDownloadEndpointCheckResult?
     @State var catalogSnapshot = ModelSettingsCatalogSnapshot.empty
     @State private var isCatalogRefreshScheduled = false
     @State private var isRefreshingCatalogSnapshot = false
@@ -477,6 +440,17 @@ struct ModelSettingsView: View {
         panel.prompt = localized("Choose")
 
         guard panel.runModal() == .OK, let selectedURL = panel.url else { return }
+        let currentURL = ModelStorageDirectoryManager.resolvedRootURL().standardizedFileURL
+        let proposedURL = selectedURL.standardizedFileURL
+        guard proposedURL != currentURL else { return }
+
+        let alert = NSAlert()
+        alert.messageText = localized("Change Model Storage Path?")
+        alert.informativeText = localized("After changing the model storage path, previously downloaded local models will need to be downloaded again.")
+        alert.addButton(withTitle: localized("Confirm"))
+        alert.addButton(withTitle: localized("Cancel"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
         do {
             try ModelStorageDirectoryManager.saveUserSelectedRootURL(selectedURL)
             modelStorageSelectionError = nil
@@ -484,8 +458,10 @@ struct ModelSettingsView: View {
             refreshModelStorageDisplayPath()
             refreshCatalogSnapshot()
         } catch {
-            let format = NSLocalizedString("Failed to update model storage path: %@", comment: "")
-            modelStorageSelectionError = String(format: format, error.localizedDescription)
+            modelStorageSelectionError = AppLocalization.format(
+                "Failed to update model storage path: %@",
+                error.localizedDescription
+            )
         }
     }
 
@@ -523,7 +499,7 @@ struct ModelSettingsView: View {
     private func runDownloadEndpointCheck(
         using baseURL: URL,
         isTesting: @escaping (Bool) -> Void,
-        setResult: @escaping (DownloadEndpointCheckResult) -> Void
+        setResult: @escaping (ModelDownloadEndpointCheckResult) -> Void
     ) async {
         await MainActor.run { isTesting(true) }
         let result = await measureDownloadEndpoint(baseURL: baseURL)
@@ -533,7 +509,7 @@ struct ModelSettingsView: View {
         }
     }
 
-    private func measureDownloadEndpoint(baseURL: URL) async -> DownloadEndpointCheckResult {
+    private func measureDownloadEndpoint(baseURL: URL) async -> ModelDownloadEndpointCheckResult {
         let targetURL = baseURL.appending(path: "robots.txt")
         var request = URLRequest(url: targetURL)
         request.timeoutInterval = 12
@@ -552,7 +528,7 @@ struct ModelSettingsView: View {
             )
 
             if let httpResponse = response as? HTTPURLResponse, !(200..<400).contains(httpResponse.statusCode) {
-                return DownloadEndpointCheckResult(
+                return ModelDownloadEndpointCheckResult(
                     isReachable: false,
                     latencyText: latencyText,
                     throughputText: throughputText,
@@ -560,14 +536,14 @@ struct ModelSettingsView: View {
                 )
             }
 
-            return DownloadEndpointCheckResult(
+            return ModelDownloadEndpointCheckResult(
                 isReachable: true,
                 latencyText: latencyText,
                 throughputText: throughputText,
                 detailText: AppLocalization.format("Downloaded %@ to verify connectivity.", ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
             )
         } catch {
-            return DownloadEndpointCheckResult(
+            return ModelDownloadEndpointCheckResult(
                 isReachable: false,
                 latencyText: localized("Latency: --"),
                 throughputText: localized("Speed: --"),
@@ -624,7 +600,7 @@ struct ModelSettingsView: View {
             } label: {
                 Image(systemName: "gearshape")
             }
-            .buttonStyle(SettingsCompactIconButtonStyle())
+            .buttonStyle(SettingsCompactIconButtonStyle(size: 32))
 
             Button(action: openModelDebugWindow) {
                 Text(localized("Debug"))
@@ -634,157 +610,23 @@ struct ModelSettingsView: View {
     }
 
     private var modelDownloadSettingsSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(localized("Model Download Settings"))
-                .font(.title3.weight(.semibold))
-
-            GeneralSettingsCard(titleText: localized("Model Storage")) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(localized("Storage Path"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button(action: openModelStorageInFinder) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder")
-                                .font(.caption)
-                            Text(modelStorageDisplayPath.isEmpty ? ModelStorageDirectoryManager.defaultRootURL.path : modelStorageDisplayPath)
-                                .underline()
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .multilineTextAlignment(.trailing)
-                            Image(systemName: "arrow.up.forward.square")
-                                .font(.caption)
-                        }
-                    }
-                    .buttonStyle(SettingsInlineSelectorButtonStyle())
-                    .help(localized("Open folder"))
-
-                    Button(localized("Choose")) {
-                        chooseModelStorageDirectory()
-                    }
-                    .buttonStyle(SettingsPillButtonStyle())
-                }
-
-                Text(localized("New model downloads are stored here. Switching the path will not move existing model files."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let modelStorageSelectionError, !modelStorageSelectionError.isEmpty {
-                    Text(modelStorageSelectionError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-
-            GeneralSettingsCard(titleText: localized("Memory")) {
-                HStack(alignment: .center) {
-                    Text(localized("Unload Delay"))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HStack(spacing: 6) {
-                        LocalModelIdleUnloadDelayTextField(
-                            value: $localModelIdleUnloadDelaySeconds,
-                            range: AppPreferenceKey.localModelIdleUnloadDelayMinimumSeconds...AppPreferenceKey.localModelIdleUnloadDelayMaximumSeconds,
-                            width: 80
-                        )
-
-                        Text("s")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Text(localized("Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            GeneralSettingsCard(titleText: localized("Download Source")) {
-                Toggle(localized("Use China mirror"), isOn: $useHfMirror)
-
-                Text(localized("Use the China mirror when downloading local models. This only changes the download source for Hugging Face based local models."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                endpointTestRow(
-                    title: localized("Global"),
-                    subtitle: "https://huggingface.co",
-                    isTesting: isTestingGlobalDownloadEndpoint,
-                    result: globalDownloadEndpointResult,
-                    actionTitle: localized("Test"),
-                    action: testGlobalDownloadEndpoint
-                )
-
-                endpointTestRow(
-                    title: localized("China Mirror"),
-                    subtitle: "https://hf-mirror.com",
-                    isTesting: isTestingChinaDownloadEndpoint,
-                    result: chinaDownloadEndpointResult,
-                    actionTitle: localized("Test"),
-                    action: testChinaDownloadEndpoint
-                )
-            }
-
-            SettingsDialogActionRow {
-                Button(localized("Done")) {
-                    isModelDownloadSettingsPresented = false
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 560)
-    }
-
-    @ViewBuilder
-    private func endpointTestRow(
-        title: String,
-        subtitle: String,
-        isTesting: Bool,
-        result: DownloadEndpointCheckResult?,
-        actionTitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if isTesting {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                if let result {
-                    OnboardingPermissionStatusBadge(isGranted: result.isReachable)
-                }
-
-                Button(actionTitle, action: action)
-                    .buttonStyle(SettingsPillButtonStyle())
-                    .disabled(isTesting)
-            }
-
-            if let result {
-                Text("\(result.latencyText) · \(result.throughputText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(result.detailText)
-                    .font(.caption)
-                    .foregroundStyle(
-                        result.isReachable
-                        ? AnyShapeStyle(.secondary)
-                        : AnyShapeStyle(Color.orange)
-                    )
-            }
-        }
+        ModelDownloadSettingsSheet(
+            modelStorageDisplayPath: modelStorageDisplayPath,
+            modelStorageFallbackPath: ModelStorageDirectoryManager.defaultRootURL.path,
+            modelStorageSelectionError: modelStorageSelectionError,
+            onOpenModelStorageInFinder: openModelStorageInFinder,
+            onChooseModelStorageDirectory: chooseModelStorageDirectory,
+            localModelIdleUnloadDelaySeconds: $localModelIdleUnloadDelaySeconds,
+            showIdleUnloadDelayInfo: $showIdleUnloadDelayInfo,
+            useHfMirror: $useHfMirror,
+            isTestingGlobalDownloadEndpoint: isTestingGlobalDownloadEndpoint,
+            globalDownloadEndpointResult: globalDownloadEndpointResult,
+            onTestGlobalDownloadEndpoint: testGlobalDownloadEndpoint,
+            isTestingChinaDownloadEndpoint: isTestingChinaDownloadEndpoint,
+            chinaDownloadEndpointResult: chinaDownloadEndpointResult,
+            onTestChinaDownloadEndpoint: testChinaDownloadEndpoint,
+            isPresented: $isModelDownloadSettingsPresented
+        )
     }
 
     var shouldPollModelState: Bool {
@@ -854,61 +696,5 @@ struct ModelSettingsView: View {
         case .rewriteCustomLLM(let repo):
             return AppLocalization.format("%@ %@: %@", customLLMManager.displayTitle(for: repo), localized("Rewrite"), issue.message)
         }
-    }
-}
-
-private struct LocalModelIdleUnloadDelayTextField: View {
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-    let width: CGFloat
-
-    @State private var text: String
-
-    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
-        _value = value
-        self.range = range
-        self.width = width
-        _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
-    }
-
-    var body: some View {
-        TextField("", text: $text)
-            .textFieldStyle(.plain)
-            .settingsFieldSurface(width: width, alignment: .trailing)
-            .multilineTextAlignment(.trailing)
-            .onChange(of: text) { _, newValue in
-                let digits = newValue.filter(\.isNumber)
-                guard !digits.isEmpty else { return }
-
-                let parsed = Int(digits) ?? range.lowerBound
-                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
-                value = clamped
-
-                let normalized = String(clamped)
-                if text != normalized {
-                    text = normalized
-                }
-            }
-            .onSubmit {
-                syncTextToValue()
-            }
-            .onChange(of: value) { _, newValue in
-                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
-                let normalized = String(clamped)
-                if text != normalized {
-                    text = normalized
-                }
-            }
-            .onAppear {
-                syncTextToValue()
-            }
-    }
-
-    private func syncTextToValue() {
-        let digits = text.filter(\.isNumber)
-        let parsed = Int(digits) ?? value
-        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
-        value = clamped
-        text = String(clamped)
     }
 }

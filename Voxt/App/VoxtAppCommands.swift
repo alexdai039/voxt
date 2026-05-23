@@ -51,7 +51,7 @@ struct VoxtApp: App {
 }
 
 struct MainWindowNavigationCommands: Commands {
-    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = false
+    @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
     let appDelegate: AppDelegate
 
@@ -66,26 +66,23 @@ struct MainWindowNavigationCommands: Commands {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general))
                 }
                 Divider()
-                Button(AppLocalization.localizedString("Configuration")) {
-                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalConfiguration))
-                }
-                Button(AppLocalization.localizedString("Audio")) {
-                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalAudio))
-                }
-                Button(AppLocalization.localizedString("Transcription UI")) {
+                Button(AppLocalization.localizedString("Floating Window Style")) {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalTranscriptionUI))
                 }
                 Button(AppLocalization.localizedString("Languages")) {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalLanguages))
                 }
-                Button(AppLocalization.localizedString("Output")) {
-                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalOutput))
+                Button(AppLocalization.localizedString("Audio")) {
+                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalAudio))
+                }
+                Button(AppLocalization.localizedString("App Behavior")) {
+                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalAppBehavior))
                 }
                 Button(AppLocalization.localizedString("Logging")) {
                     appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalLogging))
                 }
-                Button(AppLocalization.localizedString("App Behavior")) {
-                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalAppBehavior))
+                Button(AppLocalization.localizedString("Proxy")) {
+                    appDelegate.openMainWindow(target: SettingsNavigationTarget(tab: .general, section: .generalProxy))
                 }
             }
 

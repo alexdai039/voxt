@@ -295,7 +295,6 @@ extension ModelSettingsView {
 }
 
 private struct MLXASRConfigurationSheetView: View {
-    private static let contentMaxHeight: CGFloat = 520
     private static let dictionaryTermsVariable = [
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
@@ -332,12 +331,12 @@ private struct MLXASRConfigurationSheetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(localized("MLX ASR Configuration"))
+                .font(.title3.weight(.semibold))
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(localized("MLX ASR Configuration"))
-                        .font(.title3.weight(.semibold))
-
                     Text(modelTitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -378,7 +377,7 @@ private struct MLXASRConfigurationSheetView: View {
                         Text(localized("Recognition Context"))
                             .font(.subheadline.weight(.medium))
                         PromptEditorView(text: $tuningSettings.qwenContextBias, height: 110, variables: Self.dictionaryTermsVariable)
-                        Text(localized("Use concise domain terms, names, and product vocabulary to bias Qwen3-ASR toward the right transcription."))
+                        Text(localized("Concise names, terms, and product vocabulary."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -387,7 +386,7 @@ private struct MLXASRConfigurationSheetView: View {
                         Text(localized("Recognition Prompt"))
                             .font(.subheadline.weight(.medium))
                         PromptEditorView(text: $tuningSettings.granitePromptBias, height: 110, variables: Self.dictionaryTermsVariable)
-                        Text(localized("Granite uses prompt-style instructions. Keep it recognition-focused, for example spelling preferences or domain terminology."))
+                        Text(localized("Recognition-focused spelling and terminology preferences."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -404,16 +403,15 @@ private struct MLXASRConfigurationSheetView: View {
                         && !family.supportsPromptBias
                         && !family.supportsITN
                     {
-                        Text(localized("This MLX model family currently uses preset-based chunking and language strategy only. Model-native prompt or context controls are not exposed by this family in Voxt yet."))
+                        Text(localized("This model family only exposes preset and language controls."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.trailing, 4)
             }
-            .frame(maxHeight: Self.contentMaxHeight)
-
-            Divider()
+            .frame(maxHeight: SettingsUIStyle.modelConfigurationScrollMaxHeight)
 
             SettingsDialogActionRow {
                 Button(localized("Reset to Default")) {
@@ -428,9 +426,12 @@ private struct MLXASRConfigurationSheetView: View {
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(20)
         }
-        .frame(width: 520)
+        .settingsDialogChrome(
+            width: SettingsUIStyle.modelConfigurationDialogWidth,
+            maxHeight: SettingsUIStyle.modelConfigurationDialogMaxHeight,
+            onClose: onDone
+        )
     }
 
     private func localInfoRow(label: String, value: String) -> some View {
@@ -445,7 +446,6 @@ private struct MLXASRConfigurationSheetView: View {
 }
 
 private struct WhisperASRConfigurationSheetView: View {
-    private static let contentMaxHeight: CGFloat = 520
     private static let dictionaryTermsVariable = [
         PromptTemplateVariableDescriptor(
             token: AppPreferenceKey.asrDictionaryTermsTemplateVariable,
@@ -479,12 +479,12 @@ private struct WhisperASRConfigurationSheetView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(localized("Whisper Configuration"))
+                .font(.title3.weight(.semibold))
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(localized("Whisper Configuration"))
-                        .font(.title3.weight(.semibold))
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text(localized("Preset"))
                             .font(.subheadline.weight(.medium))
@@ -520,7 +520,7 @@ private struct WhisperASRConfigurationSheetView: View {
                     Text(localized("Recognition Prompt"))
                         .font(.subheadline.weight(.medium))
                     PromptEditorView(text: $hintSettings.promptTemplate, height: 110, variables: Self.dictionaryTermsVariable)
-                    Text(localized("Use a short recognition-focused prompt for names, product terms, or formatting habits. Keep it concise."))
+                    Text(localized("Short recognition-focused names, terms, or formatting preferences."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -579,15 +579,14 @@ private struct WhisperASRConfigurationSheetView: View {
                         )
                     }
 
-                    Text(localized("These settings apply to Whisper transcription sessions. Live Realtime (Experimental) streams partial text while you speak and does a final correction after stop. Turn it off to use the quality-first non-live path. Whisper translate is only used when Whisper translation is selected."))
+                    Text(localized("Applies to Whisper sessions. Realtime streams partial text before final correction."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(.trailing, 4)
             }
-            .frame(maxHeight: Self.contentMaxHeight)
-
-            Divider()
+            .frame(maxHeight: SettingsUIStyle.modelConfigurationScrollMaxHeight)
 
             SettingsDialogActionRow {
                 Button(localized("Reset to Default")) {
@@ -606,9 +605,12 @@ private struct WhisperASRConfigurationSheetView: View {
                 .buttonStyle(SettingsPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
             }
-            .padding(20)
         }
-        .frame(width: 540)
+        .settingsDialogChrome(
+            width: SettingsUIStyle.modelConfigurationDialogWidth,
+            maxHeight: SettingsUIStyle.modelConfigurationDialogMaxHeight,
+            onClose: onDone
+        )
     }
 
     private func localInfoRow(label: String, value: String) -> some View {

@@ -165,6 +165,15 @@ final class VoxtDatabase: @unchecked Sendable {
                 """)
         }
 
+        migrator.registerMigration("v5_history_browser_context") { db in
+            try db.execute(sql: """
+                ALTER TABLE history_entries ADD COLUMN browserURLHost TEXT;
+                ALTER TABLE history_entries ADD COLUMN browserURLOrigin TEXT;
+                CREATE INDEX IF NOT EXISTS idx_history_browser_host
+                    ON history_entries(browserURLHost);
+                """)
+        }
+
         return migrator
     }
 }

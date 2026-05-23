@@ -11,8 +11,99 @@ extension ConfigurationTransferManager {
             defaults.removeObject(forKey: AppPreferenceKey.trackedMicrophoneRecords)
             return
         }
-
         defaults.set(raw, forKey: AppPreferenceKey.trackedMicrophoneRecords)
+    }
+
+    static func loadDictionarySuggestionFilterSettings(defaults: UserDefaults) -> DictionarySuggestionFilterSettings {
+        guard let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionFilterSettings),
+              let decoded = try? JSONDecoder().decode(DictionarySuggestionFilterSettings.self, from: data)
+        else {
+            return .defaultValue
+        }
+        return decoded.sanitized()
+    }
+
+    static func loadDictionaryHistoryScanCheckpoint(defaults: UserDefaults) -> DictionaryHistoryScanCheckpoint? {
+        guard let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint),
+              let checkpoint = try? JSONDecoder().decode(DictionaryHistoryScanCheckpoint.self, from: data)
+        else {
+            return nil
+        }
+        return checkpoint
+    }
+
+    static func persistDictionaryHistoryScanCheckpoint(
+        _ checkpoint: DictionaryHistoryScanCheckpoint?,
+        defaults: UserDefaults
+    ) {
+        guard let checkpoint else {
+            defaults.removeObject(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(checkpoint) else { return }
+        defaults.set(data, forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
+    }
+
+    static func loadDictionaryEntries(environment: FileEnvironment) -> [DictionaryEntry] {
+        guard let url = try? environment.dictionaryEntriesURL(),
+              let data = try? Data(contentsOf: url),
+              !data.isEmpty,
+              let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data)
+        else {
+            return []
+        }
+        return entries
+    }
+
+    static func persistDictionaryEntries(
+        _ entries: [DictionaryEntry],
+        environment: FileEnvironment
+    ) {
+        guard let url = try? environment.dictionaryEntriesURL(),
+              let data = try? JSONEncoder().encode(entries)
+        else {
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            VoxtLog.error("Failed to persist dictionary entries during configuration import: \(error.localizedDescription)")
+        }
+    }
+
+    static func loadDictionarySuggestions(environment: FileEnvironment) -> [DictionarySuggestion] {
+        guard let url = try? environment.dictionarySuggestionsURL(),
+              let data = try? Data(contentsOf: url),
+              !data.isEmpty,
+              let suggestions = try? JSONDecoder().decode([DictionarySuggestion].self, from: data)
+        else {
+            return []
+        }
+        return suggestions
+    }
+
+    static func persistDictionarySuggestions(
+        _ suggestions: [DictionarySuggestion],
+        environment: FileEnvironment
+    ) {
+        guard let url = try? environment.dictionarySuggestionsURL(),
+              let data = try? JSONEncoder().encode(suggestions)
+        else {
+            return
+        }
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            VoxtLog.error("Failed to persist dictionary suggestions during configuration import: \(error.localizedDescription)")
+        }
     }
 
     static func loadAppBranchGroups(defaults: UserDefaults) -> [ExportedAppBranchGroup] {
@@ -30,113 +121,47 @@ extension ConfigurationTransferManager {
                 appRefs: $0.appRefs,
                 urlPatternIDs: $0.urlPatternIDs,
                 isExpanded: $0.isExpanded,
-                iconPlaceholder: "app-icon-placeholder"
+                iconPlaceholder: ""
             )
         }
     }
 
     static func loadBranchURLs(defaults: UserDefaults) -> [ExportedBranchURLItem] {
         guard let data = defaults.data(forKey: AppPreferenceKey.appBranchURLs),
-              let urls = try? JSONDecoder().decode([BranchURLItem].self, from: data)
+              let items = try? JSONDecoder().decode([BranchURLItem].self, from: data)
         else {
             return []
         }
-        return urls.map { ExportedBranchURLItem(id: $0.id, pattern: $0.pattern, iconPlaceholder: "url-icon-placeholder") }
-    }
-
-    static func loadDictionaryEntries(environment: FileEnvironment) -> [DictionaryEntry] {
-        guard let url = try? environment.dictionaryEntriesURL(),
-              let data = try? Data(contentsOf: url),
-              let entries = try? JSONDecoder().decode([DictionaryEntry].self, from: data)
-        else {
-            return []
-        }
-        return entries
-    }
-
-    static func loadDictionarySuggestionFilterSettings(
-        defaults: UserDefaults
-    ) -> DictionarySuggestionFilterSettings {
-        guard
-            let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionFilterSettings),
-            let settings = try? JSONDecoder().decode(DictionarySuggestionFilterSettings.self, from: data)
-        else {
-            return .defaultValue
-        }
-        return settings.sanitized()
-    }
-
-    static func loadDictionaryHistoryScanCheckpoint(
-        defaults: UserDefaults
-    ) -> DictionaryHistoryScanCheckpoint? {
-        guard
-            let data = defaults.data(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint),
-            let checkpoint = try? JSONDecoder().decode(DictionaryHistoryScanCheckpoint.self, from: data)
-        else {
-            return nil
-        }
-        return checkpoint
-    }
-
-    static func persistDictionaryHistoryScanCheckpoint(
-        _ checkpoint: DictionaryHistoryScanCheckpoint?,
-        defaults: UserDefaults
-    ) {
-        guard let checkpoint else {
-            defaults.removeObject(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
-            return
-        }
-
-        guard let data = try? JSONEncoder().encode(checkpoint) else {
-            defaults.removeObject(forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
-            return
-        }
-        defaults.set(data, forKey: AppPreferenceKey.dictionarySuggestionHistoryScanCheckpoint)
-    }
-
-    static func persistDictionaryEntries(
-        _ entries: [DictionaryEntry],
-        environment: FileEnvironment
-    ) {
-        guard let url = try? environment.dictionaryEntriesURL(),
-              let data = try? JSONEncoder().encode(entries)
-        else {
-            return
-        }
-
-        do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic])
-        } catch {
-            // Ignore config import dictionary persistence failures.
+        return items.map {
+            ExportedBranchURLItem(
+                id: $0.id,
+                pattern: $0.pattern,
+                iconPlaceholder: ""
+            )
         }
     }
 
-    static func loadDictionarySuggestions(environment: FileEnvironment) -> [DictionarySuggestion] {
-        guard let url = try? environment.dictionarySuggestionsURL(),
-              let data = try? Data(contentsOf: url),
-              let suggestions = try? JSONDecoder().decode([DictionarySuggestion].self, from: data)
-        else {
-            return []
-        }
-        return suggestions
+    static func dictionaryFileURL() throws -> URL {
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return appSupport
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("dictionary.json")
     }
 
-    static func persistDictionarySuggestions(
-        _ suggestions: [DictionarySuggestion],
-        environment: FileEnvironment
-    ) {
-        guard let url = try? environment.dictionarySuggestionsURL(),
-              let data = try? JSONEncoder().encode(suggestions)
-        else {
-            return
-        }
-
-        do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic])
-        } catch {
-            // Ignore config import dictionary persistence failures.
-        }
+    static func dictionarySuggestionsFileURL() throws -> URL {
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        return appSupport
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("dictionary-suggestions.json")
     }
 }
