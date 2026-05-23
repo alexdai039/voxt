@@ -3,21 +3,8 @@ import Foundation
 extension AppDelegate {
     func scheduleLLMIdleWarmupIfNeeded() {
         let remoteWarmupKeys = remoteLLMWarmupContextsForIdle().map(\.key)
-        guard !localModelMemoryOptimizationEnabled else {
-            cancelLLMWarmupTasks(except: [])
-            cancelRemoteLLMWarmupTasks(except: remoteWarmupKeys)
-            for context in remoteLLMWarmupContextsForIdle() {
-                startRemoteLLMWarmupIfNeeded(context: context, reason: "idle")
-            }
-            return
-        }
-
-        let idleRepos = customLLMWarmupReposForIdle()
-        cancelLLMWarmupTasks(except: idleRepos)
+        cancelLLMWarmupTasks(except: [])
         cancelRemoteLLMWarmupTasks(except: remoteWarmupKeys)
-        for repo in idleRepos {
-            startCustomLLMWarmupIfNeeded(repo: repo, reason: "idle")
-        }
         for context in remoteLLMWarmupContextsForIdle() {
             startRemoteLLMWarmupIfNeeded(context: context, reason: "idle")
         }
@@ -76,16 +63,6 @@ extension AppDelegate {
 
     func cancelAllLLMWarmupTasks() {
         cancelLLMWarmupTasks(except: [])
-    }
-
-    func releaseIdleLocalModelResources(reason: String) {
-        guard localModelMemoryOptimizationEnabled else { return }
-        cancelLLMWarmupTasks(except: [])
-        mlxModelManager.releaseLoadedModelIfIdle(reason: reason)
-        customLLMManager.releaseLoadedModelIfIdle(reason: reason)
-        Task { @MainActor [weak self] in
-            await self?.whisperModelManager.releaseLoadedModelIfIdle(reason: reason)
-        }
     }
 
     private func customLLMWarmupReposForIdle() -> Set<String> {

@@ -263,8 +263,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppPreferenceKey.whisperVADEnabled: true,
             AppPreferenceKey.whisperTimestampsEnabled: false,
             AppPreferenceKey.whisperRealtimeEnabled: false,
-            AppPreferenceKey.localModelMemoryOptimizationEnabled: true,
-            AppPreferenceKey.whisperKeepResidentLoaded: false,
             AppPreferenceKey.translationFallbackModelProvider: TranslationModelProvider.customLLM.rawValue,
             AppPreferenceKey.rewriteCustomLLMModelRepo: CustomLLMModelManager.defaultModelRepo,
             AppPreferenceKey.remoteASRSelectedProvider: RemoteASRProvider.openAIWhisper.rawValue,
@@ -312,10 +310,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static func migrateLegacyLocalModelMemoryPreferenceIfNeeded() {
         let defaults = UserDefaults.standard
-        guard defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) == nil else { return }
-        let keepResident = defaults.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool ?? false
-        defaults.set(!keepResident, forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled)
-        defaults.set(keepResident, forKey: AppPreferenceKey.whisperKeepResidentLoaded)
+        guard defaults.object(forKey: AppPreferenceKey.localModelIdleUnloadDelaySeconds) == nil else { return }
+        let resolvedDelay = AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds(defaults: defaults)
+        defaults.set(resolvedDelay, forKey: AppPreferenceKey.localModelIdleUnloadDelaySeconds)
     }
 
     var transcriptionEngine: TranscriptionEngine {
@@ -593,30 +590,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func scheduleWhisperIdleWarmupIfNeeded() {
         whisperWarmupTask?.cancel()
-        guard transcriptionEngine == .whisperKit else { return }
-        guard !(UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true) else { return }
-        guard isWhisperReady else { return }
-
-        whisperWarmupTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            guard !Task.isCancelled else { return }
-            guard self.transcriptionEngine == .whisperKit else { return }
-            guard !(UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true) else { return }
-            guard self.isWhisperReady else { return }
-
-            self.whisperModelManager.beginActiveUse()
-            defer {
-                self.whisperModelManager.endActiveUse()
-                self.whisperWarmupTask = nil
-            }
-
-            do {
-                _ = try await self.whisperModelManager.loadWhisper()
-                VoxtLog.info("Whisper idle warmup completed.", verbose: true)
-            } catch {
-                VoxtLog.warning("Whisper idle warmup failed: \(error.localizedDescription)")
-            }
-        }
+        whisperWarmupTask = nil
     }
 
     private func migrateLegacyPreferences() {

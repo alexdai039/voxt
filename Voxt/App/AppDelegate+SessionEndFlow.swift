@@ -155,7 +155,6 @@ extension AppDelegate {
         for stage in stages {
             stage.run(delegate: self)
         }
-        releaseIdleLocalModelResources(reason: "session-end-\(trigger)")
         VoxtLog.info(
             "Session end pipeline completed. sessionID=\(sessionID.uuidString), overlayVisible=\(overlayWindow.isVisible)"
         )

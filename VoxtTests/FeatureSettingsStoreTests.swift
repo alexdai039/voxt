@@ -83,4 +83,49 @@ final class FeatureSettingsStoreTests: XCTestCase {
             XCTAssertTrue(reloaded.rewrite.appEnhancementEnabled)
         }
     }
+
+    func testPromptSpecificSaveHelpersPersistLatestPromptText() throws {
+        try withEphemeralDefaults { defaults in
+            let transcriptionPrompt = "Clean this transcript, keep it compact."
+            let translationPrompt = "Translate into {{TARGET_LANGUAGE}} and keep product names in English."
+            let rewritePrompt = "Rewrite the text to sound polite and concise."
+
+            FeatureSettingsStore.saveTranscriptionPrompt(transcriptionPrompt, defaults: defaults)
+            FeatureSettingsStore.saveTranslationPrompt(translationPrompt, defaults: defaults)
+            FeatureSettingsStore.saveRewritePrompt(rewritePrompt, defaults: defaults)
+
+            let reloaded = FeatureSettingsStore.load(defaults: defaults)
+
+            XCTAssertEqual(reloaded.transcription.prompt, transcriptionPrompt)
+            XCTAssertEqual(reloaded.translation.prompt, translationPrompt)
+            XCTAssertEqual(reloaded.rewrite.prompt, rewritePrompt)
+            XCTAssertEqual(defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt), transcriptionPrompt)
+            XCTAssertEqual(defaults.string(forKey: AppPreferenceKey.translationSystemPrompt), translationPrompt)
+            XCTAssertEqual(defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt), rewritePrompt)
+        }
+    }
+
+    func testSaveSyncsLegacyPromptKeysFromFeatureSettingsPayload() throws {
+        try withEphemeralDefaults { defaults in
+            var settings = FeatureSettingsStore.deriveFromLegacy(defaults: defaults)
+            settings.transcription.prompt = "Enhance with my custom cleanup rules."
+            settings.translation.prompt = "Translate to {{TARGET_LANGUAGE}} and preserve app names."
+            settings.rewrite.prompt = "Rewrite as concise release notes."
+
+            FeatureSettingsStore.save(settings, defaults: defaults)
+
+            XCTAssertEqual(
+                defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
+                "Enhance with my custom cleanup rules."
+            )
+            XCTAssertEqual(
+                defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
+                "Translate to {{TARGET_LANGUAGE}} and preserve app names."
+            )
+            XCTAssertEqual(
+                defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
+                "Rewrite as concise release notes."
+            )
+        }
+    }
 }

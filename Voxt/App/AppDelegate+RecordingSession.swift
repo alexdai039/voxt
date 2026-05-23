@@ -190,7 +190,7 @@ extension AppDelegate {
         guard case .start(let recordingEngine) = startDecision else {
             if case .blocked(let reason) = startDecision {
                 VoxtLog.warning("Recording start blocked: \(reason.logDescription)")
-                showOverlayReminder(reason.userMessage)
+                showOverlayReminder(reason.userMessage, autoHideAfter: reason.reminderDuration)
             }
             return
         }

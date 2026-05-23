@@ -102,11 +102,8 @@ extension ModelSettingsView {
                 .onChange(of: whisperModelID) { _, newValue in
                     handleWhisperModelIDChange(newValue)
                 }
-                .onChange(of: localModelMemoryOptimizationEnabled) { _, _ in
-                    handleWhisperResidencyTriggerChange()
-                }
-                .onChange(of: engineRaw) { _, _ in
-                    handleWhisperResidencyTriggerChange()
+                .onChange(of: localModelIdleUnloadDelaySeconds) { _, _ in
+                    handleLocalModelIdleUnloadDelayChange()
                 }
                 .onChange(of: customLLMRepo) { _, newValue in
                     handleCustomLLMRepoChange(newValue)
@@ -188,17 +185,15 @@ extension ModelSettingsView {
         refreshCatalogSnapshot()
     }
 
-    func handleWhisperResidencyTriggerChange() {
+    func handleLocalModelIdleUnloadDelayChange() {
+        let clamped = AppPreferenceKey.clampedLocalModelIdleUnloadDelaySeconds(localModelIdleUnloadDelaySeconds)
+        if localModelIdleUnloadDelaySeconds != clamped {
+            localModelIdleUnloadDelaySeconds = clamped
+        }
         mlxModelManager.refreshMemoryOptimizationPolicy()
         customLLMManager.refreshMemoryOptimizationPolicy()
         whisperModelManager.refreshMemoryOptimizationPolicy()
         AppDelegate.shared?.scheduleLLMIdleWarmupIfNeeded()
-        guard selectedEngine == .whisperKit, !localModelMemoryOptimizationEnabled else { return }
-        Task { @MainActor in
-            whisperModelManager.beginActiveUse()
-            defer { whisperModelManager.endActiveUse() }
-            _ = try? await whisperModelManager.loadWhisper()
-        }
     }
 
     func handleCustomLLMRepoChange(_ newValue: String) {
@@ -265,9 +260,25 @@ extension ModelSettingsView {
     }
 
     func handleImmediateDownloadLifecycleChange() {
-        guard isActive else { return }
-        guard mainWindowState.isVisible else { return }
-        guard shouldPollModelState else { return }
+        guard ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
+            isActive: isActive,
+            isWindowVisible: mainWindowState.isVisible
+        ) else {
+            return
+        }
+
+        let token = ModelSettingsManagerRefreshSupport.downloadLifecycleToken(
+            mlxState: mlxModelManager.state,
+            mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+            whisperState: whisperModelManager.state,
+            whisperActiveDownload: whisperModelManager.activeDownload,
+            customLLMState: customLLMManager.state
+        )
+        guard lastHandledDownloadLifecycleToken != token else {
+            return
+        }
+        lastHandledDownloadLifecycleToken = token
+
         refreshModelInstallStateIfNeeded()
         pruneSelectedTags()
         refreshCatalogSnapshot()
@@ -276,7 +287,8 @@ extension ModelSettingsView {
     func handleDownloadMetadataChange() {
         guard ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
             isActive: isActive,
-            isWindowVisible: mainWindowState.isVisible
+            isWindowVisible: mainWindowState.isVisible,
+            shouldPollModelState: shouldPollModelState
         ) else {
             return
         }

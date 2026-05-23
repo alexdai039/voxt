@@ -122,6 +122,10 @@ extension AppDelegate {
             state: overlayState,
             position: overlayPosition
         )
+        if let captureStartFailure = whisper.startRecordingCapture() {
+            handleRecordingStartFailure(captureStartFailure)
+            return
+        }
 
         pendingWhisperStartupTask?.cancel()
         pendingWhisperStartupTask = Task { [weak self] in
@@ -416,6 +420,7 @@ extension AppDelegate {
         _ message: String,
         autoHideAfter seconds: TimeInterval = 2.4
     ) {
+        releaseResidualRecordingResources(reason: "recording-start-failure")
         showOverlayReminder(message, autoHideAfter: seconds)
         resetSessionAfterFailedStart()
     }

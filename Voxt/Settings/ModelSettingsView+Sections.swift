@@ -105,10 +105,7 @@ extension ModelSettingsView {
 
         ModelTableView(title: LocalizedStringKey(localized("Models")), rows: mlxRows, viewportHeight: 320)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromMLXState(
-            mlxModelManager.state,
-            pauseMessage: mlxModelManager.pausedStatusMessage
-        ) {
+        if let downloadStatus = mlxInstallSnapshot(for: modelRepo).downloadStatus {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }
@@ -169,10 +166,7 @@ extension ModelSettingsView {
 
         ModelTableView(title: LocalizedStringKey(localized("Whisper Models")), rows: whisperRows, viewportHeight: 260)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromWhisperDownload(
-            whisperModelManager.activeDownload,
-            pauseMessage: whisperModelManager.pausedStatusMessage(for: whisperModelID)
-        ) {
+        if let downloadStatus = whisperInstallSnapshot(for: whisperModelID).downloadStatus {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }
@@ -264,10 +258,7 @@ extension ModelSettingsView {
 
         ModelTableView(title: LocalizedStringKey(localized("Custom LLM Models")), rows: customLLMRows, viewportHeight: 260)
 
-        if let downloadStatus = ModelDownloadStatusSnapshot.fromCustomLLMState(
-            customLLMManager.state,
-            pauseMessage: customLLMManager.pausedStatusMessage
-        ) {
+        if let downloadStatus = customLLMInstallSnapshot(for: customLLMRepo).downloadStatus {
             ModelDownloadStatusView(status: downloadStatus)
         }
     }

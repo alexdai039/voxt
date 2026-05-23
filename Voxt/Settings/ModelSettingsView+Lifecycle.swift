@@ -21,9 +21,11 @@ extension ModelSettingsView {
         if UserDefaults.standard.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) == nil {
             whisperRealtimeEnabled = false
         }
-        if UserDefaults.standard.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) == nil {
-            let legacyKeepResident = UserDefaults.standard.object(forKey: AppPreferenceKey.whisperKeepResidentLoaded) as? Bool
-            localModelMemoryOptimizationEnabled = legacyKeepResident.map { !$0 } ?? true
+        let resolvedIdleUnloadDelay = AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds()
+        if UserDefaults.standard.object(forKey: AppPreferenceKey.localModelIdleUnloadDelaySeconds) == nil
+            || localModelIdleUnloadDelaySeconds != resolvedIdleUnloadDelay
+        {
+            localModelIdleUnloadDelaySeconds = resolvedIdleUnloadDelay
         }
 
         if customLLMRepo.isEmpty {

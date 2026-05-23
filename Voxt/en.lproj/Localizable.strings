@@ -355,6 +355,7 @@
 "MLX model is not downloaded. Open Settings > Model to install it." = "MLX model is not downloaded. Open Settings > Model to install it.";
 "MLX model is still downloading. Wait for installation to finish and try again." = "MLX model is still downloading. Wait for installation to finish and try again.";
 "MLX model is unavailable. Open Settings > Model to fix it." = "MLX model is unavailable. Open Settings > Model to fix it.";
+"MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@";
 "Whisper (On-device)" = "Whisper (On-device)";
 "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding." = "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding.";
 "Transcribe" = "Transcribe";
@@ -386,6 +387,7 @@
 "Whisper model is not downloaded. Open Settings > Model to install it." = "Whisper model is not downloaded. Open Settings > Model to install it.";
 "Whisper model is still downloading. Wait for installation to finish and try again." = "Whisper model is still downloading. Wait for installation to finish and try again.";
 "Whisper model is unavailable. Open Settings > Model to fix it." = "Whisper model is unavailable. Open Settings > Model to fix it.";
+"Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@";
 "Whisper failed to load the selected model." = "Whisper failed to load the selected model.";
 "Whisper is not ready yet. Open Settings > Model and try again." = "Whisper is not ready yet. Open Settings > Model and try again.";
 "Whisper failed to start recording." = "Whisper failed to start recording.";
@@ -878,7 +880,9 @@
 "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready." = "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready.";
 "Memory" = "Memory";
 "Memory Optimization" = "Memory Optimization";
-"When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse." = "When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse.";
+"When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse." = "When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse.";
+"Unload Delay" = "Unload Delay";
+"Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse." = "Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse.";
 "Keep Resident" = "Keep Resident";
 "Resident On" = "Resident On";
 "Resident Off" = "Resident Off";

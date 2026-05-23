@@ -2,23 +2,54 @@ import XCTest
 @testable import Voxt
 
 final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
-    func testShouldRefreshCatalogForMetadataChangeOnlyWhenActiveAndVisible() {
+    func testShouldRefreshCatalogForLifecycleChangeOnlyWhenActiveAndVisible() {
         XCTAssertTrue(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: true,
                 isWindowVisible: true
             )
         )
         XCTAssertFalse(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: false,
                 isWindowVisible: true
             )
         )
         XCTAssertFalse(
-            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForLifecycleChange(
                 isActive: true,
                 isWindowVisible: false
+            )
+        )
+    }
+
+    func testShouldRefreshCatalogForMetadataChangeOnlyWhenActiveVisibleAndPolling() {
+        XCTAssertTrue(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: true,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: false,
+                isWindowVisible: true,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: false,
+                shouldPollModelState: true
+            )
+        )
+        XCTAssertFalse(
+            ModelSettingsProgressRefreshSupport.shouldRefreshCatalogForMetadataChange(
+                isActive: true,
+                isWindowVisible: true,
+                shouldPollModelState: false
             )
         )
     }
@@ -26,7 +57,7 @@ final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
     func testShouldPollModelStateWhenNonCurrentMLXDownloadIsActive() {
         let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: .notDownloaded,
-            mlxActiveDownloadRepos: [MLXModelManager.canonicalModelRepo("mlx-community/FireRedASR2-AED-mlx")],
+            mlxHasActiveDownloadingRepos: true,
             whisperState: .notDownloaded,
             whisperActiveDownload: nil,
             customLLMState: .notDownloaded
@@ -51,7 +82,7 @@ final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
 
         let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: .notDownloaded,
-            mlxActiveDownloadRepos: [],
+            mlxHasActiveDownloadingRepos: false,
             whisperState: .notDownloaded,
             whisperActiveDownload: whisperDownload,
             customLLMState: .notDownloaded
@@ -63,7 +94,7 @@ final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
     func testShouldNotPollModelStateWithoutActiveDownloads() {
         let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: .downloaded,
-            mlxActiveDownloadRepos: [],
+            mlxHasActiveDownloadingRepos: false,
             whisperState: .downloaded,
             whisperActiveDownload: nil,
             customLLMState: .downloaded
@@ -75,8 +106,27 @@ final class ModelSettingsProgressRefreshSupportTests: XCTestCase {
     func testShouldNotPollModelStateForLoadingWithoutActiveDownloads() {
         let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: .loading,
-            mlxActiveDownloadRepos: [],
+            mlxHasActiveDownloadingRepos: false,
             whisperState: .loading,
+            whisperActiveDownload: nil,
+            customLLMState: .notDownloaded
+        )
+
+        XCTAssertFalse(shouldPoll)
+    }
+
+    func testShouldNotPollModelStateForPausedMLXWhileCancellationStillCleansUp() {
+        let shouldPoll = ModelSettingsProgressRefreshSupport.shouldPollModelState(
+            mlxState: .paused(
+                progress: 0.5,
+                completed: 50,
+                total: 100,
+                currentFile: "weights.bin",
+                completedFiles: 1,
+                totalFiles: 2
+            ),
+            mlxHasActiveDownloadingRepos: false,
+            whisperState: .notDownloaded,
             whisperActiveDownload: nil,
             customLLMState: .notDownloaded
         )

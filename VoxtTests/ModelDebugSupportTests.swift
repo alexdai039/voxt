@@ -3,6 +3,21 @@ import XCTest
 
 @MainActor
 final class ModelDebugSupportTests: XCTestCase {
+    private func withEphemeralDefaults(
+        _ body: (UserDefaults) throws -> Void
+    ) rethrows {
+        let suiteName = "ModelDebugSupportTests.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            XCTFail("Expected ephemeral UserDefaults suite")
+            return
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        try body(defaults)
+    }
+
     func testLLMDebugPresetsIncludeBuiltinsAndSavedGroups() throws {
         let defaults = UserDefaults.standard
         let previousGroups = defaults.data(forKey: AppPreferenceKey.appBranchGroups)
@@ -48,6 +63,96 @@ final class ModelDebugSupportTests: XCTestCase {
         XCTAssertTrue(presets.contains(where: { $0.id == "builtin:rewrite" }))
         XCTAssertTrue(presets.contains(where: { $0.id == "builtin:transcript-summary" }))
         XCTAssertTrue(presets.contains(where: { $0.title.contains("Chrome") }))
+    }
+
+    func testBuiltInPresetsPreferGlobalPromptOverDebugOverride() throws {
+        try withEphemeralDefaults { defaults in
+            defaults.set("global enhancement prompt", forKey: AppPreferenceKey.enhancementSystemPrompt)
+            defaults.set("global translation prompt", forKey: AppPreferenceKey.translationSystemPrompt)
+            defaults.set("global rewrite prompt", forKey: AppPreferenceKey.rewriteSystemPrompt)
+            defaults.set(
+                try JSONEncoder().encode([
+                    "builtin:enhancement": "stale debug enhancement",
+                    "builtin:translation": "stale debug translation",
+                    "builtin:rewrite": "stale debug rewrite"
+                ]),
+                forKey: AppPreferenceKey.llmDebugPresetPromptOverrides
+            )
+
+            let presets = ModelDebugCatalog.availableLLMPresets(defaults: defaults)
+
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:enhancement" })?.promptTemplate,
+                "global enhancement prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:translation" })?.promptTemplate,
+                "global translation prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:rewrite" })?.promptTemplate,
+                "global rewrite prompt"
+            )
+        }
+    }
+
+    func testBuiltInPresetsApplySessionPromptOverridesWhenProvided() throws {
+        try withEphemeralDefaults { defaults in
+            defaults.set("global enhancement prompt", forKey: AppPreferenceKey.enhancementSystemPrompt)
+            defaults.set("global translation prompt", forKey: AppPreferenceKey.translationSystemPrompt)
+            defaults.set("global rewrite prompt", forKey: AppPreferenceKey.rewriteSystemPrompt)
+
+            let presets = ModelDebugCatalog.availableLLMPresets(
+                defaults: defaults,
+                promptOverrides: [
+                    "builtin:enhancement": "session enhancement prompt",
+                    "builtin:translation": "session translation prompt",
+                    "builtin:rewrite": "session rewrite prompt"
+                ]
+            )
+
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:enhancement" })?.promptTemplate,
+                "session enhancement prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:translation" })?.promptTemplate,
+                "session translation prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:rewrite" })?.promptTemplate,
+                "session rewrite prompt"
+            )
+        }
+    }
+
+    func testBuiltInPresetsUseFeatureSettingsPromptsWhenLegacyKeysAreEmpty() throws {
+        try withEphemeralDefaults { defaults in
+            var settings = FeatureSettingsStore.deriveFromLegacy(defaults: defaults)
+            settings.transcription.prompt = "feature enhancement prompt"
+            settings.translation.prompt = "feature translation prompt"
+            settings.rewrite.prompt = "feature rewrite prompt"
+
+            FeatureSettingsStore.save(settings, defaults: defaults)
+            defaults.set("", forKey: AppPreferenceKey.enhancementSystemPrompt)
+            defaults.set("", forKey: AppPreferenceKey.translationSystemPrompt)
+            defaults.set("", forKey: AppPreferenceKey.rewriteSystemPrompt)
+
+            let presets = ModelDebugCatalog.availableLLMPresets(defaults: defaults)
+
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:enhancement" })?.promptTemplate,
+                "feature enhancement prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:translation" })?.promptTemplate,
+                "feature translation prompt"
+            )
+            XCTAssertEqual(
+                presets.first(where: { $0.id == "builtin:rewrite" })?.promptTemplate,
+                "feature rewrite prompt"
+            )
+        }
     }
 
     func testPromptResolverInjectsEnhancementVariables() {

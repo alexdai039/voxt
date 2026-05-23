@@ -931,7 +931,6 @@ extension AppDelegate {
         guard overlayState.displayMode == .answer else { return }
         cancelPendingSelectedTextTranslationRefresh()
         releaseResidualRecordingResources(reason: "dismiss-answer-overlay")
-        releaseIdleLocalModelResources(reason: "dismiss-answer-overlay")
         overlayWindow.hide { [weak self] in
             guard let self else { return }
             self.overlayWindow.onRequestInject = nil

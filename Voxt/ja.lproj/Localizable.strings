@@ -349,6 +349,7 @@
 "Speech Recognition permission is required for Direct Dictation. Enable it in Settings > Permissions." = "Direct Dictation には音声認識権限が必要です。設定 > 権限で有効にしてください。";
 "MLX model is not downloaded. Open Settings > Model to install it." = "MLX モデルが未ダウンロードです。設定 > モデルでインストールしてください。";
 "MLX model is unavailable. Open Settings > Model to fix it." = "MLX モデルが利用できません。設定 > モデルで修正してください。";
+"MLX model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "MLX モデルが利用できません。設定 > モデルで修正してください。\n理由: %@";
 "MLX model is still downloading. Wait for installation to finish and try again." = "MLX モデルはまだダウンロード中です。インストール完了後に再試行してください。";
 "Whisper (On-device)" = "Whisper オンデバイス";
 "Uses WhisperKit speech models running locally. Supports multiple Whisper models and configurable decoding." = "WhisperKit の音声モデルをローカル実行します。複数の Whisper モデルとデコード設定に対応します。";
@@ -381,6 +382,7 @@
 "Whisper model is not downloaded. Open Settings > Model to install it." = "Whisper モデルが未ダウンロードです。設定 > モデルでインストールしてください。";
 "Whisper model is still downloading. Wait for installation to finish and try again." = "Whisper モデルはまだダウンロード中です。インストール完了後に再試行してください。";
 "Whisper model is unavailable. Open Settings > Model to fix it." = "Whisper モデルが利用できません。設定 > モデルで修正してください。";
+"Whisper model is unavailable. Open Settings > Model to fix it.\nReason: %@" = "Whisper モデルが利用できません。設定 > モデルで修正してください。\n理由: %@";
 "Whisper failed to load the selected model." = "選択した Whisper モデルの読み込みに失敗しました。";
 "Whisper is not ready yet. Open Settings > Model and try again." = "Whisper はまだ準備できていません。設定 > モデルを開いて再試行してください。";
 "Whisper failed to start recording." = "Whisper の録音開始に失敗しました。";
@@ -877,7 +879,9 @@
 "The first local Whisper load can take a few seconds. Voxt will show an initializing state in the overlay until the model is ready." = "Whisper の初回ローカル読み込みには数秒かかることがあります。モデルの準備ができるまでは、Voxt がオーバーレイに初期化状態を表示します。";
 "Memory" = "メモリ";
 "Memory Optimization" = "メモリ最適化";
-"When enabled, Voxt unloads idle local ASR and local LLM models after cooldown to reduce memory usage. Turn it off to keep loaded local models resident for faster reuse." = "有効にすると、Voxt はクールダウン後にアイドル状態のローカル ASR とローカル LLM モデルを解放してメモリ使用量を下げます。無効にすると、読み込み済みのローカルモデルを常駐させて再利用を速くします。";
+"When enabled, Voxt unloads idle local ASR and local LLM models sooner to reduce memory usage. Turn it off to keep them available longer before unload for faster reuse." = "有効にすると、Voxt はアイドル状態のローカル ASR とローカル LLM モデルをより早く解放してメモリ使用量を下げます。無効にすると、解放までの待機時間が長くなり、短時間での再利用が速くなります。";
+"Unload Delay" = "アンロード遅延";
+"Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse." = "ローカル ASR とローカル LLM モデルがアイドル状態になってから解放されるまでの待機時間です。短いほどメモリ使用量を抑えられ、長いほど短時間での再利用が速くなります。";
 "Keep Resident" = "常駐ロード";
 "Resident On" = "常駐オン";
 "Resident Off" = "常駐オフ";

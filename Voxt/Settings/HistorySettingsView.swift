@@ -77,6 +77,7 @@ struct HistorySettingsView: View {
     @State private var isLoadingHistoryEntries = false
     @State private var historyPageGeneration = 0
     @State private var historyAudioStatsGeneration = 0
+    @State private var suppressedStoreHistoryReloadCount = 0
 
     private let historyPageSize = 80
     private let historyRowHeight: CGFloat = 74
@@ -337,6 +338,10 @@ struct HistorySettingsView: View {
             applyRetentionPolicyAndReload()
         }
         .onReceive(historyStore.$entries) { _ in
+            if suppressedStoreHistoryReloadCount > 0 {
+                suppressedStoreHistoryReloadCount -= 1
+                return
+            }
             refreshHistoryAudioStorageStats()
             reloadHistoryEntries(reset: true)
         }
@@ -426,11 +431,7 @@ struct HistorySettingsView: View {
                     onShowInfo: {
                         selectedHistoryInfoEntry = entry
                     },
-                    onDelete: {
-                        copiedEntryID = nil
-                        historyStore.delete(id: entry.id)
-                        reloadHistoryEntries(reset: true)
-                    }
+                    onDelete: { deleteHistoryEntry(entry) }
                 )
                 .padding(.vertical, historyRowVerticalInset)
             }
@@ -505,6 +506,10 @@ struct HistorySettingsView: View {
         guard reset || offset < totalHistoryEntryCount else { return }
         guard reset || !isLoadingHistoryEntries else { return }
 
+        loadHistoryEntries(offset: offset, limit: historyPageSize, reset: reset)
+    }
+
+    private func loadHistoryEntries(offset: Int, limit: Int, reset: Bool) {
         historyPageGeneration += 1
         let generation = historyPageGeneration
         let kind = selectedHistoryKind
@@ -514,7 +519,7 @@ struct HistorySettingsView: View {
         historyStore.loadEntries(
             kind: kind,
             query: query,
-            limit: historyPageSize,
+            limit: limit,
             offset: offset
         ) { count, page in
             guard generation == historyPageGeneration else { return }
@@ -522,6 +527,31 @@ struct HistorySettingsView: View {
             visibleHistoryEntries = reset ? page : visibleHistoryEntries + page
             isLoadingHistoryEntries = false
         }
+    }
+
+    private func deleteHistoryEntry(_ entry: TranscriptionHistoryEntry) {
+        copiedEntryID = nil
+        if selectedHistoryInfoEntry?.id == entry.id {
+            selectedHistoryInfoEntry = nil
+        }
+
+        suppressedStoreHistoryReloadCount += 1
+        guard historyStore.delete(id: entry.id) else {
+            suppressedStoreHistoryReloadCount = max(0, suppressedStoreHistoryReloadCount - 1)
+            return
+        }
+        refreshHistoryAudioStorageStats()
+
+        guard let removedIndex = visibleHistoryEntries.firstIndex(where: { $0.id == entry.id }) else {
+            reloadHistoryEntries(reset: true)
+            return
+        }
+
+        visibleHistoryEntries.remove(at: removedIndex)
+        totalHistoryEntryCount = max(0, totalHistoryEntryCount - 1)
+
+        guard visibleHistoryEntries.count < totalHistoryEntryCount else { return }
+        loadHistoryEntries(offset: visibleHistoryEntries.count, limit: 1, reset: false)
     }
 
     private func applyRetentionPolicyAndReload() {

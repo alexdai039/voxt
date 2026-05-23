@@ -56,7 +56,8 @@ struct ModelSettingsView: View {
     @AppStorage(AppPreferenceKey.whisperVADEnabled) var whisperVADEnabled = true
     @AppStorage(AppPreferenceKey.whisperTimestampsEnabled) var whisperTimestampsEnabled = false
     @AppStorage(AppPreferenceKey.whisperRealtimeEnabled) var whisperRealtimeEnabled = false
-    @AppStorage(AppPreferenceKey.localModelMemoryOptimizationEnabled) var localModelMemoryOptimizationEnabled = true
+    @AppStorage(AppPreferenceKey.localModelIdleUnloadDelaySeconds)
+    var localModelIdleUnloadDelaySeconds = AppPreferenceKey.defaultLocalModelIdleUnloadDelaySeconds
     @AppStorage(AppPreferenceKey.whisperLocalASRTuningSettings) var whisperLocalASRTuningSettingsRaw = WhisperLocalTuningSettingsStore.defaultStoredValue()
     @AppStorage(AppPreferenceKey.customLLMModelRepo) var customLLMRepo = CustomLLMModelManager.defaultModelRepo
     @AppStorage(AppPreferenceKey.customLLMGenerationSettings) var customLLMGenerationSettingsRaw = CustomLLMGenerationSettingsStore.defaultStoredValue()
@@ -114,8 +115,10 @@ struct ModelSettingsView: View {
     @State private var isCatalogRefreshScheduled = false
     @State private var isRefreshingCatalogSnapshot = false
     @State private var needsAnotherCatalogRefresh = false
+    @State var lastHandledDownloadLifecycleToken: ModelSettingsDownloadLifecycleToken?
     @State var pendingModelRemovalTarget: LocalModelRemovalTarget?
     @State var uninstallingModelTarget: LocalModelRemovalTarget?
+    @State var cancellingInstallTargets = Set<LocalModelInstallTarget>()
 
     let modelStateRefreshTimer = Timer.publish(every: 2.0, on: .main, in: .common).autoconnect()
 
@@ -201,58 +204,26 @@ struct ModelSettingsView: View {
             remoteLLMConfigurations: remoteLLMConfigurations,
             featureSettings: featureSettings,
             hasIssue: hasIssue(for:),
-            modelStatusText: modelStatusText(for:),
-            whisperModelStatusText: whisperModelStatusText(for:),
-            customLLMStatusText: customLLMStatusText(for:),
             customLLMBadgeText: customLLMBadgeText(for:),
             remoteASRStatusText: { provider, configuration in
                 remoteASRStatusText(for: provider, configuration: configuration)
             },
             remoteLLMBadgeText: remoteLLMBadgeText(for:),
             primaryUserLanguageCode: selectedUserLanguageCodes.first,
-            isDownloadingModel: isDownloadingModel,
-            isPausedModel: isPausedModel,
-            isDownloadingWhisperModel: isDownloadingWhisperModel,
-            isPausedWhisperModel: isPausedWhisperModel,
-            isAnotherWhisperModelDownloading: isAnotherWhisperModelDownloading,
-            isDownloadingCustomLLM: isDownloadingCustomLLM,
-            isPausedCustomLLM: isPausedCustomLLM,
-            isAnotherCustomLLMDownloading: isAnotherCustomLLMDownloading,
-            isCustomLLMInstalled: { customLLMManager.isModelDownloaded(repo: $0) },
-            isUninstallingModel: isUninstallingModel,
-            isUninstallingWhisperModel: isUninstallingWhisperModel,
-            isUninstallingCustomLLM: isUninstallingCustomLLM,
-            downloadModel: downloadModel,
-            pauseModelDownload: { mlxModelManager.pauseDownload(repo: $0) },
-            cancelModelDownload: {
-                mlxModelManager.cancelDownload(repo: $0)
-                refreshCatalogSnapshot()
+            mlxInstallSnapshot: mlxInstallSnapshot(for:),
+            whisperInstallSnapshot: whisperInstallSnapshot(for:),
+            customLLMInstallSnapshot: customLLMInstallSnapshot(for:),
+            catalogPrimaryAction: {
+                ModelSettingsInstallActionResolver.catalogPrimaryAction(
+                    for: $0,
+                    perform: performInstallAction(_:kind:)
+                )
             },
-            deleteModel: requestDeleteModel,
-            openMLXModelDirectory: openMLXModelDirectory,
-            presentMLXSettings: { repo in
-                activeLocalASRConfigurationTarget = .mlx(repo: repo)
-            },
-            downloadWhisperModel: downloadWhisperModel,
-            cancelWhisperDownload: {
-                whisperModelManager.cancelDownload(id: $0)
-                refreshCatalogSnapshot()
-            },
-            deleteWhisperModel: requestDeleteWhisperModel,
-            openWhisperModelDirectory: openWhisperModelDirectory,
-            presentWhisperSettings: {
-                activeLocalASRConfigurationTarget = .whisper(modelID: whisperModelID)
-            },
-            downloadCustomLLM: downloadCustomLLM,
-            cancelCustomLLMDownload: {
-                customLLMManager.cancelDownload(repo: $0)
-                refreshCatalogSnapshot()
-            },
-            deleteCustomLLM: requestDeleteCustomLLM,
-            openCustomLLMModelDirectory: openCustomLLMModelDirectory,
-            configureCustomLLMGeneration: { repo in
-                customLLMConfigurationRepo = repo
-                isCustomLLMConfigurationPresented = true
+            catalogSecondaryActions: {
+                ModelSettingsInstallActionResolver.catalogSecondaryActions(
+                    for: $0,
+                    perform: performInstallAction(_:kind:)
+                )
             },
             configureASRProvider: { editingASRProvider = $0 },
             configureLLMProvider: { editingLLMProvider = $0 },
@@ -481,6 +452,8 @@ struct ModelSettingsView: View {
             }
         }
 
+        reconcileCancellingInstallTargets()
+
         let entries = switch catalogTab {
         case .asr:
             catalogBuilder.asrEntries()
@@ -519,9 +492,6 @@ struct ModelSettingsView: View {
     func refreshModelStorageDisplayPath() {
         let resolved = ModelStorageDirectoryManager.resolvedRootURL().path
         modelStorageDisplayPath = resolved
-        if modelStorageRootPath != resolved {
-            modelStorageRootPath = resolved
-        }
     }
 
     private func openModelStorageInFinder() {
@@ -702,13 +672,28 @@ struct ModelSettingsView: View {
                 }
             }
 
-            GeneralSectionDivider()
+            GeneralSettingsCard(titleText: localized("Memory")) {
+                HStack(alignment: .center) {
+                    Text(localized("Unload Delay"))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 6) {
+                        LocalModelIdleUnloadDelayTextField(
+                            value: $localModelIdleUnloadDelaySeconds,
+                            range: AppPreferenceKey.localModelIdleUnloadDelayMinimumSeconds...AppPreferenceKey.localModelIdleUnloadDelayMaximumSeconds,
+                            width: 80
+                        )
 
-            GeneralToggleRow(
-                title: LocalizedStringKey(localized("Memory Optimization")),
-                description: LocalizedStringKey(localized("Unload idle local models to reduce memory usage.")),
-                isOn: $localModelMemoryOptimizationEnabled
-            )
+                        Text("s")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text(localized("Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             GeneralSectionDivider()
 
@@ -804,7 +789,12 @@ struct ModelSettingsView: View {
     var shouldPollModelState: Bool {
         ModelSettingsProgressRefreshSupport.shouldPollModelState(
             mlxState: mlxModelManager.state,
-            mlxActiveDownloadRepos: mlxModelManager.activeDownloadRepos,
+            mlxHasActiveDownloadingRepos: mlxModelManager.activeDownloadRepos.contains { repo in
+                if case .downloading = mlxModelManager.state(for: repo) {
+                    return true
+                }
+                return false
+            },
             whisperState: whisperModelManager.state,
             whisperActiveDownload: whisperModelManager.activeDownload,
             customLLMState: customLLMManager.state
@@ -863,5 +853,61 @@ struct ModelSettingsView: View {
         case .rewriteCustomLLM(let repo):
             return AppLocalization.format("%@ %@: %@", customLLMManager.displayTitle(for: repo), localized("Rewrite"), issue.message)
         }
+    }
+}
+
+private struct LocalModelIdleUnloadDelayTextField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    let width: CGFloat
+
+    @State private var text: String
+
+    init(value: Binding<Int>, range: ClosedRange<Int>, width: CGFloat) {
+        _value = value
+        self.range = range
+        self.width = width
+        _text = State(initialValue: String(min(max(value.wrappedValue, range.lowerBound), range.upperBound)))
+    }
+
+    var body: some View {
+        TextField("", text: $text)
+            .textFieldStyle(.plain)
+            .settingsFieldSurface(width: width, alignment: .trailing)
+            .multilineTextAlignment(.trailing)
+            .onChange(of: text) { _, newValue in
+                let digits = newValue.filter(\.isNumber)
+                guard !digits.isEmpty else { return }
+
+                let parsed = Int(digits) ?? range.lowerBound
+                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                value = clamped
+
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onSubmit {
+                syncTextToValue()
+            }
+            .onChange(of: value) { _, newValue in
+                let clamped = min(max(newValue, range.lowerBound), range.upperBound)
+                let normalized = String(clamped)
+                if text != normalized {
+                    text = normalized
+                }
+            }
+            .onAppear {
+                syncTextToValue()
+            }
+    }
+
+    private func syncTextToValue() {
+        let digits = text.filter(\.isNumber)
+        let parsed = Int(digits) ?? value
+        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+        value = clamped
+        text = String(clamped)
     }
 }

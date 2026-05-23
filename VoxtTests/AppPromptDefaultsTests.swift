@@ -140,6 +140,33 @@ final class AppPromptDefaultsTests: XCTestCase {
         XCTAssertTrue(AppPromptDefaults.matchesKnownDefault(previousJapanesePrompt, kind: .enhancement))
     }
 
+    func testModifiedRecentEnhancementDefaultIsNotTreatedAsKnownDefault() {
+        let editedPrompt = """
+        你是 Voxt 的转写清理助手，负责对语音识别生成的原始文本进行精准清理。
+
+        用户主要语言为：
+        {{USER_MAIN_LANGUAGE}}
+
+        请严格按优先级执行以下规则：
+        8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示。
+
+        示例：
+        - 原句：“代码里的大括号user大括号需要替换成实际用户名”
+          输出：“代码里的{user}需要替换成实际用户名”
+
+        输出：
+        请直接输出调整后的文本，无需额外说明。
+
+        用户补充规则：保留我的自定义结尾。
+        """
+
+        XCTAssertFalse(AppPromptDefaults.matchesKnownDefault(editedPrompt, kind: .enhancement))
+        XCTAssertEqual(
+            AppPromptDefaults.canonicalStoredText(editedPrompt, kind: .enhancement),
+            editedPrompt
+        )
+    }
+
     func testTranslationDefaultPromptDoesNotEmbedSourceText() {
         let prompt = AppPromptDefaults.text(for: .translation, language: .english)
 
@@ -276,6 +303,36 @@ final class AppPromptDefaultsTests: XCTestCase {
         XCTAssertTrue(AppPromptDefaults.matchesKnownDefault(previousEnglishPrompt, kind: .translation))
         XCTAssertTrue(AppPromptDefaults.matchesKnownDefault(previousChinesePrompt, kind: .translation))
         XCTAssertTrue(AppPromptDefaults.matchesKnownDefault(previousJapanesePrompt, kind: .translation))
+    }
+
+    func testModifiedRecentTranslationDefaultIsNotTreatedAsKnownDefault() {
+        let editedPrompt = """
+        你是 Voxt 的内容整理翻译助手，负责对用户提供的内容进行整理并翻译为目标语言。
+
+        用户主要语言为：
+        {{USER_MAIN_LANGUAGE}}
+
+        目标语言：
+        {{TARGET_LANGUAGE}}
+
+        请严格按优先级执行以下规则：
+        8. 若内容中有顺序列表相关表述，使用序号列表方式整理；若有并列关系且明确的非顺序类内容，使用无序列表“-”表示。
+
+        示例：
+        - 原句：“代码里的大括号user大括号需要替换成实际用户名”
+          输出：“代码里的{user}需要替换成实际用户名”
+
+        输出：
+        请直接输出整理并翻译后的文本，无需额外说明。
+
+        用户补充规则：保留品牌名英文原样。
+        """
+
+        XCTAssertFalse(AppPromptDefaults.matchesKnownDefault(editedPrompt, kind: .translation))
+        XCTAssertEqual(
+            AppPromptDefaults.canonicalStoredText(editedPrompt, kind: .translation),
+            editedPrompt
+        )
     }
 
     func testRewriteDefaultPromptDoesNotEmbedRuntimeInputs() {

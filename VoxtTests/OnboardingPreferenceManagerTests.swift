@@ -71,6 +71,97 @@ final class OnboardingPreferenceManagerTests: XCTestCase {
     }
 }
 
+final class ModelStorageDirectoryManagerResolutionTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        ModelStorageDirectoryManager.resetForTesting()
+    }
+
+    override func tearDown() {
+        ModelStorageDirectoryManager.resetForTesting()
+        super.tearDown()
+    }
+
+    func testAutomaticResolutionUsesNewWriteRootAndLegacyReadFallback() {
+        let defaults = TestDoubles.makeUserDefaults(testName: "ModelStorageDirectoryManagerTests.automaticResolution")
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootPath)
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+
+        let resolution = ModelStorageDirectoryManager.resolvedRootResolution(defaults: defaults)
+
+        XCTAssertEqual(resolution.writeRootURL.standardizedFileURL.path, ModelStorageDirectoryManager.defaultRootURL.standardizedFileURL.path)
+        XCTAssertEqual(
+            resolution.readableRootURLs.map(\.standardizedFileURL.path),
+            [
+                ModelStorageDirectoryManager.defaultRootURL.standardizedFileURL.path,
+                ModelStorageDirectoryManager.legacyDefaultRootURL.standardizedFileURL.path,
+            ]
+        )
+    }
+
+    func testStoredPathUsesSingleReadWriteRoot() throws {
+        let defaults = TestDoubles.makeUserDefaults(testName: "ModelStorageDirectoryManagerTests.storedPath")
+        let directory = try TemporaryDirectory()
+        let customRoot = directory.url.appendingPathComponent("custom-model-root", isDirectory: true)
+        defaults.set(customRoot.path, forKey: AppPreferenceKey.modelStorageRootPath)
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+
+        let resolution = ModelStorageDirectoryManager.resolvedRootResolution(defaults: defaults)
+
+        XCTAssertEqual(resolution.writeRootURL.standardizedFileURL.path, customRoot.standardizedFileURL.path)
+        XCTAssertEqual(resolution.readableRootURLs.map(\.standardizedFileURL.path), [customRoot.standardizedFileURL.path])
+    }
+
+    func testLegacyStoredPathWithoutBookmarkUsesAutomaticResolution() {
+        let defaults = TestDoubles.makeUserDefaults(testName: "ModelStorageDirectoryManagerTests.legacyStoredPathAutomaticResolution")
+        defaults.set(
+            ModelStorageDirectoryManager.legacyDefaultRootURL.standardizedFileURL.path,
+            forKey: AppPreferenceKey.modelStorageRootPath
+        )
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+
+        let resolution = ModelStorageDirectoryManager.resolvedRootResolution(defaults: defaults)
+
+        XCTAssertEqual(resolution.writeRootURL.standardizedFileURL.path, ModelStorageDirectoryManager.defaultRootURL.standardizedFileURL.path)
+        XCTAssertEqual(
+            resolution.readableRootURLs.map(\.standardizedFileURL.path),
+            [
+                ModelStorageDirectoryManager.defaultRootURL.standardizedFileURL.path,
+                ModelStorageDirectoryManager.legacyDefaultRootURL.standardizedFileURL.path,
+            ]
+        )
+    }
+
+    func testResolvedRootURLReturnsWriteRoot() throws {
+        let defaults = TestDoubles.makeUserDefaults(testName: "ModelStorageDirectoryManagerTests.resolvedRootURL")
+        let directory = try TemporaryDirectory()
+        let customRoot = directory.url.appendingPathComponent("another-root", isDirectory: true)
+        defaults.set(customRoot.path, forKey: AppPreferenceKey.modelStorageRootPath)
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+
+        let resolvedRoot = ModelStorageDirectoryManager.resolvedRootURL(defaults: defaults)
+
+        XCTAssertEqual(resolvedRoot.standardizedFileURL.path, customRoot.standardizedFileURL.path)
+    }
+
+    func testResolvedDerivedRootURLTracksWriteRoot() throws {
+        let defaults = TestDoubles.makeUserDefaults(testName: "ModelStorageDirectoryManagerTests.derivedRootURL")
+        let directory = try TemporaryDirectory()
+        let customRoot = directory.url.appendingPathComponent("another-root", isDirectory: true)
+        defaults.set(customRoot.path, forKey: AppPreferenceKey.modelStorageRootPath)
+        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+
+        let derivedRoot = ModelStorageDirectoryManager.resolvedDerivedRootURL(defaults: defaults)
+
+        XCTAssertEqual(
+            derivedRoot.standardizedFileURL.path,
+            customRoot
+                .appendingPathComponent(".derived-model-artifacts", isDirectory: true)
+                .standardizedFileURL.path
+        )
+    }
+}
+
 private final class TestAppSupportFileManager: FileManager {
     private let applicationSupportDirectory: URL
 

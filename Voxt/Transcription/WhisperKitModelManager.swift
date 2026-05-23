@@ -49,7 +49,7 @@ final class WhisperKitModelManager: ObservableObject {
 
     private struct DirectoryLookupCache {
         let validURL: URL?
-        let rawURL: URL?
+        let fallbackURL: URL?
     }
 
     private enum DownloadStopAction {
@@ -80,12 +80,10 @@ final class WhisperKitModelManager: ObservableObject {
     private var sizeTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var idleUnloadTask: Task<Void, Never>?
-    private let idleUnloadDelay: Duration = .seconds(90)
     private var activeUseCount = 0
     private var downloadErrorByID: [String: String] = [:]
-    private var isMemoryOptimizationEnabled: Bool {
-        let defaults = UserDefaults.standard
-        return defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
+    private var resolvedIdleUnloadDelay: Duration {
+        .seconds(AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds())
     }
 
     init(modelID: String, hubBaseURL: URL) {
@@ -139,15 +137,10 @@ final class WhisperKitModelManager: ObservableObject {
             return
         }
         guard activeUseCount == 0 else { return }
-        if isMemoryOptimizationEnabled {
-            scheduleIdleUnloadIfNeeded()
-        } else {
-            cancelIdleUnloadTask()
-        }
+        scheduleIdleUnloadIfNeeded()
     }
 
     func releaseLoadedModelIfIdle(reason: String) async {
-        guard isMemoryOptimizationEnabled else { return }
         guard activeUseCount == 0 else { return }
         guard loadedWhisper != nil else {
             cancelIdleUnloadTask()
@@ -221,7 +214,7 @@ final class WhisperKitModelManager: ObservableObject {
         } catch {
             self.loadingTask = nil
             if WhisperModelArtifacts.isCorruptLoadFailure(error),
-               let invalidFolder = rawModelDirectoryURL(id: targetModelID) {
+               let invalidFolder = writableRawModelDirectoryURL(id: targetModelID) {
                 try? FileManager.default.removeItem(at: invalidFolder)
                 loadedWhisper = nil
                 loadedModelID = nil
@@ -253,7 +246,7 @@ final class WhisperKitModelManager: ObservableObject {
     func hasResumableDownload(id: String) -> Bool {
         let canonicalModelID = Self.canonicalModelID(id)
         guard !isModelDownloaded(id: canonicalModelID),
-              let rawFolder = rawModelDirectoryURL(id: canonicalModelID),
+              let rawFolder = writableRawModelDirectoryURL(id: canonicalModelID),
               FileManager.default.fileExists(atPath: rawFolder.path) else {
             return false
         }
@@ -319,7 +312,7 @@ final class WhisperKitModelManager: ObservableObject {
                 case .cancel, .none:
                     pausedStatusMessageByID[targetID] = nil
                     activeDownload = nil
-                    removeModelDirectoryIfPresent(id: targetID)
+                    removeWritableModelDirectoryIfPresent(id: targetID)
                     if targetID == modelID {
                         state = .notDownloaded
                     }
@@ -406,7 +399,7 @@ final class WhisperKitModelManager: ObservableObject {
         guard let pausedDownload = activeDownload, pausedDownload.isPaused else { return }
         pausedStatusMessageByID.removeValue(forKey: Self.canonicalModelID(pausedDownload.modelID))
         activeDownload = nil
-        removeModelDirectoryIfPresent(id: pausedDownload.modelID)
+        removeWritableModelDirectoryIfPresent(id: pausedDownload.modelID)
         checkExistingModel()
         VoxtLog.info("Whisper download cancelled from paused state. model=\(pausedDownload.modelID)")
     }
@@ -421,7 +414,7 @@ final class WhisperKitModelManager: ObservableObject {
             pausedStatusMessageByID.removeValue(forKey: canonicalModelID)
             downloadErrorByID.removeValue(forKey: canonicalModelID)
             self.activeDownload = nil
-            removeModelDirectoryIfPresent(id: canonicalModelID)
+            removeWritableModelDirectoryIfPresent(id: canonicalModelID)
             if canonicalModelID == modelID {
                 checkExistingModel()
             }
@@ -431,7 +424,7 @@ final class WhisperKitModelManager: ObservableObject {
 
         pausedStatusMessageByID.removeValue(forKey: canonicalModelID)
         downloadErrorByID.removeValue(forKey: canonicalModelID)
-        removeModelDirectoryIfPresent(id: canonicalModelID)
+        removeWritableModelDirectoryIfPresent(id: canonicalModelID)
         if canonicalModelID == modelID {
             checkExistingModel()
         }
@@ -442,7 +435,7 @@ final class WhisperKitModelManager: ObservableObject {
             if downloadTask == nil {
                 restorePausedDownloadIfPossible(for: modelID)
             } else {
-                state = .notDownloaded
+                setStateIfNeeded(.notDownloaded)
             }
             downloadedStateByID[modelID] = false
             return
@@ -455,9 +448,9 @@ final class WhisperKitModelManager: ObservableObject {
         }
         downloadedStateByID[modelID] = true
         if loadedWhisper != nil, loadedModelID == modelID {
-            state = .ready
+            setStateIfNeeded(.ready)
         } else {
-            state = .downloaded
+            setStateIfNeeded(.downloaded)
         }
     }
 
@@ -491,36 +484,75 @@ final class WhisperKitModelManager: ObservableObject {
         firstModelDirectoryURL(id: id, requireValid: false)
     }
 
-    private func firstModelDirectoryURL(id: String, requireValid: Bool) -> URL? {
+    private func writableRawModelDirectoryURL(id: String) -> URL? {
+        firstModelDirectoryURL(id: id, requireValid: false, restrictToWritableRoot: true)
+    }
+
+    private func allReadableModelDirectories(id: String) -> [URL] {
         let canonicalModelID = Self.canonicalModelID(id)
+        let expectedFolderName = "openai_whisper-\(canonicalModelID)"
+        return readableDownloadRootURLs().compactMap { rootURL in
+            let directoryURL = rootURL.appendingPathComponent(expectedFolderName, isDirectory: true)
+            return FileManager.default.fileExists(atPath: directoryURL.path) ? directoryURL : nil
+        }
+    }
+
+    private func firstModelDirectoryURL(id: String, requireValid: Bool) -> URL? {
+        firstModelDirectoryURL(id: id, requireValid: requireValid, restrictToWritableRoot: false)
+    }
+
+    private func firstModelDirectoryURL(id: String, requireValid: Bool, restrictToWritableRoot: Bool) -> URL? {
+        let canonicalModelID = Self.canonicalModelID(id)
+        if restrictToWritableRoot {
+            return firstModelDirectoryURLInWritableRoot(id: canonicalModelID, requireValid: requireValid)
+        }
         primeDirectoryLookupCacheIfNeeded()
         if let cached = directoryLookupCacheByID[canonicalModelID] {
-            return requireValid ? cached.validURL : (cached.rawURL ?? cached.validURL)
+            return requireValid ? cached.validURL : (cached.validURL ?? cached.fallbackURL)
         }
-        let expectedFolderName = "openai_whisper-\(canonicalModelID)"
-        guard let enumerator = FileManager.default.enumerator(
-            at: downloadRootURL(),
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
+        let lookup = scanModelDirectory(id: canonicalModelID, rootURLs: readableDownloadRootURLs())
+        directoryLookupCacheByID[canonicalModelID] = lookup
+        downloadedStateByID[canonicalModelID] = lookup.validURL != nil
+        if requireValid {
+            return lookup.validURL
         }
+        return lookup.validURL ?? lookup.fallbackURL
+    }
 
-        for case let fileURL as URL in enumerator {
-            guard fileURL.lastPathComponent == expectedFolderName else { continue }
-            if requireValid && !WhisperModelArtifacts.isValidModelDirectory(fileURL) {
-                directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(validURL: nil, rawURL: fileURL)
-                downloadedStateByID[canonicalModelID] = false
+    private func firstModelDirectoryURLInWritableRoot(id: String, requireValid: Bool) -> URL? {
+        let lookup = scanModelDirectory(id: id, rootURLs: [downloadRootURL()])
+        if requireValid {
+            return lookup.validURL
+        }
+        return lookup.validURL ?? lookup.fallbackURL
+    }
+
+    private func scanModelDirectory(id: String, rootURLs: [URL]) -> DirectoryLookupCache {
+        let canonicalModelID = Self.canonicalModelID(id)
+        let expectedFolderName = "openai_whisper-\(canonicalModelID)"
+        var fallbackURL: URL?
+
+        for rootURL in rootURLs {
+            guard let enumerator = FileManager.default.enumerator(
+                at: rootURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else {
                 continue
             }
-            directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(validURL: fileURL, rawURL: fileURL)
-            downloadedStateByID[canonicalModelID] = true
-            return fileURL
+
+            for case let fileURL as URL in enumerator {
+                guard fileURL.lastPathComponent == expectedFolderName else { continue }
+                if WhisperModelArtifacts.isValidModelDirectory(fileURL) {
+                    return DirectoryLookupCache(validURL: fileURL, fallbackURL: fileURL)
+                }
+                if fallbackURL == nil {
+                    fallbackURL = fileURL
+                }
+            }
         }
 
-        directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(validURL: nil, rawURL: nil)
-        downloadedStateByID[canonicalModelID] = false
-        return nil
+        return DirectoryLookupCache(validURL: nil, fallbackURL: fallbackURL)
     }
 
     private func primeDirectoryLookupCacheIfNeeded() {
@@ -528,44 +560,54 @@ final class WhisperKitModelManager: ObservableObject {
         directoryLookupCachePrimed = true
 
         let expectedModelIDs = Set(Self.availableModels.map { Self.canonicalModelID($0.id) })
-        guard let enumerator = FileManager.default.enumerator(
-            at: downloadRootURL(),
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            for modelID in expectedModelIDs {
-                downloadedStateByID[modelID] = false
-                directoryLookupCacheByID[modelID] = DirectoryLookupCache(validURL: nil, rawURL: nil)
+        for rootURL in readableDownloadRootURLs() {
+            guard let enumerator = FileManager.default.enumerator(
+                at: rootURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
             }
-            return
-        }
 
-        for case let fileURL as URL in enumerator {
-            let folderName = fileURL.lastPathComponent
-            guard folderName.hasPrefix("openai_whisper-") else { continue }
-            let rawModelID = String(folderName.dropFirst("openai_whisper-".count))
-            let canonicalModelID = Self.canonicalModelID(rawModelID)
-            guard expectedModelIDs.contains(canonicalModelID) else { continue }
-            guard directoryLookupCacheByID[canonicalModelID] == nil else { continue }
+            for case let fileURL as URL in enumerator {
+                let folderName = fileURL.lastPathComponent
+                guard folderName.hasPrefix("openai_whisper-") else { continue }
+                let rawModelID = String(folderName.dropFirst("openai_whisper-".count))
+                let canonicalModelID = Self.canonicalModelID(rawModelID)
+                guard expectedModelIDs.contains(canonicalModelID) else { continue }
 
-            let isValid = WhisperModelArtifacts.isValidModelDirectory(fileURL)
-            directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(
-                validURL: isValid ? fileURL : nil,
-                rawURL: fileURL
-            )
-            downloadedStateByID[canonicalModelID] = isValid
+                let isValid = WhisperModelArtifacts.isValidModelDirectory(fileURL)
+                if let existing = directoryLookupCacheByID[canonicalModelID], existing.validURL != nil {
+                    continue
+                }
+                if isValid {
+                    directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(
+                        validURL: fileURL,
+                        fallbackURL: fileURL
+                    )
+                    downloadedStateByID[canonicalModelID] = true
+                } else if directoryLookupCacheByID[canonicalModelID] == nil {
+                    directoryLookupCacheByID[canonicalModelID] = DirectoryLookupCache(
+                        validURL: nil,
+                        fallbackURL: fileURL
+                    )
+                    downloadedStateByID[canonicalModelID] = false
+                }
+            }
         }
 
         for modelID in expectedModelIDs where directoryLookupCacheByID[modelID] == nil {
             downloadedStateByID[modelID] = false
-            directoryLookupCacheByID[modelID] = DirectoryLookupCache(validURL: nil, rawURL: nil)
+            directoryLookupCacheByID[modelID] = DirectoryLookupCache(validURL: nil, fallbackURL: nil)
         }
     }
 
-    private func removeModelDirectoryIfPresent(id: String) {
-        if let directoryURL = rawModelDirectoryURL(id: id) {
-            try? removeModelDirectory(at: directoryURL, modelID: id, updatesCurrentState: false)
+    private func removeWritableModelDirectoryIfPresent(id: String) {
+        guard let directoryURL = writableRawModelDirectoryURL(id: id) else {
+            invalidateLocalCache(id: id)
+            return
         }
+        try? removeModelDirectory(at: directoryURL, modelID: id, updatesCurrentState: false)
         invalidateLocalCache(id: id)
     }
 
@@ -884,6 +926,12 @@ final class WhisperKitModelManager: ObservableObject {
         }
     }
 
+    private func setStateIfNeeded(_ nextState: ModelState) {
+        if state != nextState {
+            state = nextState
+        }
+    }
+
     private func pauseDownloadIfNetworkIssue(_ error: Error, targetID: String) -> Bool {
         guard let message = MLXModelDownloadSupport.pauseMessageForInterruptedDownload(error) else {
             return false
@@ -915,8 +963,14 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func downloadRootURL() -> URL {
         WhisperKitModelStorageSupport.downloadRootURL(
-            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+            rootDirectory: ModelStorageDirectoryManager.resolvedWriteRootURL()
         )
+    }
+
+    private func readableDownloadRootURLs() -> [URL] {
+        ModelStorageDirectoryManager.resolvedReadableRootURLs().map {
+            WhisperKitModelStorageSupport.downloadRootURL(rootDirectory: $0)
+        }
     }
 
     private func restorePausedDownloadIfPossible(for modelID: String) {
@@ -1136,7 +1190,9 @@ final class WhisperKitModelManager: ObservableObject {
     }
 
     private func removeModelDirectoryIfPresentIfNeeded(id: String) throws {
-        if let directoryURL = rawModelDirectoryURL(id: id) {
+        let directoryURLs = allReadableModelDirectories(id: id)
+        guard !directoryURLs.isEmpty else { return }
+        for directoryURL in directoryURLs {
             try removeModelDirectory(
                 at: directoryURL,
                 modelID: id,
@@ -1159,17 +1215,17 @@ final class WhisperKitModelManager: ObservableObject {
 
     private func clearRepositoryMetadataCache() {
         WhisperKitModelStorageSupport.clearRepositoryMetadataCache(
-            rootDirectory: ModelStorageDirectoryManager.resolvedRootURL()
+            rootDirectory: ModelStorageDirectoryManager.resolvedWriteRootURL()
         )
     }
 
     private func scheduleIdleUnloadIfNeeded() {
         cancelIdleUnloadTask()
-        guard isMemoryOptimizationEnabled else { return }
+        guard loadedWhisper != nil else { return }
         idleUnloadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await Task.sleep(for: idleUnloadDelay)
+                try await Task.sleep(for: resolvedIdleUnloadDelay)
             } catch {
                 return
             }

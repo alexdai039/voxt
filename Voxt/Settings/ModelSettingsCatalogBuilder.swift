@@ -6,6 +6,12 @@ private func localizedModelCatalog(_ key: String) -> String {
 
 @MainActor
 struct ModelCatalogBuilder {
+    struct CatalogDecoration {
+        let filterTags: [String]
+        let displayTags: [String]
+        let usageLocations: [String]
+    }
+
     let mlxModelManager: MLXModelManager
     let whisperModelManager: WhisperKitModelManager
     let customLLMManager: CustomLLMModelManager
@@ -13,41 +19,15 @@ struct ModelCatalogBuilder {
     let remoteLLMConfigurations: [String: RemoteProviderConfiguration]
     let featureSettings: FeatureSettings
     let hasIssue: (ConfigurationTransferManager.MissingConfigurationIssue.Scope) -> Bool
-    let modelStatusText: (String) -> String
-    let whisperModelStatusText: (String) -> String
-    let customLLMStatusText: (String) -> String
     let customLLMBadgeText: (String) -> String?
     let remoteASRStatusText: (RemoteASRProvider, RemoteProviderConfiguration) -> String
     let remoteLLMBadgeText: (RemoteLLMProvider) -> String?
     let primaryUserLanguageCode: String?
-    let isDownloadingModel: (String) -> Bool
-    let isPausedModel: (String) -> Bool
-    let isDownloadingWhisperModel: (String) -> Bool
-    let isPausedWhisperModel: (String) -> Bool
-    let isAnotherWhisperModelDownloading: (String) -> Bool
-    let isDownloadingCustomLLM: (String) -> Bool
-    let isPausedCustomLLM: (String) -> Bool
-    let isAnotherCustomLLMDownloading: (String) -> Bool
-    let isCustomLLMInstalled: (String) -> Bool
-    let isUninstallingModel: (String) -> Bool
-    let isUninstallingWhisperModel: (String) -> Bool
-    let isUninstallingCustomLLM: (String) -> Bool
-    let downloadModel: (String) -> Void
-    let pauseModelDownload: (String) -> Void
-    let cancelModelDownload: (String) -> Void
-    let deleteModel: (String) -> Void
-    let openMLXModelDirectory: (String) -> Void
-    let presentMLXSettings: (String) -> Void
-    let downloadWhisperModel: (String) -> Void
-    let cancelWhisperDownload: (String) -> Void
-    let deleteWhisperModel: (String) -> Void
-    let openWhisperModelDirectory: (String) -> Void
-    let presentWhisperSettings: () -> Void
-    let downloadCustomLLM: (String) -> Void
-    let cancelCustomLLMDownload: (String) -> Void
-    let deleteCustomLLM: (String) -> Void
-    let openCustomLLMModelDirectory: (String) -> Void
-    let configureCustomLLMGeneration: (String) -> Void
+    let mlxInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let whisperInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let customLLMInstallSnapshot: (String) -> LocalModelInstallSnapshot
+    let catalogPrimaryAction: (LocalModelInstallSnapshot) -> ModelTableAction?
+    let catalogSecondaryActions: (LocalModelInstallSnapshot) -> [ModelTableAction]
     let configureASRProvider: (RemoteASRProvider) -> Void
     let configureLLMProvider: (RemoteLLMProvider) -> Void
     let showASRHintTarget: (ASRHintTarget) -> Void
@@ -67,6 +47,13 @@ struct ModelCatalogBuilder {
             )
             let configured = configuration.isConfigured
             let needsSetup = hasIssue(.remoteASRProvider(provider))
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
+                installed: false,
+                requiresConfiguration: true,
+                configured: configured,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "remote-asr:\(provider.rawValue)",
@@ -74,21 +61,10 @@ struct ModelCatalogBuilder {
                 engine: localizedModelCatalog("Remote ASR"),
                 sizeText: configuration.hasUsableModel ? configuration.model : localizedModelCatalog("Cloud"),
                 ratingText: provider == .openAIWhisper ? "4.6" : "4.4",
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
-                    installed: false,
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Remote")] + remoteASRCatalogTags(for: provider, configuration: configuration),
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: remoteASRStatusText(provider, configuration),
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: needsSetup ? localizedModelCatalog("Needs Setup") : nil,
                 primaryAction: ModelTableAction(title: localizedModelCatalog("Configure")) {
                     configureASRProvider(provider)
@@ -106,77 +82,30 @@ struct ModelCatalogBuilder {
         entries.append(contentsOf: CustomLLMModelManager.availableModels.map { model in
             let repo = model.id
             let selectionID = FeatureModelSelectionID.localLLM(repo)
-            let isInstalled = isCustomLLMInstalled(repo)
-            let badge = customLLMBadgeText(repo)
-            let status = isUninstallingCustomLLM(repo) ? localizedModelCatalog("Uninstalling…") : customLLMStatusText(repo)
-            let primaryAction: ModelTableAction?
-            let secondaryActions: [ModelTableAction]
-            if isUninstallingCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Uninstalling…"), isEnabled: false) {}
-                secondaryActions = []
-            } else if isDownloadingCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Pause")) {
-                    customLLMManager.pauseDownload()
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
-                        customLLMManager.cancelDownload()
-                    }
-                ]
-            } else if isPausedCustomLLM(repo) {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Continue")) {
-                    downloadCustomLLM(repo)
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Cancel"), role: .destructive) {
-                        cancelCustomLLMDownload(repo)
-                    }
-                ]
-            } else if isInstalled {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Uninstall"), role: .destructive) {
-                    deleteCustomLLM(repo)
-                }
-                secondaryActions = [
-                    ModelTableAction(title: localizedModelCatalog("Open Location")) {
-                        openCustomLLMModelDirectory(repo)
-                    },
-                    ModelTableAction(title: localizedModelCatalog("Configure")) {
-                        configureCustomLLMGeneration(repo)
-                    }
-                ]
-            } else {
-                primaryAction = ModelTableAction(title: localizedModelCatalog("Install"), isEnabled: !isAnotherCustomLLMDownloading(repo)) {
-                    downloadCustomLLM(repo)
-                }
-                secondaryActions = []
-            }
+            let snapshot = customLLMInstallSnapshot(repo)
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
+                installed: snapshot.isInstalled,
+                requiresConfiguration: false,
+                configured: true,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "local-llm:\(repo)",
                 title: customLLMManager.displayTitle(for: repo),
                 engine: localizedModelCatalog("Local LLM"),
-                sizeText: isInstalled
+                sizeText: snapshot.isInstalled
                     ? (customLLMManager.cachedModelSizeText(repo: repo) ?? customLLMManager.remoteSizeText(repo: repo))
                     : customLLMManager.remoteSizeText(repo: repo),
                 ratingText: CustomLLMModelManager.ratingText(for: repo),
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
-                    installed: isInstalled,
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Local")] + llmCatalogTags(for: repo),
-                    requiresConfiguration: false,
-                    configured: true,
-                    selectionID: selectionID
-                ),
-                statusText: status,
-                usageLocations: usageLocations(for: selectionID),
-                badgeText: badge,
-                primaryAction: primaryAction,
-                secondaryActions: secondaryActions
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
+                statusText: snapshot.statusText,
+                usageLocations: decoration.usageLocations,
+                badgeText: snapshot.badgeText,
+                primaryAction: catalogPrimaryAction(snapshot),
+                secondaryActions: catalogSecondaryActions(snapshot)
             )
         })
 
@@ -191,6 +120,13 @@ struct ModelCatalogBuilder {
                 stored: remoteLLMConfigurations
             )
             let status = configured ? "" : localizedModelCatalog("Not configured")
+            let decoration = catalogDecoration(
+                base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
+                installed: false,
+                requiresConfiguration: true,
+                configured: configured,
+                selectionID: selectionID
+            )
 
             return ModelCatalogEntry(
                 id: "remote-llm:\(provider.rawValue)",
@@ -198,21 +134,10 @@ struct ModelCatalogBuilder {
                 engine: localizedModelCatalog("Remote LLM"),
                 sizeText: configured ? configuration.model : localizedModelCatalog("Cloud"),
                 ratingText: "4.5",
-                filterTags: catalogFilterTags(
-                    base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
-                    installed: false,
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
-                displayTags: catalogDisplayTags(
-                    base: [localizedModelCatalog("Remote")] + remoteLLMCatalogTags(for: provider),
-                    requiresConfiguration: true,
-                    configured: configured,
-                    selectionID: selectionID
-                ),
+                filterTags: decoration.filterTags,
+                displayTags: decoration.displayTags,
                 statusText: status,
-                usageLocations: usageLocations(for: selectionID),
+                usageLocations: decoration.usageLocations,
                 badgeText: remoteLLMBadgeText(provider),
                 primaryAction: ModelTableAction(title: localizedModelCatalog("Configure")) {
                     configureLLMProvider(provider)
@@ -241,6 +166,43 @@ struct ModelCatalogBuilder {
         return labels
     }
 
+    func catalogDecoration(
+        base: [String],
+        installed: Bool,
+        requiresConfiguration: Bool,
+        configured: Bool,
+        selectionID: FeatureModelSelectionID
+    ) -> CatalogDecoration {
+        let usageLocations = usageLocations(for: selectionID)
+        var filterTags = base
+        if installed {
+            filterTags.append(localizedModelCatalog("Installed"))
+        }
+        if requiresConfiguration && configured {
+            filterTags.append(localizedModelCatalog("Configured"))
+        }
+        if !usageLocations.isEmpty {
+            filterTags.append(localizedModelCatalog("In Use"))
+        }
+
+        var displayTags = base.filter { $0 != localizedModelCatalog("Multilingual") }
+        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
+            displayTags.append(languageSupportTag)
+        }
+        if requiresConfiguration && configured {
+            displayTags.append(localizedModelCatalog("Configured"))
+        }
+        if !usageLocations.isEmpty {
+            displayTags.append(localizedModelCatalog("In Use"))
+        }
+
+        return CatalogDecoration(
+            filterTags: deduplicatedTags(filterTags),
+            displayTags: deduplicatedTags(displayTags),
+            usageLocations: usageLocations
+        )
+    }
+
     func catalogFilterTags(
         base: [String],
         installed: Bool,
@@ -267,17 +229,14 @@ struct ModelCatalogBuilder {
         configured: Bool,
         selectionID: FeatureModelSelectionID
     ) -> [String] {
-        var tags = base.filter { $0 != localizedModelCatalog("Multilingual") }
-        if let languageSupportTag = primaryLanguageSupportTag(for: selectionID) {
-            tags.append(languageSupportTag)
-        }
-        if requiresConfiguration && configured {
-            tags.append(localizedModelCatalog("Configured"))
-        }
-        if !usageLocations(for: selectionID).isEmpty {
-            tags.append(localizedModelCatalog("In Use"))
-        }
-        return deduplicatedTags(tags)
+        catalogDecoration(
+            base: base,
+            installed: false,
+            requiresConfiguration: requiresConfiguration,
+            configured: configured,
+            selectionID: selectionID
+        )
+        .displayTags
     }
 
     func mlxCatalogTags(for repo: String) -> [String] {

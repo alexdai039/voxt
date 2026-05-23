@@ -99,7 +99,6 @@ extension AppDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.scheduleHotkeyTransientStateReset(reason: "workspaceSessionDidResignActive")
-                self?.releaseIdleLocalModelResources(reason: "workspace-session-resign-active")
             }
         }
     }

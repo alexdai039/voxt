@@ -301,7 +301,6 @@ struct LLMDebugWindowView: View {
                     preset: selectedPreset,
                     variableValues: $viewModel.variableValues,
                     onApply: { prompt in
-                        viewModel.savePromptTemplate(prompt)
                         viewModel.applyPromptTemplate(prompt)
                     },
                     onSave: { prompt in

@@ -616,13 +616,14 @@ final class TranscriptionHistoryStore: ObservableObject {
         return entry.id
     }
 
-    func delete(id: UUID) {
+    @discardableResult
+    func delete(id: UUID) -> Bool {
         let wasCached = allEntries.contains { $0.id == id }
         let removed: TranscriptionHistoryEntry?
         do {
             removed = try repository.delete(id: id)
         } catch {
-            return
+            return false
         }
 
         removeCachedEntry(id: id)
@@ -633,6 +634,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         refreshEntryIndexes()
         publishVisibleEntries()
         removed.map(audioArchive.removeArchive(for:))
+        return true
     }
 
     func clearAll() {

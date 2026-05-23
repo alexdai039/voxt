@@ -6,7 +6,7 @@ struct FeaturePromptSection: View {
     let defaultText: String
     let variables: [PromptTemplateVariableDescriptor]
     let guidance: String
-    let persistChanges: () -> Void
+    let persistChanges: (String) -> Void
     @State private var coordinator: FeaturePromptDraftCoordinator
     @State private var pendingSaveTask: Task<Void, Never>?
 
@@ -16,7 +16,7 @@ struct FeaturePromptSection: View {
         defaultText: String,
         variables: [PromptTemplateVariableDescriptor],
         guidance: String,
-        persistChanges: @escaping () -> Void
+        persistChanges: @escaping (String) -> Void
     ) {
         self.title = title
         _text = text
@@ -73,7 +73,7 @@ struct FeaturePromptSection: View {
 
         if let persistedText = coordinator.takePendingPersist(expectedText: expectedText) {
             text = persistedText
-            persistChanges()
+            persistChanges(persistedText)
         }
     }
 }

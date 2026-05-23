@@ -1,21 +1,29 @@
 import Foundation
 
 enum ModelSettingsProgressRefreshSupport {
-    static func shouldRefreshCatalogForMetadataChange(
+    static func shouldRefreshCatalogForLifecycleChange(
         isActive: Bool,
         isWindowVisible: Bool
     ) -> Bool {
         isActive && isWindowVisible
     }
 
+    static func shouldRefreshCatalogForMetadataChange(
+        isActive: Bool,
+        isWindowVisible: Bool,
+        shouldPollModelState: Bool
+    ) -> Bool {
+        isActive && isWindowVisible && shouldPollModelState
+    }
+
     static func shouldPollModelState(
         mlxState: MLXModelManager.ModelState,
-        mlxActiveDownloadRepos: Set<String>,
+        mlxHasActiveDownloadingRepos: Bool,
         whisperState: WhisperKitModelManager.ModelState,
         whisperActiveDownload: WhisperKitModelManager.ActiveDownload?,
         customLLMState: CustomLLMModelManager.ModelState
     ) -> Bool {
-        if !mlxActiveDownloadRepos.isEmpty {
+        if mlxHasActiveDownloadingRepos {
             return true
         }
 

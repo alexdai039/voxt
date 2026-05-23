@@ -6,7 +6,7 @@ The current Xcode package reference is:
 
 - URL: `https://github.com/hehehai/mlx-audio-swift.git`
 - Requirement: `revision`
-- Revision: `8ae0c745360b32c128c0ba6d4e46b27ee3214529`
+- Revision: `a1c7b11b68b16f1591bb0ff586372dde9b265135`
 
 ## Version rules
 
@@ -42,5 +42,5 @@ If Voxt needs to consume a synced fork commit before a new tag exists, pin the p
 
 - Fork: `hehehai/mlx-audio-swift`
 - Requirement: `revision`
-- Commit: `8ae0c745360b32c128c0ba6d4e46b27ee3214529`
-- Notes: pinned to the current fork `main` tip while Voxt tracks upstream 3.x-compatible STT updates; replace with a new Voxt tag once one is cut
+- Commit: `a1c7b11b68b16f1591bb0ff586372dde9b265135`
+- Notes: merged upstream `main` through FireRed ASR 2 fix `#188` plus the current MossTTS, Qwen3-ASR, and Silero VAD updates; replace with a new Voxt tag once one is cut

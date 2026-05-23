@@ -289,45 +289,51 @@ struct LLMDebugPromptSettingsSheet: View {
                 .buttonStyle(DetailPrimaryButtonStyle())
             }
 
-            if isCustomPreset {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(modelDebugLocalized("Prompt"))
-                        .font(.subheadline.weight(.medium))
-                    PromptEditorView(
-                        text: $draftPrompt,
-                        height: 310,
-                        variables: []
-                    )
-                }
-            } else {
-                GeometryReader { proxy in
-                    let variableWidth = max(160, proxy.size.width * 0.3)
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(modelDebugLocalized("Runtime Input"))
-                                .font(.subheadline.weight(.medium))
-                            LLMDebugVariableEditor(
-                                descriptors: preset.runtimeInputDescriptors,
-                                values: $variableValues
-                            )
+            ScrollView {
+                Group {
+                    if isCustomPreset {
+                        HStack(alignment: .top, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(modelDebugLocalized("Prompt"))
+                                    .font(.subheadline.weight(.medium))
+                                PromptEditorView(
+                                    text: $draftPrompt,
+                                    height: 310,
+                                    variables: []
+                                )
+                            }
                             Spacer(minLength: 0)
                         }
-                        .frame(width: variableWidth, alignment: .topLeading)
+                    } else {
+                        HStack(alignment: .top, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(modelDebugLocalized("Runtime Input"))
+                                    .font(.subheadline.weight(.medium))
+                                LLMDebugVariableEditor(
+                                    descriptors: preset.runtimeInputDescriptors,
+                                    values: $variableValues
+                                )
+                                Spacer(minLength: 0)
+                            }
+                            .frame(width: 210, alignment: .topLeading)
 
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(modelDebugLocalized("Prompt"))
-                                .font(.subheadline.weight(.medium))
-                            PromptEditorView(
-                                text: $draftPrompt,
-                                height: 310,
-                                variables: preset.variables,
-                                variablesTitle: modelDebugLocalized("Prompt variables")
-                            )
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(modelDebugLocalized("Prompt"))
+                                    .font(.subheadline.weight(.medium))
+                                PromptEditorView(
+                                    text: $draftPrompt,
+                                    height: 310,
+                                    variables: preset.variables,
+                                    variablesTitle: modelDebugLocalized("Prompt variables")
+                                )
+                            }
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .settingsDialogChrome(width: 720, height: 450, onClose: { dismiss() })
         .onAppear {

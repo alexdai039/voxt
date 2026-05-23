@@ -13,6 +13,7 @@ final class MLXModelManagerTests: XCTestCase {
 
         defaults.set(customRoot.path, forKey: AppPreferenceKey.modelStorageRootPath)
         defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+        ModelStorageDirectoryManager.resetForTesting()
         addTeardownBlock {
             if let previousPath {
                 defaults.set(previousPath, forKey: AppPreferenceKey.modelStorageRootPath)
@@ -24,9 +25,13 @@ final class MLXModelManagerTests: XCTestCase {
             } else {
                 defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
             }
+            ModelStorageDirectoryManager.resetForTesting()
         }
 
-        XCTAssertEqual(MLXModelManager.activeHubCache().cacheDirectory, customRoot)
+        let hubCache = MLXModelStorageSupport.hubCache(
+            rootDirectory: ModelStorageDirectoryManager.resolvedWriteRootURL()
+        )
+        XCTAssertEqual(hubCache.cacheDirectory, customRoot)
     }
 
     func testMLXAudioClearHubCacheTargetsConfiguredModelStorageRoot() throws {
@@ -612,6 +617,88 @@ final class MLXModelManagerTests: XCTestCase {
 
             XCTAssertEqual(manager.state(for: otherRepo), .notDownloaded)
             XCTAssertNil(manager.pausedStatusMessage(for: otherRepo))
+        }
+    }
+
+    func testQwen3LoadPreparationCreatesWritableShadowDirectoryWhenTokenizerIsMissing() async throws {
+        try await withIsolatedModelStorageRoot { writableRoot in
+            let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+            let sourceDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+                .appendingPathComponent("legacy-qwen3", isDirectory: true)
+            try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: sourceDirectory.appendingPathComponent("config.json"))
+            try Data("weights".utf8).write(to: sourceDirectory.appendingPathComponent("model.safetensors"))
+            defer { try? FileManager.default.removeItem(at: sourceDirectory.deletingLastPathComponent()) }
+
+            let manager = MLXModelManager(modelRepo: repo)
+            let loadDirectory = try manager.writableLoadDirectoryIfNeeded(
+                for: repo,
+                sourceDirectory: sourceDirectory,
+                lowercasedRepo: repo.lowercased()
+            )
+
+            let expectedDirectory = writableRoot
+                .appendingPathComponent(".derived-model-artifacts", isDirectory: true)
+                .appendingPathComponent("mlx-audio-shadow", isDirectory: true)
+                .appendingPathComponent("mlx-community_Qwen3-ASR-0.6B-4bit", isDirectory: true)
+            XCTAssertEqual(loadDirectory.standardizedFileURL.path, expectedDirectory.standardizedFileURL.path)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: sourceDirectory.appendingPathComponent("tokenizer.json").path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: loadDirectory.appendingPathComponent("config.json").path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: loadDirectory.appendingPathComponent("model.safetensors").path))
+        }
+    }
+
+    func testQwen3LoadPreparationPreservesWritablePartialDownloadDirectory() async throws {
+        try await withIsolatedModelStorageRoot { writableRoot in
+            let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+            let sourceDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+                .appendingPathComponent("legacy-qwen3", isDirectory: true)
+            try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: sourceDirectory.appendingPathComponent("config.json"))
+            try Data("weights".utf8).write(to: sourceDirectory.appendingPathComponent("model.safetensors"))
+            defer { try? FileManager.default.removeItem(at: sourceDirectory.deletingLastPathComponent()) }
+
+            let partialDirectory = writableRoot
+                .appendingPathComponent("mlx-audio", isDirectory: true)
+                .appendingPathComponent("mlx-community_Qwen3-ASR-0.6B-4bit", isDirectory: true)
+            try FileManager.default.createDirectory(at: partialDirectory, withIntermediateDirectories: true)
+            try Data("partial".utf8).write(to: partialDirectory.appendingPathComponent("download.state"))
+
+            let manager = MLXModelManager(modelRepo: repo)
+            _ = try manager.writableLoadDirectoryIfNeeded(
+                for: repo,
+                sourceDirectory: sourceDirectory,
+                lowercasedRepo: repo.lowercased()
+            )
+
+            XCTAssertTrue(FileManager.default.fileExists(atPath: partialDirectory.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: partialDirectory.appendingPathComponent("download.state").path))
+        }
+    }
+
+    func testDeleteModelRemovesQwen3ShadowDirectory() async throws {
+        try await withIsolatedModelStorageRoot { writableRoot in
+            let repo = "mlx-community/Qwen3-ASR-0.6B-4bit"
+            try seedValidMLXModelDirectory(repo: repo, root: writableRoot)
+            let sourceDirectory = writableRoot
+                .appendingPathComponent("mlx-audio", isDirectory: true)
+                .appendingPathComponent("mlx-community_Qwen3-ASR-0.6B-4bit", isDirectory: true)
+            try? FileManager.default.removeItem(at: sourceDirectory.appendingPathComponent("tokenizer.json"))
+
+            let manager = MLXModelManager(modelRepo: repo)
+            let loadDirectory = try manager.writableLoadDirectoryIfNeeded(
+                for: repo,
+                sourceDirectory: sourceDirectory,
+                lowercasedRepo: repo.lowercased()
+            )
+            XCTAssertTrue(FileManager.default.fileExists(atPath: loadDirectory.path))
+
+            manager.deleteModel(repo: repo)
+
+            XCTAssertFalse(FileManager.default.fileExists(atPath: sourceDirectory.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: loadDirectory.path))
         }
     }
 

@@ -148,11 +148,7 @@ extension AppDelegate {
     }
 
     var translationSystemPrompt: String {
-        AppPromptDefaults.resolvedStoredText(
-            defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
-            kind: .translation,
-            defaults: defaults
-        )
+        translationFeatureSettings.prompt
     }
 
     var translationCustomLLMRepo: String {
@@ -186,11 +182,7 @@ extension AppDelegate {
     }
 
     var rewriteSystemPrompt: String {
-        AppPromptDefaults.resolvedStoredText(
-            defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
-            kind: .rewrite,
-            defaults: defaults
-        )
+        rewriteFeatureSettings.prompt
     }
 
     var rewriteCustomLLMRepo: String {
@@ -238,16 +230,12 @@ extension AppDelegate {
         defaults.object(forKey: AppPreferenceKey.whisperRealtimeEnabled) as? Bool ?? false
     }
 
-    var localModelMemoryOptimizationEnabled: Bool {
-        defaults.object(forKey: AppPreferenceKey.localModelMemoryOptimizationEnabled) as? Bool ?? true
-    }
-
     var realtimeTextDisplayEnabled: Bool {
         defaults.object(forKey: AppPreferenceKey.realtimeTextDisplayEnabled) as? Bool ?? true
     }
 
-    var whisperKeepResidentLoaded: Bool {
-        !localModelMemoryOptimizationEnabled
+    var localModelIdleUnloadDelaySeconds: Int {
+        AppPreferenceKey.resolvedLocalModelIdleUnloadDelaySeconds(defaults: defaults)
     }
 
     var historyEnabled: Bool {
