@@ -105,7 +105,7 @@ enum AppPreferenceKey {
     static let historyAudioStorageRootBookmark = "historyAudioStorageRootBookmark"
 
     static let localModelIdleUnloadDelayMinimumSeconds = 10
-    static let localModelIdleUnloadDelayMaximumSeconds = 3000
+    static let localModelIdleUnloadDelayMaximumSeconds = 1200
     static let defaultLocalModelIdleUnloadDelaySeconds = 90
     static let legacyLongLocalModelIdleUnloadDelaySeconds = 120
 

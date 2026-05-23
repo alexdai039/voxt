@@ -25,7 +25,10 @@ struct HistoryAudioSettingsSheet: View {
                 .font(.title3.weight(.semibold))
 
             GeneralSettingsCard(titleText: localizedHistoryAudioSettings("Cleanup")) {
-                Toggle(localizedHistoryAudioSettings("History Cleanup"), isOn: $historyCleanupEnabled)
+                GeneralToggleRow(
+                    title: LocalizedStringKey(localizedHistoryAudioSettings("History Cleanup")),
+                    isOn: $historyCleanupEnabled
+                )
 
                 if historyCleanupEnabled {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -49,7 +52,10 @@ struct HistoryAudioSettingsSheet: View {
             }
 
             GeneralSettingsCard(titleText: localizedHistoryAudioSettings("Audio Storage")) {
-                Toggle(localizedHistoryAudioSettings("Save history audio"), isOn: $historyAudioStorageEnabled)
+                GeneralToggleRow(
+                    title: LocalizedStringKey(localizedHistoryAudioSettings("Save history audio")),
+                    isOn: $historyAudioStorageEnabled
+                )
 
                 if historyAudioStorageEnabled {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -68,10 +74,12 @@ struct HistoryAudioSettingsSheet: View {
                                 .underline()
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                                .multilineTextAlignment(.trailing)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 Image(systemName: "arrow.up.forward.square")
                                     .font(.caption)
                             }
+                            .frame(width: 260, alignment: .leading)
                         }
                         .buttonStyle(SettingsInlineSelectorButtonStyle())
                         .help(localizedHistoryAudioSettings("Open folder"))
@@ -82,7 +90,7 @@ struct HistoryAudioSettingsSheet: View {
                         .buttonStyle(SettingsPillButtonStyle())
                     }
 
-                    Text(localizedHistoryAudioSettings("New history audio is stored here."))
+                    Text(localizedHistoryAudioSettings("New history audio is stored here. Switching the path will not move existing audio files."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -92,7 +100,7 @@ struct HistoryAudioSettingsSheet: View {
                             .foregroundStyle(.red)
                     }
                 } else {
-                    Text(localizedHistoryAudioSettings("History items will not keep audio files."))
+                    Text(localizedHistoryAudioSettings("When disabled, history items will not keep audio files."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -111,7 +119,7 @@ struct HistoryAudioSettingsSheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Text(localizedHistoryAudioSettings("Copy saved audio to a folder."))
+                            Text(localizedHistoryAudioSettings("Copies every saved history audio file into a folder you choose."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

@@ -276,17 +276,20 @@ struct LLMDebugPromptSettingsSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if !isCustomPreset {
-                    Button(modelDebugLocalized("Apply")) {
-                        onApply(draftPrompt)
+                HStack(spacing: 8) {
+                    if !isCustomPreset {
+                        Button(modelDebugLocalized("Apply")) {
+                            onApply(draftPrompt)
+                        }
+                        .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
                     }
-                    .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10))
+                    Button(modelDebugLocalized("Save")) {
+                        onSave(draftPrompt)
+                        dismiss()
+                    }
+                    .buttonStyle(DetailPrimaryButtonStyle())
                 }
-                Button(modelDebugLocalized("Save")) {
-                    onSave(draftPrompt)
-                    dismiss()
-                }
-                .buttonStyle(DetailPrimaryButtonStyle())
+                .padding(.trailing, 56)
             }
 
             ScrollView {
