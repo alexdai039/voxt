@@ -6,45 +6,7 @@ private func localized(_ key: String) -> String {
     AppLocalization.localizedString(key)
 }
 
-enum LocalASRConfigurationTarget: Equatable, Identifiable {
-    case mlx(repo: String)
-    case whisper(modelID: String)
-
-    var id: String {
-        switch self {
-        case .mlx(let repo):
-            return "mlx:\(repo)"
-        case .whisper(let modelID):
-            return "whisper:\(modelID)"
-        }
-    }
-}
-
-enum LocalModelRemovalTarget: Equatable, Identifiable {
-    case mlx(repo: String)
-    case whisper(modelID: String)
-    case customLLM(repo: String)
-
-    var id: String {
-        switch self {
-        case .mlx(let repo):
-            return "mlx:\(MLXModelManager.canonicalModelRepo(repo))"
-        case .whisper(let modelID):
-            return "whisper:\(WhisperKitModelManager.canonicalModelID(modelID))"
-        case .customLLM(let repo):
-            return "custom-llm:\(CustomLLMModelManager.canonicalModelRepo(repo))"
-        }
-    }
-}
-
 struct ModelSettingsView: View {
-    private struct DownloadEndpointCheckResult: Equatable {
-        let isReachable: Bool
-        let latencyText: String
-        let throughputText: String
-        let detailText: String
-    }
-
     @AppStorage(AppPreferenceKey.transcriptionEngine) var engineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.enhancementMode) var enhancementModeRaw = EnhancementMode.off.rawValue
     @AppStorage(AppPreferenceKey.enhancementSystemPrompt) var systemPrompt = ""
@@ -110,8 +72,8 @@ struct ModelSettingsView: View {
     @State private var isTestingChinaDownloadEndpoint = false
     @State private var expandedModelGroupIDs = Set<String>()
     @State private var collapsedModelGroupIDs = Set<String>()
-    @State private var globalDownloadEndpointResult: DownloadEndpointCheckResult?
-    @State private var chinaDownloadEndpointResult: DownloadEndpointCheckResult?
+    @State private var globalDownloadEndpointResult: ModelDownloadEndpointCheckResult?
+    @State private var chinaDownloadEndpointResult: ModelDownloadEndpointCheckResult?
     @State var catalogSnapshot = ModelSettingsCatalogSnapshot.empty
     @State private var isCatalogRefreshScheduled = false
     @State private var isRefreshingCatalogSnapshot = false
@@ -537,7 +499,7 @@ struct ModelSettingsView: View {
     private func runDownloadEndpointCheck(
         using baseURL: URL,
         isTesting: @escaping (Bool) -> Void,
-        setResult: @escaping (DownloadEndpointCheckResult) -> Void
+        setResult: @escaping (ModelDownloadEndpointCheckResult) -> Void
     ) async {
         await MainActor.run { isTesting(true) }
         let result = await measureDownloadEndpoint(baseURL: baseURL)
@@ -547,7 +509,7 @@ struct ModelSettingsView: View {
         }
     }
 
-    private func measureDownloadEndpoint(baseURL: URL) async -> DownloadEndpointCheckResult {
+    private func measureDownloadEndpoint(baseURL: URL) async -> ModelDownloadEndpointCheckResult {
         let targetURL = baseURL.appending(path: "robots.txt")
         var request = URLRequest(url: targetURL)
         request.timeoutInterval = 12
@@ -566,7 +528,7 @@ struct ModelSettingsView: View {
             )
 
             if let httpResponse = response as? HTTPURLResponse, !(200..<400).contains(httpResponse.statusCode) {
-                return DownloadEndpointCheckResult(
+                return ModelDownloadEndpointCheckResult(
                     isReachable: false,
                     latencyText: latencyText,
                     throughputText: throughputText,
@@ -574,14 +536,14 @@ struct ModelSettingsView: View {
                 )
             }
 
-            return DownloadEndpointCheckResult(
+            return ModelDownloadEndpointCheckResult(
                 isReachable: true,
                 latencyText: latencyText,
                 throughputText: throughputText,
                 detailText: AppLocalization.format("Downloaded %@ to verify connectivity.", ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
             )
         } catch {
-            return DownloadEndpointCheckResult(
+            return ModelDownloadEndpointCheckResult(
                 isReachable: false,
                 latencyText: localized("Latency: --"),
                 throughputText: localized("Speed: --"),
@@ -648,165 +610,23 @@ struct ModelSettingsView: View {
     }
 
     private var modelDownloadSettingsSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(localized("Model Download Settings"))
-                .font(.title3.weight(.semibold))
-
-            GeneralSettingsCard(titleText: localized("Model Storage")) {
-                GeneralFieldRow(title: LocalizedStringKey(localized("Storage Path"))) {
-                    Button(action: openModelStorageInFinder) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder")
-                                .font(.caption)
-                            Text(modelStorageDisplayPath.isEmpty ? ModelStorageDirectoryManager.defaultRootURL.path : modelStorageDisplayPath)
-                                .underline()
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            Image(systemName: "arrow.up.forward.square")
-                                .font(.caption)
-                        }
-                        .frame(width: 260, alignment: .leading)
-                    }
-                    .buttonStyle(SettingsInlineSelectorButtonStyle())
-                    .help(localized("Open folder"))
-
-                    Button(localized("Choose")) {
-                        chooseModelStorageDirectory()
-                    }
-                    .buttonStyle(SettingsPillButtonStyle())
-                }
-
-                if let modelStorageSelectionError, !modelStorageSelectionError.isEmpty {
-                    Text(modelStorageSelectionError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-
-            GeneralSettingsCard(titleText: localized("Memory")) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Text(localized("Unload Delay"))
-                            .foregroundStyle(.secondary)
-
-                        Button {
-                            showIdleUnloadDelayInfo.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showIdleUnloadDelayInfo, arrowEdge: .top) {
-                            Text(localized("Idle unload delay for local ASR and local LLM models. Lower values reduce memory usage; higher values favor faster reuse."))
-                                .font(.caption)
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .frame(width: 280, alignment: .leading)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-
-                    LocalModelIdleUnloadDelayControl(
-                        value: $localModelIdleUnloadDelaySeconds,
-                        range: AppPreferenceKey.localModelIdleUnloadDelayMinimumSeconds...AppPreferenceKey.localModelIdleUnloadDelayMaximumSeconds
-                    )
-                }
-            }
-
-            GeneralSectionDivider()
-
-            VStack(alignment: .leading, spacing: 16) {
-                GeneralToggleRow(
-                    title: LocalizedStringKey(localized("Use China mirror")),
-                    description: LocalizedStringKey(localized("Use the mirror for Hugging Face model downloads.")),
-                    isOn: $useHfMirror
-                )
-
-                endpointTestRow(
-                    title: localized("Global"),
-                    subtitle: "https://huggingface.co",
-                    isTesting: isTestingGlobalDownloadEndpoint,
-                    result: globalDownloadEndpointResult,
-                    actionTitle: localized("Test"),
-                    action: testGlobalDownloadEndpoint
-                )
-
-                endpointTestRow(
-                    title: localized("China Mirror"),
-                    subtitle: "https://hf-mirror.com",
-                    isTesting: isTestingChinaDownloadEndpoint,
-                    result: chinaDownloadEndpointResult,
-                    actionTitle: localized("Test"),
-                    action: testChinaDownloadEndpoint
-                )
-            }
-
-            SettingsDialogActionRow {
-                Button(localized("Done")) {
-                    isModelDownloadSettingsPresented = false
-                }
-                .buttonStyle(SettingsPrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .settingsDialogChrome(width: 560, onClose: {
-            isModelDownloadSettingsPresented = false
-        })
-    }
-
-    @ViewBuilder
-    private func endpointTestRow(
-        title: String,
-        subtitle: String,
-        isTesting: Bool,
-        result: DownloadEndpointCheckResult?,
-        actionTitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.subheadline.weight(.medium))
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if isTesting {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                if let result {
-                    OnboardingPermissionStatusBadge(isGranted: result.isReachable)
-                }
-
-                Button(actionTitle, action: action)
-                    .buttonStyle(SettingsPillButtonStyle())
-                    .disabled(isTesting)
-            }
-
-            if let result {
-                Text("\(result.latencyText) · \(result.throughputText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(result.detailText)
-                    .font(.caption)
-                    .foregroundStyle(
-                        result.isReachable
-                        ? AnyShapeStyle(.secondary)
-                        : AnyShapeStyle(Color.orange)
-                    )
-            }
-        }
+        ModelDownloadSettingsSheet(
+            modelStorageDisplayPath: modelStorageDisplayPath,
+            modelStorageFallbackPath: ModelStorageDirectoryManager.defaultRootURL.path,
+            modelStorageSelectionError: modelStorageSelectionError,
+            onOpenModelStorageInFinder: openModelStorageInFinder,
+            onChooseModelStorageDirectory: chooseModelStorageDirectory,
+            localModelIdleUnloadDelaySeconds: $localModelIdleUnloadDelaySeconds,
+            showIdleUnloadDelayInfo: $showIdleUnloadDelayInfo,
+            useHfMirror: $useHfMirror,
+            isTestingGlobalDownloadEndpoint: isTestingGlobalDownloadEndpoint,
+            globalDownloadEndpointResult: globalDownloadEndpointResult,
+            onTestGlobalDownloadEndpoint: testGlobalDownloadEndpoint,
+            isTestingChinaDownloadEndpoint: isTestingChinaDownloadEndpoint,
+            chinaDownloadEndpointResult: chinaDownloadEndpointResult,
+            onTestChinaDownloadEndpoint: testChinaDownloadEndpoint,
+            isPresented: $isModelDownloadSettingsPresented
+        )
     }
 
     var shouldPollModelState: Bool {
@@ -877,150 +697,4 @@ struct ModelSettingsView: View {
             return AppLocalization.format("%@ %@: %@", customLLMManager.displayTitle(for: repo), localized("Rewrite"), issue.message)
         }
     }
-}
-
-private struct LocalModelIdleUnloadDelayControl: View {
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            LocalModelIdleUnloadDelaySlider(
-                value: $value,
-                range: range
-            )
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
-
-            HStack(alignment: .firstTextBaseline) {
-                Text(formatIdleUnloadDelay(range.lowerBound))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(formatIdleUnloadDelay(range.upperBound))
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption2)
-            .monospacedDigit()
-        }
-    }
-}
-
-private struct LocalModelIdleUnloadDelaySlider: View {
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-
-    @State private var isHovering = false
-    @State private var isDragging = false
-
-    var body: some View {
-        GeometryReader { geometry in
-            let progress = normalizedProgress
-            let thumbX = max(0, min(geometry.size.width, geometry.size.width * progress))
-
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(SettingsUIStyle.subtleFillColor)
-
-                tickMarks
-                    .padding(.horizontal, 18)
-
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color.primary.opacity(isActive ? 0.10 : 0.08))
-                    .frame(width: max(20, thumbX - 12), height: 30)
-                    .offset(x: 4)
-
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(activeTint.opacity(isActive ? 0.92 : 0.60))
-                    .frame(width: 8, height: 26)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .strokeBorder(activeTint.opacity(isActive ? 0.22 : 0.12), lineWidth: 1)
-                    )
-                    .offset(x: min(max(0, thumbX - 4), max(0, geometry.size.width - 8)))
-
-                HStack {
-                    Spacer()
-                    Text(formatIdleUnloadDelay(value))
-                        .font(.system(size: 12, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
-                        .padding(.trailing, 12)
-                }
-            }
-            .frame(height: 38)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(
-                        isActive ? Color.accentColor.opacity(0.45) : SettingsUIStyle.subtleBorderColor,
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: isActive ? Color.accentColor.opacity(0.10) : .clear, radius: 6, y: 1)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in
-                        isDragging = true
-                        updateValue(at: gesture.location.x, width: geometry.size.width)
-                    }
-                    .onEnded { _ in
-                        isDragging = false
-                    }
-            )
-            .onHover { isHovering = $0 }
-        }
-    }
-
-    private var isActive: Bool {
-        isHovering || isDragging
-    }
-
-    private var activeTint: Color {
-        isActive ? Color.accentColor : Color.primary
-    }
-
-    private var normalizedProgress: CGFloat {
-        let clamped = min(max(value, range.lowerBound), range.upperBound)
-        let span = max(range.upperBound - range.lowerBound, 1)
-        return CGFloat(clamped - range.lowerBound) / CGFloat(span)
-    }
-
-    @ViewBuilder
-    private var tickMarks: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                ForEach(0..<9, id: \.self) { index in
-                    Circle()
-                        .fill(Color.primary.opacity(index == 0 ? 0.18 : 0.14))
-                        .frame(width: 4.5, height: 4.5)
-                        .frame(maxWidth: .infinity, alignment: index == 0 ? .leading : index == 8 ? .trailing : .center)
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func updateValue(at locationX: CGFloat, width: CGFloat) {
-        let resolvedWidth = max(width, 1)
-        let clampedX = min(max(locationX, 0), resolvedWidth)
-        let progress = clampedX / resolvedWidth
-        let resolved = range.lowerBound + Int(round(progress * CGFloat(range.upperBound - range.lowerBound)))
-        value = min(max(resolved, range.lowerBound), range.upperBound)
-    }
-}
-
-private func formatIdleUnloadDelay(_ seconds: Int) -> String {
-    guard seconds >= 60 else {
-        return AppLocalization.format("%@s", String(seconds))
-    }
-
-    let minutes = Double(seconds) / 60.0
-    let hasFraction = seconds % 60 != 0
-    let formattedMinutes = minutes.formatted(
-        .number.precision(.fractionLength(hasFraction && minutes < 10 ? 1 : 0))
-    )
-    return AppLocalization.format("%@min", formattedMinutes)
 }

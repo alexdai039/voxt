@@ -447,29 +447,15 @@ struct GeneralModelStorageCard: View {
 
     var body: some View {
         GeneralSettingsCard(title: localizedKey("Model Storage")) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(localized("Storage Path"))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: onOpenFinder) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .font(.caption)
-                        Text(displayPath)
-                            .underline()
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .multilineTextAlignment(.trailing)
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(SettingsInlineSelectorButtonStyle())
-                .help(localized("Open folder"))
-
-                Button(localized("Choose"), action: onChoose)
-                    .buttonStyle(SettingsPillButtonStyle())
-            }
+            SettingsPathSelectionRow(
+                title: localizedKey("Storage Path"),
+                displayedPath: displayPath,
+                fallbackPath: ModelStorageDirectoryManager.defaultRootURL.path,
+                openButtonHelp: localized("Open folder"),
+                chooseButtonTitle: localized("Choose"),
+                onOpen: onOpenFinder,
+                onChoose: onChoose
+            )
 
             Text(localized("New model downloads in Model settings are stored in this folder."))
                 .font(.caption)

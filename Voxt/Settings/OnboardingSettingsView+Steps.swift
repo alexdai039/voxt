@@ -367,31 +367,15 @@ extension OnboardingSettingsView {
 
     var modelStorageCard: some View {
         GeneralSettingsCard(title: "Model Storage") {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(localized("Storage Path"))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: openModelStorageInFinder) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder")
-                            .font(.caption)
-                        Text(modelStorageDisplayPath.isEmpty ? ModelStorageDirectoryManager.defaultRootURL.path : modelStorageDisplayPath)
-                            .underline()
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .multilineTextAlignment(.trailing)
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.caption)
-                    }
-                }
-                .buttonStyle(SettingsInlineSelectorButtonStyle())
-                .help(localized("Open folder"))
-
-                Button(localized("Choose")) {
-                    chooseModelStorageDirectory()
-                }
-                .buttonStyle(SettingsPillButtonStyle())
-            }
+            SettingsPathSelectionRow(
+                title: LocalizedStringKey(localized("Storage Path")),
+                displayedPath: modelStorageDisplayPath,
+                fallbackPath: ModelStorageDirectoryManager.defaultRootURL.path,
+                openButtonHelp: localized("Open folder"),
+                chooseButtonTitle: localized("Choose"),
+                onOpen: openModelStorageInFinder,
+                onChoose: chooseModelStorageDirectory
+            )
 
             Text(localized("New model downloads are stored here. Switching the path will not move existing model files."))
                 .font(.caption)

@@ -58,37 +58,15 @@ struct HistoryAudioSettingsSheet: View {
                 )
 
                 if historyAudioStorageEnabled {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(localizedHistoryAudioSettings("Storage Path"))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button(action: onOpenHistoryAudioStorageInFinder) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "folder")
-                                    .font(.caption)
-                                Text(
-                                    historyAudioStorageDisplayPath.isEmpty
-                                    ? HistoryAudioStorageDirectoryManager.defaultRootURL.path
-                                    : historyAudioStorageDisplayPath
-                                )
-                                .underline()
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: "arrow.up.forward.square")
-                                    .font(.caption)
-                            }
-                            .frame(width: 260, alignment: .leading)
-                        }
-                        .buttonStyle(SettingsInlineSelectorButtonStyle())
-                        .help(localizedHistoryAudioSettings("Open folder"))
-
-                        Button(localizedHistoryAudioSettings("Choose")) {
-                            onChooseHistoryAudioStorageDirectory()
-                        }
-                        .buttonStyle(SettingsPillButtonStyle())
-                    }
+                    SettingsPathSelectionRow(
+                        title: LocalizedStringKey(localizedHistoryAudioSettings("Storage Path")),
+                        displayedPath: historyAudioStorageDisplayPath,
+                        fallbackPath: HistoryAudioStorageDirectoryManager.defaultRootURL.path,
+                        openButtonHelp: localizedHistoryAudioSettings("Open folder"),
+                        chooseButtonTitle: localizedHistoryAudioSettings("Choose"),
+                        onOpen: onOpenHistoryAudioStorageInFinder,
+                        onChoose: onChooseHistoryAudioStorageDirectory
+                    )
 
                     Text(localizedHistoryAudioSettings("New history audio is stored here. Switching the path will not move existing audio files."))
                         .font(.caption)

@@ -70,6 +70,46 @@ struct SettingsSelectionButton<Label: View>: View {
     }
 }
 
+struct SettingsPathSelectionRow: View {
+    let title: LocalizedStringKey
+    let displayedPath: String
+    let fallbackPath: String
+    var pathWidth: CGFloat = 260
+    let openButtonHelp: String
+    let chooseButtonTitle: String
+    let onOpen: () -> Void
+    let onChoose: () -> Void
+
+    private var resolvedPath: String {
+        displayedPath.isEmpty ? fallbackPath : displayedPath
+    }
+
+    var body: some View {
+        GeneralFieldRow(title: title) {
+            Button(action: onOpen) {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder")
+                        .font(.caption)
+                    Text(resolvedPath)
+                        .underline()
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "arrow.up.forward.square")
+                        .font(.caption)
+                }
+                .frame(width: pathWidth, alignment: .leading)
+            }
+            .buttonStyle(SettingsInlineSelectorButtonStyle())
+            .help(openButtonHelp)
+
+            Button(chooseButtonTitle, action: onChoose)
+                .buttonStyle(SettingsPillButtonStyle())
+        }
+    }
+}
+
 struct SettingsSelectLikeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         SettingsSelectLikeButtonBody(configuration: configuration)
