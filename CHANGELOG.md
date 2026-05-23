@@ -6,6 +6,44 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.8] - 2026-05-23
+
+### English
+
+#### Changed
+- Rebuilt the settings window with a new sidebar home, clearer dashboard cards, and cleaner About and update controls.
+- Expanded model and provider presentation across settings so catalogs, install states, and feature model pickers are easier to scan.
+- Moved local model storage out of the cache directory while keeping compatibility with existing installs.
+
+#### Fixed
+- Preserved settings list scroll position and prompt edits more reliably while settings views refresh.
+- Surfaced local model load failures more clearly and reduced stale refresh issues after unloading local models.
+- Started Whisper capture before model loading so recording startup stays more reliable.
+
+### 简体中文
+
+#### 改进
+- 重构设置窗口，带来新的侧边栏首页、更清晰的 Dashboard 卡片，以及更干净的 About 和更新控制。
+- 补全设置中的模型与 provider 展示，让模型目录、安装状态和功能模型选择器更易浏览。
+- 将本地模型存储迁出缓存目录，同时保持对现有安装的兼容。
+
+#### 修复
+- 改善设置视图刷新时的状态保持，更稳定地保留设置列表滚动位置和提示词编辑内容。
+- 更清晰地展示本地模型加载失败信息，并减少卸载本地模型后的陈旧刷新问题。
+- 在模型加载前启动 Whisper capture，让录音启动流程更稳定。
+
+### 日本語
+
+#### 変更
+- 設定ウィンドウを刷新し、新しいサイドバーのホーム、分かりやすい Dashboard カード、より整理された About と更新操作を追加しました。
+- 設定内のモデルと provider の表示を拡充し、カタログ、インストール状態、機能別モデル選択を見やすくしました。
+- 既存インストールとの互換性を保ちながら、ローカルモデルの保存先をキャッシュディレクトリ外へ移しました。
+
+#### 修正
+- 設定ビューの再読み込み中でも、設定リストのスクロール位置とプロンプト編集内容をより安定して保持するようにしました。
+- ローカルモデルの読み込み失敗をより分かりやすく表示し、ローカルモデル解除後の古い更新状態が残る問題を減らしました。
+- モデル読み込み前に Whisper capture を開始し、録音開始をより安定させました。
+
 ## [1.11.8-beta.1] - 2026-05-21
 
 ### English
