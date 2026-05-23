@@ -148,11 +148,7 @@ extension AppDelegate {
     }
 
     var translationSystemPrompt: String {
-        AppPromptDefaults.resolvedStoredText(
-            defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
-            kind: .translation,
-            defaults: defaults
-        )
+        translationFeatureSettings.prompt
     }
 
     var translationCustomLLMRepo: String {
@@ -186,11 +182,7 @@ extension AppDelegate {
     }
 
     var rewriteSystemPrompt: String {
-        AppPromptDefaults.resolvedStoredText(
-            defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
-            kind: .rewrite,
-            defaults: defaults
-        )
+        rewriteFeatureSettings.prompt
     }
 
     var rewriteCustomLLMRepo: String {

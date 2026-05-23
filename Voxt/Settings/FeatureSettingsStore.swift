@@ -29,7 +29,11 @@ enum FeatureSettingsStore {
            let raw = String(data: data, encoding: .utf8) {
             defaults.set(raw, forKey: AppPreferenceKey.featureSettings)
         }
-        defaults.set(storageReady.rewrite.appEnhancementEnabled, forKey: AppPreferenceKey.appEnhancementEnabled)
+        // Keep feature-specific legacy keys in sync so runtime flows and debug tools
+        // that still read them see the latest prompt/provider settings immediately.
+        syncLegacyTranscription(storageReady.transcription, defaults: defaults)
+        syncLegacyTranslation(storageReady.translation, defaults: defaults)
+        syncLegacyRewrite(storageReady.rewrite, defaults: defaults)
         NotificationCenter.default.post(name: .voxtFeatureSettingsDidChange, object: nil)
     }
 
@@ -37,6 +41,24 @@ enum FeatureSettingsStore {
         var settings = load(defaults: defaults)
         mutate(&settings)
         save(settings, defaults: defaults)
+    }
+
+    static func saveTranscriptionPrompt(_ prompt: String, defaults: UserDefaults = .standard) {
+        update(defaults: defaults) { settings in
+            settings.transcription.prompt = AppPromptDefaults.canonicalStoredText(prompt, kind: .enhancement)
+        }
+    }
+
+    static func saveTranslationPrompt(_ prompt: String, defaults: UserDefaults = .standard) {
+        update(defaults: defaults) { settings in
+            settings.translation.prompt = AppPromptDefaults.canonicalStoredText(prompt, kind: .translation)
+        }
+    }
+
+    static func saveRewritePrompt(_ prompt: String, defaults: UserDefaults = .standard) {
+        update(defaults: defaults) { settings in
+            settings.rewrite.prompt = AppPromptDefaults.canonicalStoredText(prompt, kind: .rewrite)
+        }
     }
 
     private static func removeObsoleteLatencyProfileKeys(defaults: UserDefaults) {

@@ -27,10 +27,7 @@ extension AppDelegate {
     }
 
     func resolvedGlobalEnhancementPrompt() -> String {
-        AppPromptDefaults.resolvedStoredText(
-            UserDefaults.standard.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
-            kind: .enhancement
-        )
+        FeatureSettingsStore.load(defaults: .standard).transcription.prompt
     }
 
     func resolvedEnhancementPrompt(

@@ -559,6 +559,7 @@ final class LLMDebugViewModel: ObservableObject {
 
     private let customLLMManager: CustomLLMModelManager
     private var remoteConfigurations: [String: RemoteProviderConfiguration]
+    private var sessionPromptOverrides: [String: String] = [:]
 
     init(appDelegate: AppDelegate) {
         let useMirror = UserDefaults.standard.bool(forKey: AppPreferenceKey.useHfMirror)
@@ -604,7 +605,9 @@ final class LLMDebugViewModel: ObservableObject {
             customLLMManager: customLLMManager,
             remoteLLMConfigurations: remoteConfigurations
         )
-        presetOptions = ModelDebugCatalog.availableLLMPresets()
+        presetOptions = ModelDebugCatalog.availableLLMPresets(
+            promptOverrides: sessionPromptOverrides
+        )
         if !modelOptions.contains(where: { $0.id == selectedModelID }) {
             selectedModelID = modelOptions.first?.id ?? ""
         }
@@ -633,7 +636,7 @@ final class LLMDebugViewModel: ObservableObject {
         case .custom:
             LLMDebugPresetStore.saveCustomPrompt(prompt)
         case .enhancement, .translation, .rewrite, .transcriptSummary, .appGroup:
-            LLMDebugPresetStore.savePromptOverride(prompt, for: preset.id)
+            sessionPromptOverrides[preset.id] = prompt
         }
         refreshOptions()
         selectedPresetID = currentPresetID
@@ -643,24 +646,16 @@ final class LLMDebugViewModel: ObservableObject {
     func applyPromptTemplate(_ prompt: String) {
         guard let preset = selectedPreset else { return }
         let defaults = UserDefaults.standard
+        sessionPromptOverrides.removeValue(forKey: preset.id)
         switch preset.kind {
         case .custom:
             return
         case .enhancement:
-            defaults.set(
-                AppPromptDefaults.canonicalStoredText(prompt, kind: .enhancement),
-                forKey: AppPreferenceKey.enhancementSystemPrompt
-            )
+            FeatureSettingsStore.saveTranscriptionPrompt(prompt, defaults: defaults)
         case .translation:
-            defaults.set(
-                AppPromptDefaults.canonicalStoredText(prompt, kind: .translation),
-                forKey: AppPreferenceKey.translationSystemPrompt
-            )
+            FeatureSettingsStore.saveTranslationPrompt(prompt, defaults: defaults)
         case .rewrite:
-            defaults.set(
-                AppPromptDefaults.canonicalStoredText(prompt, kind: .rewrite),
-                forKey: AppPreferenceKey.rewriteSystemPrompt
-            )
+            FeatureSettingsStore.saveRewritePrompt(prompt, defaults: defaults)
         case .transcriptSummary:
             AppPreferenceKey.setTranscriptSummaryPromptTemplate(
                 AppPromptDefaults.canonicalStoredText(prompt, kind: .transcriptSummary),
@@ -669,9 +664,11 @@ final class LLMDebugViewModel: ObservableObject {
         case .appGroup(let groupID):
             applyGroupPrompt(prompt, groupID: groupID, defaults: defaults)
         }
+        refreshOptions()
     }
 
     func handleWindowClose() {
+        sessionPromptOverrides.removeAll()
         clearResults()
         statusMessage = ""
         resetVariableValuesForPreset()

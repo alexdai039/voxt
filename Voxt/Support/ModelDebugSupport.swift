@@ -138,6 +138,12 @@ enum LLMDebugPresetStore {
         savePromptOverrides(overrides, defaults: defaults)
     }
 
+    static func removePromptOverride(for presetID: String, defaults: UserDefaults = .standard) {
+        var overrides = promptOverrides(defaults: defaults)
+        guard overrides.removeValue(forKey: presetID) != nil else { return }
+        savePromptOverrides(overrides, defaults: defaults)
+    }
+
     private static func promptOverrides(defaults: UserDefaults) -> [String: String] {
         guard let data = defaults.data(forKey: AppPreferenceKey.llmDebugPresetPromptOverrides),
               let decoded = try? JSONDecoder().decode([String: String].self, from: data)
@@ -284,11 +290,15 @@ enum ModelDebugCatalog {
         return options
     }
 
-    static func availableLLMPresets(defaults: UserDefaults = .standard) -> [LLMDebugPresetOption] {
+    static func availableLLMPresets(
+        defaults: UserDefaults = .standard,
+        promptOverrides: [String: String] = [:]
+    ) -> [LLMDebugPresetOption] {
         let userMainLanguage = userMainLanguagePromptValue(defaults: defaults)
         let targetLanguage = TranslationTargetLanguage(
             rawValue: defaults.string(forKey: AppPreferenceKey.translationTargetLanguage) ?? ""
         ) ?? .english
+        let featureSettings = FeatureSettingsStore.load(defaults: defaults)
 
         var presets: [LLMDebugPresetOption] = [
             LLMDebugPresetOption(
@@ -305,12 +315,7 @@ enum ModelDebugCatalog {
                 title: AppLocalization.localizedString("Transcription Enhancement"),
                 subtitle: AppLocalization.localizedString("Built-in preset"),
                 kind: .enhancement,
-                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:enhancement", defaults: defaults)
-                    ?? AppPromptDefaults.resolvedStoredText(
-                        defaults.string(forKey: AppPreferenceKey.enhancementSystemPrompt),
-                        kind: .enhancement,
-                        defaults: defaults
-                    ),
+                promptTemplate: promptOverrides["builtin:enhancement"] ?? featureSettings.transcription.prompt,
                 variables: ModelSettingsPromptVariables.enhancement,
                 defaultValues: [
                     AppDelegate.rawTranscriptionTemplateVariable: "",
@@ -322,12 +327,7 @@ enum ModelDebugCatalog {
                 title: AppLocalization.localizedString("Translation"),
                 subtitle: AppLocalization.localizedString("Built-in preset"),
                 kind: .translation,
-                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:translation", defaults: defaults)
-                    ?? AppPromptDefaults.resolvedStoredText(
-                        defaults.string(forKey: AppPreferenceKey.translationSystemPrompt),
-                        kind: .translation,
-                        defaults: defaults
-                    ),
+                promptTemplate: promptOverrides["builtin:translation"] ?? featureSettings.translation.prompt,
                 variables: ModelSettingsPromptVariables.translation,
                 defaultValues: [
                     "{{TARGET_LANGUAGE}}": targetLanguage.instructionName,
@@ -340,12 +340,7 @@ enum ModelDebugCatalog {
                 title: AppLocalization.localizedString("Rewrite"),
                 subtitle: AppLocalization.localizedString("Built-in preset"),
                 kind: .rewrite,
-                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:rewrite", defaults: defaults)
-                    ?? AppPromptDefaults.resolvedStoredText(
-                        defaults.string(forKey: AppPreferenceKey.rewriteSystemPrompt),
-                        kind: .rewrite,
-                        defaults: defaults
-                    ),
+                promptTemplate: promptOverrides["builtin:rewrite"] ?? featureSettings.rewrite.prompt,
                 variables: ModelSettingsPromptVariables.rewrite,
                 defaultValues: [
                     "{{DICTATED_PROMPT}}": "",
@@ -357,12 +352,11 @@ enum ModelDebugCatalog {
                 title: AppLocalization.localizedString("Transcript Summary"),
                 subtitle: AppLocalization.localizedString("Built-in preset"),
                 kind: .transcriptSummary,
-                promptTemplate: LLMDebugPresetStore.promptOverride(for: "builtin:transcript-summary", defaults: defaults)
-                    ?? AppPromptDefaults.resolvedStoredText(
-                        AppPreferenceKey.resolvedTranscriptSummaryPromptTemplate(defaults: defaults),
-                        kind: .transcriptSummary,
-                        defaults: defaults
-                    ),
+                promptTemplate: promptOverrides["builtin:transcript-summary"] ?? AppPromptDefaults.resolvedStoredText(
+                    AppPreferenceKey.resolvedTranscriptSummaryPromptTemplate(defaults: defaults),
+                    kind: .transcriptSummary,
+                    defaults: defaults
+                ),
                 variables: TranscriptSummarySupport.promptTemplateVariables.map {
                     PromptTemplateVariableDescriptor(token: $0, tipKey: "Template tip \($0)")
                 },
@@ -383,7 +377,7 @@ enum ModelDebugCatalog {
                     title: AppLocalization.format("App Enhancement · %@", group.name),
                     subtitle: AppLocalization.localizedString("Saved group preset"),
                     kind: .appGroup(groupID: group.id),
-                    promptTemplate: LLMDebugPresetStore.promptOverride(for: "group:\(group.id.uuidString)", defaults: defaults) ?? trimmedPrompt,
+                    promptTemplate: promptOverrides["group:\(group.id.uuidString)"] ?? trimmedPrompt,
                     variables: ModelSettingsPromptVariables.appEnhancement,
                     defaultValues: [
                         AppDelegate.rawTranscriptionTemplateVariable: "",

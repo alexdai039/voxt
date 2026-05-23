@@ -4,7 +4,7 @@ import Carbon
 enum LaunchPresentationPolicy {
     @MainActor
     static func shouldPresentMainWindowOnLaunch() -> Bool {
-        !LaunchSourceDetector.isLaunchedAsLoginItem
+        return !LaunchSourceDetector.isLaunchedAsLoginItem
     }
 }
 
