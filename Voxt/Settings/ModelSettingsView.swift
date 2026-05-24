@@ -393,6 +393,10 @@ struct ModelSettingsView: View {
             needsAnotherCatalogRefresh = true
             return
         }
+        if catalogSnapshot.allEntries.isEmpty {
+            rebuildCatalogSnapshot()
+            return
+        }
         guard !isCatalogRefreshScheduled else { return }
         isCatalogRefreshScheduled = true
         DispatchQueue.main.async {

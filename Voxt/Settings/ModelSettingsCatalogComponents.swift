@@ -38,6 +38,10 @@ enum ModelCatalogTag {
         locationTags
     }
 
+    static var statusFilterTags: Set<String> {
+        Set([localized("Installed"), localized("Configured"), localized("In Use")])
+    }
+
     static var priority: [String] {
         groups.flatMap { $0 }
     }

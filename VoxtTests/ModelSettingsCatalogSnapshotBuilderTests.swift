@@ -40,6 +40,19 @@ final class ModelSettingsCatalogSnapshotBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.filteredEntries.map(\.id), ["installed-local"])
     }
 
+    func testBuildTreatsStatusFiltersAsUnion() {
+        let snapshot = ModelSettingsCatalogSnapshotBuilder.build(
+            entries: [
+                makeEntry(id: "installed-local", filterTags: [localTag, installedTag]),
+                makeEntry(id: "configured-remote", filterTags: [remoteTag, configuredTag]),
+                makeEntry(id: "plain-local", filterTags: [localTag])
+            ],
+            selectedTags: [installedTag, configuredTag]
+        )
+
+        XCTAssertEqual(snapshot.filteredEntries.map(\.id), ["installed-local", "configured-remote"])
+    }
+
     private func makeEntry(
         id: String,
         filterTags: [String],

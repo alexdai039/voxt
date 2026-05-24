@@ -95,6 +95,15 @@ enum ModelSettingsCatalogSnapshotBuilder {
         selectedTags: Set<String>
     ) -> [ModelCatalogEntry] {
         guard !selectedTags.isEmpty else { return entries }
-        return entries.filter { selectedTags.isSubset(of: Set($0.filterTags)) }
+        let selectedStatusTags = selectedTags.intersection(ModelCatalogTag.statusFilterTags)
+        let requiredTags = selectedTags.subtracting(selectedStatusTags)
+        return entries.filter { entry in
+            let entryTags = Set(entry.filterTags)
+            guard requiredTags.isSubset(of: entryTags) else { return false }
+            if selectedStatusTags.isEmpty {
+                return true
+            }
+            return !entryTags.intersection(selectedStatusTags).isEmpty
+        }
     }
 }
