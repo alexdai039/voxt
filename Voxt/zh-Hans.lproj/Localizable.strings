@@ -1387,7 +1387,7 @@
 "Single Note File" = "每条笔记单文件";
 "Space by Default" = "默认空格";
 "The default note trigger is Space. Each trigger stores the current live transcript as one note, clears the transcription UI, and continues listening." = "默认触发键是空格。每次触发都会把当前实时转录保存成一条笔记，清空转录界面，并继续监听。";
-"Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "在不中断录音的前提下，把一段实时转录连续切成多条笔记。笔记会保留在独立悬浮窗里，每条都会生成一个简短 AI 标题。";
+"Capture key points during recording. Notes stay separate and get short AI titles." = "录制时保存关键内容，笔记独立保存并生成简短 AI 标题。";
 "Record Shortcut" = "录制快捷键";
 "Reset Shortcut" = "重置快捷键";
 "Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "当模型需要当前信息时，使用 Anthropic 托管的网页搜索。这可能会增加延迟和用量。";
@@ -1665,6 +1665,10 @@
 "New version: %@" = "新版本：%@";
 "One stop sequence per line" = "每行一个停止序列";
 "One wildcard pattern per line." = "每行一个通配符模式。";
+"Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again." = "macOS 已拒绝自动化授权。请打开“自动化”设置，或重置 Apple Events 权限后重试。";
+"Browser app could not be found. Reinstall or add the browser again." = "找不到浏览器应用。请重新安装，或重新添加该浏览器。";
+"Browser app signature could not be verified. Reinstall or update the browser, then request authorization again." = "无法验证浏览器应用签名。请重新安装或更新浏览器，然后再次请求授权。";
+"Browser app signature is invalid. Reinstall or update the browser, then request authorization again." = "浏览器应用签名无效。请重新安装或更新浏览器，然后再次请求授权。";
 "Open the browser and try again to complete the authorization check." = "请打开浏览器完成授权检查后再试一次。";
 "Paste a URL to test" = "粘贴一个 URL 进行测试";
 "Presence Penalty" = "存在惩罚";

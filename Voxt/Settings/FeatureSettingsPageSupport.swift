@@ -82,7 +82,8 @@ extension FeatureSettingsView {
     func featurePage<Content: View>(
         title: String,
         subtitle: String,
-        icon: String,
+        iconKind: SettingsSidebarIconKind? = nil,
+        systemImageName: String? = nil,
         pills: [FeatureSummaryPill],
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -91,7 +92,8 @@ extension FeatureSettingsView {
                 FeatureHeroCard(
                     title: title,
                     subtitle: subtitle,
-                    icon: icon,
+                    iconKind: iconKind,
+                    systemImageName: systemImageName,
                     pills: pills
                 )
 

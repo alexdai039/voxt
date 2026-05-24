@@ -5,7 +5,7 @@ extension FeatureSettingsView {
         featurePage(
             title: featureSettingsLocalized("Translation"),
             subtitle: featureSettingsLocalized("Configure the speech path, translation engine, target language, and prompt behavior for translation mode."),
-            icon: "globe",
+            iconKind: .translation,
             pills: translationPills
         ) {
             FeatureSettingsCard(title: featureSettingsLocalized("Translation Flow")) {
@@ -92,7 +92,7 @@ extension FeatureSettingsView {
         featurePage(
             title: featureSettingsLocalized("Rewrite"),
             subtitle: featureSettingsLocalized("Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut."),
-            icon: "text.badge.star",
+            iconKind: .rewrite,
             pills: rewritePills
         ) {
             FeatureSettingsCard(title: featureSettingsLocalized("Rewrite Flow")) {

@@ -5,6 +5,7 @@ import Speech
 import ApplicationServices
 import Carbon
 import UniformTypeIdentifiers
+import Security
 
 private func permissionsLocalized(_ key: String) -> String {
     AppLocalization.localizedString(key)
@@ -61,8 +62,9 @@ struct PermissionsSettingsView: View {
     @State private var browserAutomationStates: [String: PermissionState] = [:]
     @State private var browserAutomationRequestsInFlight: Set<String> = []
     @State private var browserAutomationTestsInFlight: Set<String> = []
-    @State private var browserAutomationMessages: [String: String] = [:]
     @State private var browserPickerErrorMessage: String?
+    @State private var permissionToastMessage = ""
+    @State private var permissionToastDismissTask: Task<Void, Never>?
 
     @AppStorage(AppPreferenceKey.appEnhancementEnabled) private var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.appBranchCustomBrowsers) private var appBranchCustomBrowsersJSON = "[]"
@@ -157,6 +159,16 @@ struct PermissionsSettingsView: View {
             loadBrowserTargets()
             refreshBrowserAutomationStates()
         }
+        .overlay(alignment: .top) {
+            if !permissionToastMessage.isEmpty {
+                ModelDebugToast(message: permissionToastMessage) {
+                    dismissPermissionToast()
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: permissionToastMessage)
         .onChange(of: muteSystemAudioWhileRecording) { _, _ in
             refreshStates()
         }
@@ -168,6 +180,7 @@ struct PermissionsSettingsView: View {
         }
         .onDisappear {
             stopAllMonitoring()
+            dismissPermissionToast()
         }
     }
 
@@ -211,50 +224,47 @@ struct PermissionsSettingsView: View {
 
     @ViewBuilder
     private func browserAuthorizationRow(_ target: BrowserAutomationTarget) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 18) {
-                Text(target.displayName)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary.opacity(0.92))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .center, spacing: 18) {
+            Text(target.displayName)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary.opacity(0.92))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(alignment: .center, spacing: 8) {
-                    if browserAutomationRequestsInFlight.contains(target.bundleID) || browserAutomationTestsInFlight.contains(target.bundleID) {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 14, height: 14)
-                    }
-
-                    statusBadge(for: browserAutomationStates[target.bundleID] ?? .disabled)
-
-                    Button(permissionsLocalized("Request")) {
-                        requestBrowserAutomationPermission(target)
-                    }
-                    .buttonStyle(SettingsCompactActionButtonStyle())
-
-                    Button(permissionsLocalized("Test")) {
-                        testBrowserURLRead(target)
-                    }
-                    .buttonStyle(SettingsCompactActionButtonStyle())
-
-                    if target.isCustom {
-                        Button(permissionsLocalized("Delete"), role: .destructive) {
-                            removeCustomBrowser(target)
-                        }
-                        .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
-                    }
+            HStack(alignment: .center, spacing: 8) {
+                if browserAutomationRequestsInFlight.contains(target.bundleID) || browserAutomationTestsInFlight.contains(target.bundleID) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 14, height: 14)
                 }
-                .fixedSize(horizontal: true, vertical: false)
-            }
 
-            if let message = browserAutomationMessages[target.bundleID] {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                statusBadge(for: browserAutomationStates[target.bundleID] ?? .disabled)
+
+                Button(permissionsLocalized("Request")) {
+                    requestBrowserAutomationPermission(target)
+                }
+                .buttonStyle(SettingsCompactActionButtonStyle())
+                .disabled(isBrowserAutomationOperationInFlight)
+
+                Button(permissionsLocalized("Test")) {
+                    testBrowserURLRead(target)
+                }
+                .buttonStyle(SettingsCompactActionButtonStyle())
+                .disabled(isBrowserAutomationOperationInFlight)
+
+                if target.isCustom {
+                    Button(permissionsLocalized("Delete"), role: .destructive) {
+                        removeCustomBrowser(target)
+                    }
+                    .buttonStyle(SettingsCompactActionButtonStyle(tone: .destructive))
+                    .disabled(isBrowserAutomationOperationInFlight)
+                }
             }
+            .fixedSize(horizontal: true, vertical: false)
         }
+    }
+
+    private var isBrowserAutomationOperationInFlight: Bool {
+        !browserAutomationRequestsInFlight.isEmpty || !browserAutomationTestsInFlight.isEmpty
     }
 
     private func statusBadge(for state: PermissionState) -> some View {
@@ -491,20 +501,25 @@ struct PermissionsSettingsView: View {
         custom.removeAll { $0.bundleID == target.bundleID }
         saveStoredCustomBrowsers(custom)
         browserAutomationStates.removeValue(forKey: target.bundleID)
-        browserAutomationMessages.removeValue(forKey: target.bundleID)
         loadBrowserTargets()
         refreshBrowserAutomationStates()
     }
 
     private func refreshBrowserAutomationStates() {
         for target in browserTargets {
-            browserAutomationStates[target.bundleID] = probeBrowserAutomationState(target)
+            browserAutomationStates[target.bundleID] = nonPromptingBrowserAutomationState(target)
         }
     }
 
     private func requestBrowserAutomationPermission(_ target: BrowserAutomationTarget) {
+        guard !isBrowserAutomationOperationInFlight else { return }
+        if let integrityError = browserTargetIntegrityError(target) {
+            browserAutomationStates[target.bundleID] = .disabled
+            showPermissionToast(integrityError, duration: 5.0)
+            return
+        }
+
         browserAutomationRequestsInFlight.insert(target.bundleID)
-        VoxtLog.model("Browser automation permission request triggered: target=\(target.bundleID)")
 
         Task { @MainActor in
             defer { browserAutomationRequestsInFlight.remove(target.bundleID) }
@@ -515,29 +530,19 @@ struct PermissionsSettingsView: View {
             let enabled = scriptProbe.success || (status == noErr && !scriptProbe.permissionDenied)
             browserAutomationStates[target.bundleID] = enabled ? .enabled : .disabled
             if enabled {
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Authorization granted.")
+                showPermissionToast(AppLocalization.localizedString("Authorization granted."))
             } else if scriptProbe.appNotRunning {
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Open the browser and try again to complete the authorization check.")
+                showPermissionToast(AppLocalization.localizedString("Open the browser and try again to complete the authorization check."))
+            } else if scriptProbe.permissionDenied {
+                showPermissionToast(AppLocalization.localizedString("Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again."), duration: 4.0)
             } else {
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Authorization not granted.")
+                showPermissionToast(AppLocalization.localizedString("Authorization not granted."))
             }
-            VoxtLog.model(
-                "Browser automation permission status: target=\(target.bundleID), state=\(enabled ? "enabled" : "disabled"), status=\(status)"
-            )
         }
     }
 
-    private func probeBrowserAutomationState(_ target: BrowserAutomationTarget) -> PermissionState {
+    private func nonPromptingBrowserAutomationState(_ target: BrowserAutomationTarget) -> PermissionState {
         let status = automationPermissionStatus(for: target.bundleID, askUserIfNeeded: false)
-        if isApplicationRunning(bundleID: target.bundleID) {
-            let scriptProbe = runAppleScriptCandidates(target.scripts)
-            if scriptProbe.success {
-                return .enabled
-            }
-            if scriptProbe.permissionDenied {
-                return .disabled
-            }
-        }
         return status == noErr ? .enabled : .disabled
     }
 
@@ -549,34 +554,40 @@ struct PermissionsSettingsView: View {
 
         return AEDeterminePermissionToAutomateTarget(
             aeDesc,
-            AEEventClass(kCoreEventClass),
-            AEEventID(kAEGetData),
+            AEEventClass(typeWildCard),
+            AEEventID(typeWildCard),
             askUserIfNeeded
         )
     }
 
     private func testBrowserURLRead(_ target: BrowserAutomationTarget) {
+        guard !isBrowserAutomationOperationInFlight else { return }
+        if let integrityError = browserTargetIntegrityError(target) {
+            browserAutomationStates[target.bundleID] = .disabled
+            showPermissionToast(integrityError, duration: 5.0)
+            return
+        }
+
         browserAutomationTestsInFlight.insert(target.bundleID)
-        browserAutomationMessages[target.bundleID] = nil
 
         Task { @MainActor in
             defer { browserAutomationTestsInFlight.remove(target.bundleID) }
             let result = runAppleScriptCandidates(target.scripts)
             if result.success {
                 browserAutomationStates[target.bundleID] = .enabled
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Browser URL read test succeeded.")
+                showPermissionToast(AppLocalization.localizedString("Browser URL read test succeeded."))
                 return
             }
 
             if result.permissionDenied {
                 browserAutomationStates[target.bundleID] = .disabled
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Browser URL read test failed: permission denied.")
+                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: permission denied."))
             } else if result.appNotRunning {
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Browser URL read test failed: browser is not running.")
+                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: browser is not running."))
             } else if let lastErrorCode = result.lastErrorCode {
-                browserAutomationMessages[target.bundleID] = AppLocalization.format("Browser URL read test failed (error: %@).", String(lastErrorCode))
+                showPermissionToast(AppLocalization.format("Browser URL read test failed (error: %@).", String(lastErrorCode)))
             } else {
-                browserAutomationMessages[target.bundleID] = AppLocalization.localizedString("Browser URL read test failed.")
+                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed."))
             }
         }
     }
@@ -622,12 +633,46 @@ struct PermissionsSettingsView: View {
             .contains(where: { !$0.isTerminated })
     }
 
+    private func browserTargetIntegrityError(_ target: BrowserAutomationTarget) -> String? {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleID) else {
+            return AppLocalization.localizedString("Browser app could not be found. Reinstall or add the browser again.")
+        }
+
+        var staticCode: SecStaticCode?
+        let createStatus = SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode)
+        guard createStatus == errSecSuccess, let staticCode else {
+            return AppLocalization.localizedString("Browser app signature could not be verified. Reinstall or update the browser, then request authorization again.")
+        }
+
+        let checkStatus = SecStaticCodeCheckValidity(staticCode, SecCSFlags(rawValue: kSecCSStrictValidate), nil)
+        guard checkStatus == errSecSuccess else {
+            return AppLocalization.localizedString("Browser app signature is invalid. Reinstall or update the browser, then request authorization again.")
+        }
+
+        return nil
+    }
+
     private func openSettings(for kind: SettingsPermissionKind) {
         PermissionGuidance.openSettings(for: kind)
     }
 
     private func openBrowserAutomationSettings() {
         PermissionGuidance.openBrowserAutomationSettings()
+    }
+
+    private func showPermissionToast(_ message: String, duration: TimeInterval = 2.4) {
+        permissionToastDismissTask?.cancel()
+        permissionToastMessage = message
+        permissionToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
+            permissionToastMessage = ""
+        }
+    }
+
+    private func dismissPermissionToast() {
+        permissionToastDismissTask?.cancel()
+        permissionToastMessage = ""
     }
 
     private func permissionSnapshotText(_ snapshot: [SettingsPermissionKind: PermissionState]) -> String {

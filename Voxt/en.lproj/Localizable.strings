@@ -1385,7 +1385,7 @@
 "Single Note File" = "Single Note File";
 "Space by Default" = "Space by Default";
 "The default note trigger is Space. Each trigger stores the current live transcript as one note, clears the transcription UI, and continues listening." = "The default note trigger is Space. Each trigger stores the current live transcript as one note, clears the transcription UI, and continues listening.";
-"Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title.";
+"Capture key points during recording. Notes stay separate and get short AI titles." = "Capture key points during recording. Notes stay separate and get short AI titles.";
 "Record Shortcut" = "Record Shortcut";
 "Reset Shortcut" = "Reset Shortcut";
 "Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "Use Anthropic hosted web search when the model needs current information. This may increase latency and usage.";
@@ -1663,6 +1663,10 @@
 "New version: %@" = "New version: %@";
 "One stop sequence per line" = "One stop sequence per line";
 "One wildcard pattern per line." = "One wildcard pattern per line.";
+"Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again." = "Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again.";
+"Browser app could not be found. Reinstall or add the browser again." = "Browser app could not be found. Reinstall or add the browser again.";
+"Browser app signature could not be verified. Reinstall or update the browser, then request authorization again." = "Browser app signature could not be verified. Reinstall or update the browser, then request authorization again.";
+"Browser app signature is invalid. Reinstall or update the browser, then request authorization again." = "Browser app signature is invalid. Reinstall or update the browser, then request authorization again.";
 "Open the browser and try again to complete the authorization check." = "Open the browser and try again to complete the authorization check.";
 "Paste a URL to test" = "Paste a URL to test";
 "Presence Penalty" = "Presence Penalty";

@@ -1331,7 +1331,7 @@
 "Single Note File" = "1メモ1ファイル";
 "Space by Default" = "デフォルトは Space";
 "The default note trigger is Space. Each trigger stores the current live transcript as one note, clears the transcription UI, and continues listening." = "デフォルトのメモトリガーは Space です。トリガーするたびに現在の文字起こしを 1 件のメモとして保存し、文字起こし UI をクリアして録音を続けます。";
-"Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title." = "録音セッションを止めずに、リアルタイム文字起こしを複数のメモに分割します。メモは独立したフローティングウィンドウに残り、それぞれに短い AI タイトルが付きます。";
+"Capture key points during recording. Notes stay separate and get short AI titles." = "録音中に要点を保存します。メモは個別に残り、短い AI タイトルが付きます。";
 "Use Anthropic hosted web search when the model needs current information. This may increase latency and usage." = "モデルが最新情報を必要とする場合に Anthropic のホスト型 Web 検索を使います。遅延や利用量が増える場合があります。";
 "Ground responses with Google Search when Gemini needs fresher web context. This may increase latency and usage." = "Gemini がより新しい Web コンテキストを必要とする場合に Google 検索で応答を補強します。遅延や利用量が増える場合があります。";
 "Allow GLM to call its hosted web search tool for fresher answers. This may increase latency and usage." = "GLM がホスト型 Web 検索ツールを呼び出して、より新しい回答を返せるようにします。遅延や利用量が増える場合があります。";
@@ -1608,6 +1608,10 @@
 "New version: %@" = "新しいバージョン: %@";
 "One stop sequence per line" = "停止シーケンスは 1 行に 1 つ";
 "One wildcard pattern per line." = "ワイルドカードパターンは 1 行に 1 つずつ入力します。";
+"Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again." = "macOS により自動化の認可が拒否されました。自動化設定を開くか、Apple Events 権限をリセットしてからもう一度お試しください。";
+"Browser app could not be found. Reinstall or add the browser again." = "ブラウザアプリが見つかりません。再インストールするか、ブラウザをもう一度追加してください。";
+"Browser app signature could not be verified. Reinstall or update the browser, then request authorization again." = "ブラウザアプリの署名を検証できません。ブラウザを再インストールまたは更新してから、もう一度認可をリクエストしてください。";
+"Browser app signature is invalid. Reinstall or update the browser, then request authorization again." = "ブラウザアプリの署名が無効です。ブラウザを再インストールまたは更新してから、もう一度認可をリクエストしてください。";
 "Open the browser and try again to complete the authorization check." = "ブラウザを開いて認可を完了してから、もう一度お試しください。";
 "Paste a URL to test" = "テストする URL を貼り付け";
 "Presence Penalty" = "出現ペナルティ";

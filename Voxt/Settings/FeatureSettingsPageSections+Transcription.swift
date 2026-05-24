@@ -5,7 +5,7 @@ extension FeatureSettingsView {
         featurePage(
             title: featureSettingsLocalized("Transcription"),
             subtitle: featureSettingsLocalized("Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement."),
-            icon: "waveform.and.mic",
+            iconKind: .transcription,
             pills: transcriptionPills
         ) {
             FeatureSettingsCard(title: featureSettingsLocalized("Model Pipeline")) {
@@ -71,8 +71,8 @@ extension FeatureSettingsView {
     var noteContent: some View {
         featurePage(
             title: featureSettingsLocalized("Notes"),
-            subtitle: featureSettingsLocalized("Cut a live transcription into separate notes without stopping the recording session. Notes stay in their own floating window and each one gets a short AI title."),
-            icon: "note.text",
+            subtitle: featureSettingsLocalized("Capture key points during recording. Notes stay separate and get short AI titles."),
+            iconKind: .note,
             pills: notePills
         ) {
             FeatureSettingsCard(title: featureSettingsLocalized("Notes Workflow")) {

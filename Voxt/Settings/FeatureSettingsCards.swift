@@ -10,21 +10,15 @@ struct FeatureSummaryPill: Identifiable {
 struct FeatureHeroCard: View {
     let title: String
     let subtitle: String
-    let icon: String
+    let iconKind: SettingsSidebarIconKind?
+    let systemImageName: String?
     let pills: [FeatureSummaryPill]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if !title.isEmpty || !subtitle.isEmpty {
                 HStack(alignment: .top, spacing: 14) {
-                    Image(systemName: icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.accentColor.opacity(0.12))
-                        )
+                    heroIcon
 
                     VStack(alignment: .leading, spacing: 6) {
                         if !title.isEmpty {
@@ -70,6 +64,29 @@ struct FeatureHeroCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var heroIcon: some View {
+        if let iconKind {
+            SettingsSidebarIconView(kind: iconKind)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20, height: 20)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+        } else if let systemImageName {
+            Image(systemName: systemImageName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.12))
+                )
+        }
     }
 }
 
