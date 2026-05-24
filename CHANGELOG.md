@@ -6,6 +6,26 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.9-beta.1] - 2026-05-24
+
+### English
+
+#### Added
+- Added a log viewer in General > Logging with refresh, copy, and export actions plus appended app metadata for debugging.
+- Added richer remote ASR debug logs so realtime session startup, partial results, final results, and stop handling are easier to diagnose.
+
+### 简体中文
+
+#### 新增
+- 在通用 > 日志中新增日志查看器，支持刷新、复制、导出，并在日志末尾附带应用元数据，方便排查问题。
+- 补充更完整的远程 ASR 调试日志，让实时会话启动、中间结果、最终结果和停止流程更容易定位。
+
+### 日本語
+
+#### 追加
+- 一般 > ログにログビューアを追加し、更新・コピー・エクスポート操作と、デバッグ用のアプリメタデータ付与に対応しました。
+- リモート ASR のデバッグログを拡充し、リアルタイムセッションの開始、中間結果、最終結果、停止処理を追いやすくしました。
+
 ## [1.11.8] - 2026-05-23
 
 ### English
