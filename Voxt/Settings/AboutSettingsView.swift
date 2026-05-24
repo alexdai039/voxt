@@ -119,6 +119,7 @@ struct AboutSettingsView: View {
                 }
                 .settingsNavigationAnchor(.aboutAuthor)
             }
+
         }
         .onChange(of: betaUpdatesEnabled) { _, _ in
             appUpdateManager.betaUpdatesPreferenceDidChange()

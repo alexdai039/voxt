@@ -42,6 +42,7 @@ struct GeneralSettingsView: View {
     @State private var systemAudioPermissionMessage: String?
     @State private var customProxyUsername = ""
     @State private var customProxyPassword = ""
+    @State private var isLogsViewerPresented = false
 
     private var networkProxyMode: Binding<VoxtNetworkSession.ProxyMode> {
         Binding(
@@ -158,7 +159,8 @@ struct GeneralSettingsView: View {
             ) {
                 GeneralLoggingCard(
                     hotkeyDebugLoggingEnabled: $hotkeyDebugLoggingEnabled,
-                    llmDebugLoggingEnabled: $llmDebugLoggingEnabled
+                    llmDebugLoggingEnabled: $llmDebugLoggingEnabled,
+                    onViewLogs: { isLogsViewerPresented = true }
                 )
                 .settingsNavigationAnchor(.generalLogging)
 
@@ -298,6 +300,9 @@ struct GeneralSettingsView: View {
                     applyMicrophonePriorityOrder(orderedUIDs)
                 }
             )
+        }
+        .sheet(isPresented: $isLogsViewerPresented) {
+            LogsViewerSheet()
         }
         .id(interfaceLanguageRaw)
     }

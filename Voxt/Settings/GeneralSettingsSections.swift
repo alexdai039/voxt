@@ -534,9 +534,22 @@ struct GeneralAppBehaviorCard: View {
 struct GeneralLoggingCard: View {
     @Binding var hotkeyDebugLoggingEnabled: Bool
     @Binding var llmDebugLoggingEnabled: Bool
+    let onViewLogs: () -> Void
 
     var body: some View {
-        GeneralSettingsCard(title: localizedKey("Logging")) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(localizedKey("Logging"))
+                    .font(.headline)
+
+                Spacer(minLength: 0)
+
+                Button(localized("View Logs")) {
+                    onViewLogs()
+                }
+                .buttonStyle(SettingsPillButtonStyle(horizontalPadding: 10, height: 28))
+            }
+
             GeneralToggleRow(
                 title: localizedKey("Enable hotkey debug logs"),
                 description: localizedKey("Records hotkey detection, trigger routing, and shortcut handling details for debugging."),
@@ -549,6 +562,7 @@ struct GeneralLoggingCard: View {
                 isOn: $llmDebugLoggingEnabled
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
