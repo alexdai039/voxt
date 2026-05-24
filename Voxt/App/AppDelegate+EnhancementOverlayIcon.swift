@@ -5,6 +5,10 @@ import FaviconFinder
 enum EnhancementOverlayIconResolver {
     private static let faviconCache = NSCache<NSString, NSImage>()
     private static let faviconTimeoutNanoseconds: UInt64 = 2_000_000_000
+    private static let faviconDiskCacheMaxAge: TimeInterval = 30 * 24 * 60 * 60
+    private static let faviconFailureCooldown: TimeInterval = 60 * 60
+    private static let faviconFailureLock = NSLock()
+    private static var faviconFailureRetryAfterByOrigin: [String: Date] = [:]
 
     static func appIcon(bundleID: String) -> NSImage? {
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
@@ -41,12 +45,22 @@ enum EnhancementOverlayIconResolver {
     }
 
     static func cachedFavicon(forOrigin origin: String) -> NSImage? {
-        faviconCache.object(forKey: origin as NSString)
+        if let cached = faviconCache.object(forKey: origin as NSString) {
+            return cached
+        }
+        guard let diskCached = diskCachedFavicon(forOrigin: origin) else {
+            return nil
+        }
+        faviconCache.setObject(diskCached, forKey: origin as NSString)
+        return diskCached
     }
 
     static func favicon(forOrigin origin: String) async -> NSImage? {
         if let cached = cachedFavicon(forOrigin: origin) {
             return cached
+        }
+        guard shouldAttemptFaviconLookup(forOrigin: origin) else {
+            return nil
         }
         guard let lookupURL = faviconLookupURL(forOrigin: origin) else {
             return nil
@@ -77,11 +91,88 @@ enum EnhancementOverlayIconResolver {
 
         guard let imageData,
               let image = NSImage(data: imageData) else {
+            noteFaviconLookupFailure(forOrigin: origin)
             return nil
         }
 
         faviconCache.setObject(image, forKey: origin as NSString)
+        persistFaviconData(imageData, forOrigin: origin)
+        clearFaviconLookupFailure(forOrigin: origin)
         return image
+    }
+
+    static func faviconCacheFileName(forOrigin origin: String) -> String {
+        let encoded = Data(origin.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+        return encoded + ".favicon"
+    }
+
+    private static func diskCachedFavicon(forOrigin origin: String) -> NSImage? {
+        let fileURL = faviconCacheFileURL(forOrigin: origin)
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let modifiedAt = attributes[.modificationDate] as? Date,
+              Date().timeIntervalSince(modifiedAt) <= faviconDiskCacheMaxAge,
+              let data = try? Data(contentsOf: fileURL),
+              let image = NSImage(data: data)
+        else {
+            return nil
+        }
+        return image
+    }
+
+    private static func persistFaviconData(_ data: Data, forOrigin origin: String) {
+        let fileURL = faviconCacheFileURL(forOrigin: origin)
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: fileURL, options: [.atomic])
+        } catch {
+            VoxtLog.warning("Enhancement favicon cache write failed. origin=\(origin), error=\(error.localizedDescription)")
+        }
+    }
+
+    private static func faviconCacheFileURL(forOrigin origin: String) -> URL {
+        faviconCacheDirectory()
+            .appendingPathComponent(faviconCacheFileName(forOrigin: origin), isDirectory: false)
+    }
+
+    private static func faviconCacheDirectory() -> URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches", isDirectory: true)
+        return caches
+            .appendingPathComponent("Voxt", isDirectory: true)
+            .appendingPathComponent("enhancement-favicons", isDirectory: true)
+    }
+
+    private static func shouldAttemptFaviconLookup(forOrigin origin: String, now: Date = Date()) -> Bool {
+        faviconFailureLock.lock()
+        defer { faviconFailureLock.unlock() }
+
+        guard let retryAfter = faviconFailureRetryAfterByOrigin[origin] else {
+            return true
+        }
+        if retryAfter <= now {
+            faviconFailureRetryAfterByOrigin.removeValue(forKey: origin)
+            return true
+        }
+        return false
+    }
+
+    private static func noteFaviconLookupFailure(forOrigin origin: String, now: Date = Date()) {
+        faviconFailureLock.lock()
+        faviconFailureRetryAfterByOrigin[origin] = now.addingTimeInterval(faviconFailureCooldown)
+        faviconFailureLock.unlock()
+    }
+
+    private static func clearFaviconLookupFailure(forOrigin origin: String) {
+        faviconFailureLock.lock()
+        faviconFailureRetryAfterByOrigin.removeValue(forKey: origin)
+        faviconFailureLock.unlock()
     }
 }
 

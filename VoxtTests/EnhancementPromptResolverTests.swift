@@ -280,4 +280,15 @@ final class EnhancementPromptResolverTests: XCTestCase {
         )
         XCTAssertEqual(url.absoluteString, "https://www.xiaohongshu.com")
     }
+
+    func testFaviconCacheFileNameIsFilesystemSafe() {
+        let fileName = EnhancementOverlayIconResolver.faviconCacheFileName(
+            forOrigin: "https://mail.google.com"
+        )
+
+        XCTAssertTrue(fileName.hasSuffix(".favicon"))
+        XCTAssertFalse(fileName.contains("/"))
+        XCTAssertFalse(fileName.contains("+"))
+        XCTAssertFalse(fileName.contains("="))
+    }
 }
