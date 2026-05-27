@@ -39,7 +39,7 @@ enum PermissionGuidance {
     private static func target(for permission: SettingsPermissionKind) -> Target {
         switch permission {
         case .microphone:
-            return .destination(.privacy(anchor: .privacyMicrophone))
+            return .pane(.microphone)
         case .speechRecognition:
             return .destination(.privacy(anchor: .privacySpeechRecognition))
         case .accessibility:
@@ -56,7 +56,7 @@ enum PermissionGuidance {
     private static func target(for permission: OnboardingContextualPermission) -> Target {
         switch permission {
         case .microphone:
-            return .destination(.privacy(anchor: .privacyMicrophone))
+            return .pane(.microphone)
         case .speechRecognition:
             return .destination(.privacy(anchor: .privacySpeechRecognition))
         case .accessibility:
