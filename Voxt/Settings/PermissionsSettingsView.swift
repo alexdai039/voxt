@@ -14,7 +14,7 @@ private func permissionsLocalized(_ key: String) -> String {
 struct PermissionsSettingsView: View {
     let navigationRequest: SettingsNavigationRequest?
 
-    private enum PermissionState: Equatable {
+    private enum PermissionState: Equatable, Sendable {
         case enabled
         case disabled
 
@@ -33,7 +33,7 @@ struct PermissionsSettingsView: View {
         }
     }
 
-    private struct BrowserAutomationTarget: Identifiable, Hashable {
+    private struct BrowserAutomationTarget: Identifiable, Hashable, Sendable {
         let bundleID: String
         let displayName: String
         let scripts: [String]
@@ -42,17 +42,29 @@ struct PermissionsSettingsView: View {
         var id: String { bundleID }
     }
 
-    private struct StoredCustomBrowser: Codable, Hashable {
+    private struct StoredCustomBrowser: Codable, Hashable, Sendable {
         let bundleID: String
         let displayName: String
     }
 
-    private struct ScriptProbeResult {
+    private struct ScriptProbeResult: Sendable {
         let success: Bool
         let permissionDenied: Bool
         let appNotRunning: Bool
         let lastErrorCode: Int?
     }
+
+    private struct BrowserTargetPreflight: Sendable {
+        let appPath: String?
+        let appNotFoundError: String?
+        let isRunning: Bool
+    }
+
+    // Remember browsers that have already granted Automation permission so the
+    // Settings UI does not fall back to "disabled" just because the browser is
+    // currently closed. We still prefer a live re-check whenever macOS can give
+    // us a definitive answer.
+    private static let knownAuthorizedBrowserBundleIDsStorageKey = "voxt.permissions.knownAuthorizedBrowserBundleIDs"
 
     @State private var states: [SettingsPermissionKind: PermissionState] = [:]
     @State private var monitoringKinds: Set<SettingsPermissionKind> = []
@@ -62,6 +74,9 @@ struct PermissionsSettingsView: View {
     @State private var browserAutomationStates: [String: PermissionState] = [:]
     @State private var browserAutomationRequestsInFlight: Set<String> = []
     @State private var browserAutomationTestsInFlight: Set<String> = []
+    @State private var browserAutomationRefreshTask: Task<Void, Never>?
+    @State private var browserAutomationRequestTasks: [String: Task<Void, Never>] = [:]
+    @State private var browserAutomationTestTasks: [String: Task<Void, Never>] = [:]
     @State private var browserPickerErrorMessage: String?
     @State private var permissionToastMessage = ""
     @State private var permissionToastDismissTask: Task<Void, Never>?
@@ -71,6 +86,7 @@ struct PermissionsSettingsView: View {
     @AppStorage(AppPreferenceKey.muteSystemAudioWhileRecording) private var muteSystemAudioWhileRecording = false
     @AppStorage(AppPreferenceKey.transcriptionEngine) private var transcriptionEngineRaw = TranscriptionEngine.mlxAudio.rawValue
     @AppStorage(AppPreferenceKey.featureSettings) private var featureSettingsRaw = ""
+    @AppStorage(Self.knownAuthorizedBrowserBundleIDsStorageKey) private var knownAuthorizedBrowserBundleIDsJSON = "[]"
 
     private var transcriptionEngine: TranscriptionEngine {
         TranscriptionEngine(rawValue: transcriptionEngineRaw) ?? .mlxAudio
@@ -156,8 +172,8 @@ struct PermissionsSettingsView: View {
         .onAppear {
             _ = AccessibilityPermissionManager.request(prompt: false)
             refreshStates()
-            loadBrowserTargets()
-            refreshBrowserAutomationStates()
+            let targets = loadBrowserTargets()
+            refreshBrowserAutomationStates(targets: targets)
         }
         .overlay(alignment: .top) {
             if !permissionToastMessage.isEmpty {
@@ -180,6 +196,7 @@ struct PermissionsSettingsView: View {
         }
         .onDisappear {
             stopAllMonitoring()
+            cancelBrowserAutomationTasks()
             dismissPermissionToast()
         }
     }
@@ -412,15 +429,14 @@ struct PermissionsSettingsView: View {
     }
 
     private func scriptsForCustomBrowser(bundleID: String, displayName: String) -> [String] {
-        [
-            "tell application id \"\(bundleID)\" to get URL of front document",
-            "tell application id \"\(bundleID)\" to get URL of current tab of front window",
-            "tell application id \"\(bundleID)\" to get the URL of active tab of front window",
-            "tell application \"\(displayName)\" to get URL of front document"
-        ]
+        BrowserAutomationScriptBuilder.customBrowserPermissionProbeScripts(
+            bundleID: bundleID,
+            displayName: displayName
+        )
     }
 
-    private func loadBrowserTargets() {
+    @discardableResult
+    private func loadBrowserTargets() -> [BrowserAutomationTarget] {
         let builtIns = builtInBrowserTargets()
         let customBrowsers = loadStoredCustomBrowsers().map {
             BrowserAutomationTarget(
@@ -440,6 +456,7 @@ struct PermissionsSettingsView: View {
         }
 
         browserTargets = merged
+        return merged
     }
 
     private func loadStoredCustomBrowsers() -> [StoredCustomBrowser] {
@@ -456,6 +473,28 @@ struct PermissionsSettingsView: View {
             return
         }
         appBranchCustomBrowsersJSON = json
+    }
+
+    private func loadKnownAuthorizedBrowserBundleIDs() -> Set<String> {
+        guard let data = knownAuthorizedBrowserBundleIDsJSON.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(decoded)
+    }
+
+    private func setKnownAuthorizedBrowser(_ bundleID: String, isAuthorized: Bool) {
+        var knownAuthorizedBrowserBundleIDs = loadKnownAuthorizedBrowserBundleIDs()
+        if isAuthorized {
+            knownAuthorizedBrowserBundleIDs.insert(bundleID)
+        } else {
+            knownAuthorizedBrowserBundleIDs.remove(bundleID)
+        }
+        guard let data = try? JSONEncoder().encode(Array(knownAuthorizedBrowserBundleIDs).sorted()),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+        knownAuthorizedBrowserBundleIDsJSON = json
     }
 
     private func chooseBrowserApplication() {
@@ -491,8 +530,8 @@ struct PermissionsSettingsView: View {
         custom.append(StoredCustomBrowser(bundleID: bundleID, displayName: displayName))
         saveStoredCustomBrowsers(custom)
         browserPickerErrorMessage = nil
-        loadBrowserTargets()
-        refreshBrowserAutomationStates()
+        let targets = loadBrowserTargets()
+        refreshBrowserAutomationStates(targets: targets)
     }
 
     private func removeCustomBrowser(_ target: BrowserAutomationTarget) {
@@ -501,52 +540,196 @@ struct PermissionsSettingsView: View {
         custom.removeAll { $0.bundleID == target.bundleID }
         saveStoredCustomBrowsers(custom)
         browserAutomationStates.removeValue(forKey: target.bundleID)
-        loadBrowserTargets()
-        refreshBrowserAutomationStates()
+        let targets = loadBrowserTargets()
+        refreshBrowserAutomationStates(targets: targets)
     }
 
-    private func refreshBrowserAutomationStates() {
-        for target in browserTargets {
-            browserAutomationStates[target.bundleID] = nonPromptingBrowserAutomationState(target)
+    private func refreshBrowserAutomationStates(targets: [BrowserAutomationTarget]? = nil) {
+        browserAutomationRefreshTask?.cancel()
+        let targets = targets ?? browserTargets
+        let knownAuthorizedBrowserBundleIDs = loadKnownAuthorizedBrowserBundleIDs()
+        // Browser Automation checks can block on AppleScript / Apple Events, so
+        // refresh them off the main actor. When the user is actively pressing
+        // Request or Test, skip that row here so an older refresh result does
+        // not overwrite the newer user-triggered state.
+        browserAutomationRefreshTask = Task.detached(priority: .userInitiated) {
+            for target in targets {
+                guard !Task.isCancelled else { return }
+                let state = Self.nonPromptingBrowserAutomationState(
+                    target,
+                    knownAuthorizedBrowserBundleIDs: knownAuthorizedBrowserBundleIDs
+                )
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard !Task.isCancelled else { return }
+                    guard !browserAutomationRequestsInFlight.contains(target.bundleID),
+                          !browserAutomationTestsInFlight.contains(target.bundleID) else {
+                        return
+                    }
+                    browserAutomationStates[target.bundleID] = state
+                }
+           }
         }
     }
 
     private func requestBrowserAutomationPermission(_ target: BrowserAutomationTarget) {
         guard !isBrowserAutomationOperationInFlight else { return }
-        if let integrityError = browserTargetIntegrityError(target) {
-            browserAutomationStates[target.bundleID] = .disabled
-            showPermissionToast(integrityError, duration: 5.0)
-            return
-        }
+        browserAutomationRefreshTask?.cancel()
+        browserAutomationRefreshTask = nil
 
         browserAutomationRequestsInFlight.insert(target.bundleID)
 
-        Task { @MainActor in
-            defer { browserAutomationRequestsInFlight.remove(target.bundleID) }
-            let status = automationPermissionStatus(for: target.bundleID, askUserIfNeeded: true)
-            let scriptProbe = isApplicationRunning(bundleID: target.bundleID)
-                ? runAppleScriptCandidates(target.scripts)
-                : ScriptProbeResult(success: false, permissionDenied: false, appNotRunning: true, lastErrorCode: nil)
-            let enabled = scriptProbe.success || (status == noErr && !scriptProbe.permissionDenied)
-            browserAutomationStates[target.bundleID] = enabled ? .enabled : .disabled
-            if enabled {
-                showPermissionToast(AppLocalization.localizedString("Authorization granted."))
-            } else if scriptProbe.appNotRunning {
-                showPermissionToast(AppLocalization.localizedString("Open the browser and try again to complete the authorization check."))
-            } else if scriptProbe.permissionDenied {
-                showPermissionToast(AppLocalization.localizedString("Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again."), duration: 4.0)
+        let preflight = browserTargetPreflight(target)
+        let task = Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return }
+            let result: BrowserAutomationRequestResult
+            if let integrityError = preflight.appNotFoundError
+                ?? Self.browserTargetSignatureIntegrityError(appPath: preflight.appPath) {
+                result = BrowserAutomationRequestResult(
+                    integrityError: integrityError,
+                    enabled: false,
+                    permissionGranted: false,
+                    scriptProbe: nil,
+                    failureMessage: nil
+                )
             } else {
-                showPermissionToast(AppLocalization.localizedString("Authorization not granted."))
+                // Request and Test have different goals:
+                // - Request should confirm / trigger Automation permission.
+                // - Test should verify that URL reading works right now.
+                // If the browser is already running and a script succeeds, we
+                // can treat that as permission already working without showing
+                // an extra macOS prompt.
+                let initialProbe = preflight.isRunning
+                    ? Self.runAppleScriptCandidates(target.scripts)
+                    : ScriptProbeResult(success: false, permissionDenied: false, appNotRunning: true, lastErrorCode: nil)
+                if initialProbe.success {
+                    result = BrowserAutomationRequestResult(
+                        integrityError: nil,
+                        enabled: true,
+                        permissionGranted: true,
+                        scriptProbe: initialProbe,
+                        failureMessage: nil
+                    )
+                } else if initialProbe.appNotRunning {
+                    result = BrowserAutomationRequestResult(
+                        integrityError: nil,
+                        enabled: false,
+                        permissionGranted: false,
+                        scriptProbe: initialProbe,
+                        failureMessage: nil
+                    )
+                } else {
+                    let permissionProbe = Self.runAutomationPermissionProbe(bundleID: target.bundleID)
+                    guard !Task.isCancelled else { return }
+                    let scriptProbe = Self.runAppleScriptCandidates(target.scripts)
+                    let permissionGranted = permissionProbe.success
+                    result = BrowserAutomationRequestResult(
+                        integrityError: nil,
+                        enabled: permissionGranted || scriptProbe.success,
+                        permissionGranted: permissionGranted,
+                        scriptProbe: scriptProbe,
+                        failureMessage: permissionGranted
+                            ? nil
+                            : permissionProbe.permissionDenied
+                                ? nil
+                            : AppLocalization.localizedString("This app does not support browser URL reading.")
+                    )
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                browserAutomationRequestTasks.removeValue(forKey: target.bundleID)
+                browserAutomationRequestsInFlight.remove(target.bundleID)
+                if let integrityError = result.integrityError {
+                    browserAutomationStates[target.bundleID] = .disabled
+                    showPermissionToast(integrityError, duration: 5.0)
+                    return
+                }
+
+                guard let scriptProbe = result.scriptProbe else { return }
+                browserAutomationStates[target.bundleID] = result.enabled ? .enabled : .disabled
+                if result.enabled {
+                    setKnownAuthorizedBrowser(target.bundleID, isAuthorized: true)
+                    if result.permissionGranted && scriptProbe.appNotRunning {
+                        showPermissionToast(AppLocalization.localizedString("Authorization granted. Open the browser and click Test if you want to verify URL reading."))
+                    } else if result.permissionGranted && !scriptProbe.success {
+                        showPermissionToast(AppLocalization.localizedString("Authorization granted. This app may not support browser URL reading. Click Test if you want to verify."))
+                    } else {
+                        showPermissionToast(AppLocalization.localizedString("Authorization granted."))
+                    }
+                } else if scriptProbe.appNotRunning {
+                    showPermissionToast(AppLocalization.localizedString("Open the browser and try again to complete the authorization check."))
+                } else if scriptProbe.permissionDenied {
+                    setKnownAuthorizedBrowser(target.bundleID, isAuthorized: false)
+                    showPermissionToast(AppLocalization.localizedString("Authorization denied by macOS. Open Automation settings or reset Apple Events permission and try again."), duration: 4.0)
+                } else if let failureMessage = result.failureMessage {
+                    showPermissionToast(failureMessage, duration: 4.0)
+                } else {
+                    showPermissionToast(AppLocalization.localizedString("Authorization not granted."))
+                }
+                refreshBrowserAutomationStates()
             }
         }
+        browserAutomationRequestTasks[target.bundleID] = task
     }
 
-    private func nonPromptingBrowserAutomationState(_ target: BrowserAutomationTarget) -> PermissionState {
+    private struct BrowserAutomationRequestResult: Sendable {
+        let integrityError: String?
+        let enabled: Bool
+        let permissionGranted: Bool
+        let scriptProbe: ScriptProbeResult?
+        let failureMessage: String?
+    }
+
+    nonisolated private static func nonPromptingBrowserAutomationState(
+        _ target: BrowserAutomationTarget,
+        knownAuthorizedBrowserBundleIDs: Set<String>
+    ) -> PermissionState {
+        if target.isCustom {
+            // Custom browsers are less consistent than Safari / Chrome: some do
+            // not answer the low-level permission API reliably, especially when
+            // the app is not running. For them we combine three signals:
+            // installation, running state, and remembered authorization.
+            let isRememberedAuthorized = knownAuthorizedBrowserBundleIDs.contains(target.bundleID)
+            guard isApplicationInstalled(bundleID: target.bundleID) else {
+                return .disabled
+            }
+            guard isApplicationRunning(bundleID: target.bundleID) else {
+                return isRememberedAuthorized ? .enabled : .disabled
+            }
+
+            let permissionProbe = runAutomationPermissionProbe(bundleID: target.bundleID)
+            if permissionProbe.success {
+                return .enabled
+            }
+            if permissionProbe.permissionDenied {
+                return .disabled
+            }
+            return isRememberedAuthorized ? .enabled : .disabled
+        }
+
         let status = automationPermissionStatus(for: target.bundleID, askUserIfNeeded: false)
-        return status == noErr ? .enabled : .disabled
+        if status == noErr {
+            return .enabled
+        }
+        if status == errAEEventNotPermitted || status == errAEPrivilegeError {
+            return .disabled
+        }
+        if knownAuthorizedBrowserBundleIDs.contains(target.bundleID) {
+            return .enabled
+        }
+        return .disabled
     }
 
-    private func automationPermissionStatus(for bundleID: String, askUserIfNeeded: Bool) -> OSStatus {
+    nonisolated private static func runAutomationPermissionProbe(bundleID: String) -> ScriptProbeResult {
+        runAppleScriptCandidates([
+            "tell application id \"\(bundleID)\" to get name"
+        ])
+    }
+
+    nonisolated private static func automationPermissionStatus(for bundleID: String, askUserIfNeeded: Bool) -> OSStatus {
         let descriptor = NSAppleEventDescriptor(bundleIdentifier: bundleID)
         guard let aeDesc = descriptor.aeDesc else {
             return OSStatus(errAEEventNotPermitted)
@@ -562,42 +745,88 @@ struct PermissionsSettingsView: View {
 
     private func testBrowserURLRead(_ target: BrowserAutomationTarget) {
         guard !isBrowserAutomationOperationInFlight else { return }
-        if let integrityError = browserTargetIntegrityError(target) {
-            browserAutomationStates[target.bundleID] = .disabled
-            showPermissionToast(integrityError, duration: 5.0)
-            return
-        }
+        browserAutomationRefreshTask?.cancel()
+        browserAutomationRefreshTask = nil
 
         browserAutomationTestsInFlight.insert(target.bundleID)
 
-        Task { @MainActor in
-            defer { browserAutomationTestsInFlight.remove(target.bundleID) }
-            let result = runAppleScriptCandidates(target.scripts)
-            if result.success {
-                browserAutomationStates[target.bundleID] = .enabled
-                showPermissionToast(AppLocalization.localizedString("Browser URL read test succeeded."))
-                return
+        let preflight = browserTargetPreflight(target)
+        let task = Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return }
+            let result: BrowserAutomationTestResult
+            if let integrityError = preflight.appNotFoundError
+                ?? Self.browserTargetSignatureIntegrityError(appPath: preflight.appPath) {
+                result = BrowserAutomationTestResult(integrityError: integrityError, scriptProbe: nil)
+            } else {
+                result = BrowserAutomationTestResult(
+                    integrityError: nil,
+                    scriptProbe: preflight.isRunning
+                        ? Self.runAppleScriptCandidates(target.scripts)
+                        : ScriptProbeResult(success: false, permissionDenied: false, appNotRunning: true, lastErrorCode: nil)
+                )
             }
 
-            if result.permissionDenied {
-                browserAutomationStates[target.bundleID] = .disabled
-                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: permission denied."))
-            } else if result.appNotRunning {
-                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: browser is not running."))
-            } else if let lastErrorCode = result.lastErrorCode {
-                showPermissionToast(AppLocalization.format("Browser URL read test failed (error: %@).", String(lastErrorCode)))
-            } else {
-                showPermissionToast(AppLocalization.localizedString("Browser URL read test failed."))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                browserAutomationTestTasks.removeValue(forKey: target.bundleID)
+                browserAutomationTestsInFlight.remove(target.bundleID)
+                if let integrityError = result.integrityError {
+                    browserAutomationStates[target.bundleID] = .disabled
+                    showPermissionToast(integrityError, duration: 5.0)
+                    return
+                }
+
+                guard let scriptProbe = result.scriptProbe else { return }
+                if scriptProbe.success {
+                    browserAutomationStates[target.bundleID] = .enabled
+                    setKnownAuthorizedBrowser(target.bundleID, isAuthorized: true)
+                    showPermissionToast(AppLocalization.localizedString("Browser URL read test succeeded."))
+                    return
+                }
+
+                if scriptProbe.permissionDenied {
+                    browserAutomationStates[target.bundleID] = .disabled
+                    setKnownAuthorizedBrowser(target.bundleID, isAuthorized: false)
+                    showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: permission denied."))
+                } else if scriptProbe.appNotRunning {
+                    showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: browser is not running."))
+                } else if target.isCustom, scriptProbe.lastErrorCode == -1728 {
+                    // For several Chromium-like custom browsers, -1728 often
+                    // means "the current page has no readable URL yet" (for
+                    // example a New Tab / welcome page), not that the browser
+                    // is permanently unsupported.
+                    showPermissionToast(AppLocalization.localizedString("Browser URL read test failed: open a webpage in the browser and try again."))
+                } else if let lastErrorCode = scriptProbe.lastErrorCode {
+                    showPermissionToast(AppLocalization.format("Browser URL read test failed (error: %@).", String(lastErrorCode)))
+                } else {
+                    showPermissionToast(AppLocalization.localizedString("Browser URL read test failed."))
+                }
+                refreshBrowserAutomationStates()
             }
         }
+        browserAutomationTestTasks[target.bundleID] = task
     }
 
-    private func runAppleScriptCandidates(_ scripts: [String]) -> ScriptProbeResult {
+    private struct BrowserAutomationTestResult: Sendable {
+        let integrityError: String?
+        let scriptProbe: ScriptProbeResult?
+    }
+
+    nonisolated private static func runAppleScriptCandidates(_ scripts: [String]) -> ScriptProbeResult {
         var sawPermissionDenied = false
         var sawAppNotRunning = false
         var lastErrorCode: Int?
 
         for source in scripts {
+            if Task.isCancelled {
+                return ScriptProbeResult(
+                    success: false,
+                    permissionDenied: sawPermissionDenied,
+                    appNotRunning: sawAppNotRunning,
+                    lastErrorCode: lastErrorCode
+                )
+            }
             var error: NSDictionary?
             let wrapped = """
             with timeout of 1 seconds
@@ -628,17 +857,31 @@ struct PermissionsSettingsView: View {
         )
     }
 
-    private func isApplicationRunning(bundleID: String) -> Bool {
+    private func browserTargetPreflight(_ target: BrowserAutomationTarget) -> BrowserTargetPreflight {
+        let appPath = NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleID)?.path
+        return BrowserTargetPreflight(
+            appPath: appPath,
+            appNotFoundError: appPath == nil
+                ? AppLocalization.localizedString("Browser app could not be found. Reinstall or add the browser again.")
+                : nil,
+            isRunning: Self.isApplicationRunning(bundleID: target.bundleID)
+        )
+    }
+
+    nonisolated private static func isApplicationRunning(bundleID: String) -> Bool {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
             .contains(where: { !$0.isTerminated })
     }
 
-    private func browserTargetIntegrityError(_ target: BrowserAutomationTarget) -> String? {
-        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: target.bundleID) else {
-            return AppLocalization.localizedString("Browser app could not be found. Reinstall or add the browser again.")
-        }
+    nonisolated private static func isApplicationInstalled(bundleID: String) -> Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+    }
+
+    nonisolated private static func browserTargetSignatureIntegrityError(appPath: String?) -> String? {
+        guard let appPath else { return nil }
 
         var staticCode: SecStaticCode?
+        let appURL = URL(fileURLWithPath: appPath)
         let createStatus = SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode)
         guard createStatus == errSecSuccess, let staticCode else {
             return AppLocalization.localizedString("Browser app signature could not be verified. Reinstall or update the browser, then request authorization again.")
@@ -650,6 +893,23 @@ struct PermissionsSettingsView: View {
         }
 
         return nil
+    }
+
+    private func cancelBrowserAutomationTasks() {
+        browserAutomationRefreshTask?.cancel()
+        browserAutomationRefreshTask = nil
+
+        for task in browserAutomationRequestTasks.values {
+            task.cancel()
+        }
+        browserAutomationRequestTasks.removeAll()
+        browserAutomationRequestsInFlight.removeAll()
+
+        for task in browserAutomationTestTasks.values {
+            task.cancel()
+        }
+        browserAutomationTestTasks.removeAll()
+        browserAutomationTestsInFlight.removeAll()
     }
 
     private func openSettings(for kind: SettingsPermissionKind) {
