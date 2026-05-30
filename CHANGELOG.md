@@ -6,6 +6,47 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.11.9] - 2026-05-30
+
+### English
+
+#### Added
+- Added StepFun as a remote ASR provider with setup validation and hint support for realtime transcription.
+- Added a log viewer in General > Logging with refresh, copy, and export actions plus appended app metadata for debugging.
+
+#### Changed
+- Expanded microphone startup and live capture diagnostics so recording issues are easier to trace from logs and settings.
+
+#### Fixed
+- Fixed the custom browser timeout flow so browser automation permission setup no longer gets blocked by launch timeout settings.
+- Fixed model catalog empty states and log viewer preview loading so settings and exported logs refresh more reliably.
+
+### 简体中文
+
+#### 新增
+- 新增 StepFun 远程 ASR provider，支持连接校验和实时转写提示词配置。
+- 在通用 > 日志中新增日志查看器，支持刷新、复制、导出，并在日志末尾附带应用元数据，方便排查问题。
+
+#### 改进
+- 补强麦克风启动和实时采集诊断信息，让录音问题更容易结合日志和设置页面定位。
+
+#### 修复
+- 修复自定义浏览器超时流程，避免浏览器自动化权限设置被启动超时配置卡住。
+- 修复模型目录空状态和日志查看器预览加载问题，让设置刷新和日志导出结果更稳定。
+
+### 日本語
+
+#### 追加
+- StepFun をリモート ASR provider として追加し、接続確認とリアルタイム文字起こし向けヒント設定に対応しました。
+- 一般 > ログにログビューアを追加し、更新・コピー・エクスポート操作と、デバッグ用のアプリメタデータ付与に対応しました。
+
+#### 変更
+- マイク起動時とライブキャプチャの診断情報を拡充し、録音トラブルをログや設定画面から追いやすくしました。
+
+#### 修正
+- カスタムブラウザのタイムアウト設定が原因で、ブラウザ自動操作の権限設定が止まってしまう問題を修正しました。
+- モデルカタログの空状態とログビューアのプレビュー読み込みを修正し、設定更新とログ出力の反映を安定させました。
+
 ## [1.11.9-beta.1] - 2026-05-24
 
 ### English
