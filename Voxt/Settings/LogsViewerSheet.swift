@@ -10,12 +10,72 @@ private func logsViewerLocalizedKey(_ key: String) -> LocalizedStringKey {
     LocalizedStringKey(logsViewerLocalized(key))
 }
 
+private struct LogsPreviewTextView: NSViewRepresentable {
+    let text: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = false
+        textView.usesFindBar = true
+        textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        textView.textColor = NSColor.labelColor.withAlphaComponent(0.86)
+        textView.string = text
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.minSize = .zero
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = context.coordinator.textView else { return }
+        guard textView.string != text else { return }
+        textView.string = text
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        scrollView.contentView.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    final class Coordinator {
+        weak var textView: NSTextView?
+    }
+}
+
 struct LogsViewerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var latestLogsText = ""
+    @State private var isLoadingLogs = false
     @State private var logsStatusMessage = ""
     @State private var toastMessage = ""
     @State private var toastDismissTask: Task<Void, Never>?
+    @State private var logLoadTask: Task<Void, Never>?
+    @State private var logLoadGeneration = 0
     @State private var isExportingLogs = false
     @State private var logExportDocument = LogExportDocument(text: "")
     @State private var logExportFilename = "voxt-log.txt"
@@ -47,11 +107,13 @@ struct LogsViewerSheet: View {
                 Button(logsViewerLocalized("Copy")) {
                     copyLogs()
                 }
+                .disabled(isLoadingLogs || latestLogsText.isEmpty)
                 .buttonStyle(SettingsCompactActionButtonStyle())
 
                 Button(logsViewerLocalized("Export")) {
                     prepareLogExport()
                 }
+                .disabled(isLoadingLogs || latestLogsText.isEmpty)
                 .buttonStyle(SettingsCompactActionButtonStyle())
 
                 Button(action: dismiss.callAsFunction) {
@@ -70,13 +132,19 @@ struct LogsViewerSheet: View {
                     .padding(.horizontal, 20)
             }
 
-            ScrollView([.vertical, .horizontal]) {
-                Text(latestLogsText)
-                    .font(.system(size: 11.5, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.primary.opacity(0.86))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(12)
+            ZStack {
+                LogsPreviewTextView(text: latestLogsText)
+                .opacity(latestLogsText.isEmpty && isLoadingLogs ? 0 : 1)
+
+                if isLoadingLogs {
+                    VStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.regular)
+                        Text(logsViewerLocalized("Loading logs..."))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, minHeight: 420, idealHeight: 440, maxHeight: 440)
             .background(
@@ -121,11 +189,34 @@ struct LogsViewerSheet: View {
         .onAppear {
             refreshLogs()
         }
+        .onDisappear {
+            logLoadTask?.cancel()
+            logLoadTask = nil
+            toastDismissTask?.cancel()
+        }
     }
 
     private func refreshLogs() {
-        latestLogsText = VoxtLog.latestLogDisplayText(limit: 1000)
+        logLoadTask?.cancel()
+        logLoadGeneration += 1
+        let generation = logLoadGeneration
+
+        isLoadingLogs = true
         logsStatusMessage = ""
+
+        logLoadTask = Task {
+            let loadedText = await Task.detached(priority: .userInitiated) {
+                VoxtLog.latestLogDisplayText(limit: 1000)
+            }.value
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard generation == logLoadGeneration else { return }
+                latestLogsText = loadedText
+                isLoadingLogs = false
+                logLoadTask = nil
+            }
+        }
     }
 
     private func copyLogs() {
