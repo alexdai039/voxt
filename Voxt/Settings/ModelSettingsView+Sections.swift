@@ -330,6 +330,10 @@ private struct MLXASRConfigurationSheetView: View {
         ).language ?? AppLocalization.localizedString("Automatic")
     }
 
+    private var senseVoiceSupportedLanguageSummary: String {
+        AppLocalization.localizedString("Automatic, zh, en, yue, ja, ko")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(localized("MLX ASR Configuration"))
@@ -341,26 +345,28 @@ private struct MLXASRConfigurationSheetView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(localized("Preset"))
-                            .font(.subheadline.weight(.medium))
-                        SettingsMenuPicker(
-                            selection: Binding(
-                                get: { tuningSettings.preset.rawValue },
-                                set: { rawValue in
-                                    guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
-                                    tuningSettings.preset = preset
-                                }
-                            ),
-                            options: LocalASRRecognitionPreset.allCases.map {
-                                SettingsMenuOption(value: $0.rawValue, title: $0.title)
-                            },
-                            selectedTitle: tuningSettings.preset.title,
-                            width: 220
-                        )
-                        Text(tuningSettings.preset.summary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    if family.supportsRecognitionPreset {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(localized("Preset"))
+                                .font(.subheadline.weight(.medium))
+                            SettingsMenuPicker(
+                                selection: Binding(
+                                    get: { tuningSettings.preset.rawValue },
+                                    set: { rawValue in
+                                        guard let preset = LocalASRRecognitionPreset(rawValue: rawValue) else { return }
+                                        tuningSettings.preset = preset
+                                    }
+                                ),
+                                options: LocalASRRecognitionPreset.allCases.map {
+                                    SettingsMenuOption(value: $0.rawValue, title: $0.title)
+                                },
+                                selectedTitle: tuningSettings.preset.title,
+                                width: 220
+                            )
+                            Text(tuningSettings.preset.summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Toggle(localized("Follow User Main Language"), isOn: $hintSettings.followsUserMainLanguage)
@@ -372,6 +378,16 @@ private struct MLXASRConfigurationSheetView: View {
                     }
 
                     localInfoRow(label: localized("Other languages"), value: secondaryLanguageSummary)
+
+                    if family == .senseVoice {
+                        localInfoRow(
+                            label: localized("Supported routes"),
+                            value: senseVoiceSupportedLanguageSummary
+                        )
+                        Text(localized("SenseVoice only accepts explicit language routing for zh, en, yue, ja, and ko here. Any other primary language falls back to Automatic."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
                     if family.supportsContextBias {
                         Text(localized("Recognition Context"))
@@ -404,6 +420,10 @@ private struct MLXASRConfigurationSheetView: View {
                         && !family.supportsITN
                     {
                         Text(localized("This model family only exposes preset and language controls."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if family == .senseVoice {
+                        Text(localized("SenseVoice only exposes language routing and ITN here. Recognition presets are not used by this model path."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

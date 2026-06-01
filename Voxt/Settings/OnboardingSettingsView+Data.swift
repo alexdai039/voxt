@@ -61,7 +61,7 @@ extension OnboardingSettingsView {
             hasRecordingMicrophone: !inputDevices.isEmpty,
             hasRecordingPermissions: recordingPermissionsSatisfied,
             hasRewriteIssues: !rewriteIssues.isEmpty,
-            appEnhancementEnabled: appEnhancementEnabled
+            appEnhancementEnabled: true
         )
     }
 
@@ -278,7 +278,7 @@ extension OnboardingSettingsView {
 
             settings.rewrite.asrSelectionID = asrSelection
             settings.rewrite.llmSelectionID = llmSelection
-            settings.rewrite.appEnhancementEnabled = appEnhancementEnabled
+            settings.rewrite.appEnhancementEnabled = true
         }
 
         featureSettings = FeatureSettingsStore.load(defaults: .standard)

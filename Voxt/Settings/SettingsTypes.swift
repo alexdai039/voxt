@@ -149,6 +149,7 @@ struct UserMainLanguageOption: Identifiable, Hashable {
         .init(code: "km", promptName: "Khmer", aliases: []),
         .init(code: "kn", promptName: "Kannada", aliases: []),
         .init(code: "ko", promptName: "Korean", aliases: []),
+        .init(code: "yue", promptName: "Cantonese", aliases: ["Yue Chinese"]),
         .init(code: "la", promptName: "Latin", aliases: []),
         .init(code: "lb", promptName: "Luxembourgish", aliases: []),
         .init(code: "lo", promptName: "Lao", aliases: []),

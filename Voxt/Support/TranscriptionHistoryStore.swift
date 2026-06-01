@@ -82,6 +82,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
     let remoteLLMEndpoint: String?
     let audioRelativePath: String?
     let whisperWordTimings: [WhisperHistoryWordTiming]?
+    let senseVoiceMetadata: SenseVoiceTranscriptMetadata?
     let transcriptSegments: [TranscriptSegment]?
     let transcriptAudioRelativePath: String?
     let transcriptSummary: TranscriptSummarySnapshot?
@@ -122,6 +123,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         case remoteLLMEndpoint
         case audioRelativePath
         case whisperWordTimings
+        case senseVoiceMetadata
         case transcriptSegments
         case transcriptAudioRelativePath
         case transcriptSummary
@@ -163,6 +165,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteLLMEndpoint: String?,
         audioRelativePath: String? = nil,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
+        senseVoiceMetadata: SenseVoiceTranscriptMetadata? = nil,
         transcriptSegments: [TranscriptSegment]? = nil,
         transcriptAudioRelativePath: String? = nil,
         transcriptSummary: TranscriptSummarySnapshot? = nil,
@@ -202,6 +205,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         self.remoteLLMEndpoint = remoteLLMEndpoint
         self.audioRelativePath = audioRelativePath ?? transcriptAudioRelativePath
         self.whisperWordTimings = whisperWordTimings
+        self.senseVoiceMetadata = senseVoiceMetadata
         self.transcriptSegments = transcriptSegments
         self.transcriptAudioRelativePath = transcriptAudioRelativePath
         self.transcriptSummary = transcriptSummary
@@ -250,6 +254,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         remoteLLMEndpoint = try container.decodeIfPresent(String.self, forKey: .remoteLLMEndpoint)
         let decodedAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .audioRelativePath)
         whisperWordTimings = try container.decodeIfPresent([WhisperHistoryWordTiming].self, forKey: .whisperWordTimings)
+        senseVoiceMetadata = try container.decodeIfPresent(SenseVoiceTranscriptMetadata.self, forKey: .senseVoiceMetadata)
         transcriptSegments = try container.decodeIfPresent([TranscriptSegment].self, forKey: .transcriptSegments)
         transcriptAudioRelativePath = try container.decodeIfPresent(String.self, forKey: .transcriptAudioRelativePath)
         audioRelativePath = decodedAudioRelativePath ?? transcriptAudioRelativePath
@@ -293,6 +298,7 @@ struct TranscriptionHistoryEntry: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(remoteLLMEndpoint, forKey: .remoteLLMEndpoint)
         try container.encodeIfPresent(audioRelativePath, forKey: .audioRelativePath)
         try container.encodeIfPresent(whisperWordTimings, forKey: .whisperWordTimings)
+        try container.encodeIfPresent(senseVoiceMetadata, forKey: .senseVoiceMetadata)
         try container.encodeIfPresent(transcriptSegments, forKey: .transcriptSegments)
         try container.encodeIfPresent(transcriptAudioRelativePath, forKey: .transcriptAudioRelativePath)
         try container.encodeIfPresent(transcriptSummary, forKey: .transcriptSummary)
@@ -553,6 +559,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         remoteLLMEndpoint: String?,
         audioRelativePath: String? = nil,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
+        senseVoiceMetadata: SenseVoiceTranscriptMetadata? = nil,
         transcriptSegments: [TranscriptSegment]? = nil,
         transcriptAudioRelativePath: String? = nil,
         transcriptSummary: TranscriptSummarySnapshot? = nil,
@@ -595,6 +602,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             remoteLLMEndpoint: remoteLLMEndpoint,
             audioRelativePath: audioRelativePath,
             whisperWordTimings: whisperWordTimings,
+            senseVoiceMetadata: senseVoiceMetadata,
             transcriptSegments: transcriptSegments,
             transcriptAudioRelativePath: transcriptAudioRelativePath,
             transcriptSummary: transcriptSummary,
@@ -875,6 +883,7 @@ final class TranscriptionHistoryStore: ObservableObject {
         transcriptionProcessingDurationSeconds: TimeInterval?,
         llmDurationSeconds: TimeInterval?,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
+        senseVoiceMetadata: SenseVoiceTranscriptMetadata?,
         transcriptionChatMessages: [TranscriptSummaryChatMessage],
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
@@ -895,6 +904,7 @@ final class TranscriptionHistoryStore: ObservableObject {
             transcriptionProcessingDurationSeconds: transcriptionProcessingDurationSeconds,
             llmDurationSeconds: llmDurationSeconds,
             whisperWordTimings: whisperWordTimings,
+            senseVoiceMetadata: senseVoiceMetadata,
             transcriptionChatMessages: transcriptionChatMessages,
             dictionaryHitTerms: dictionaryHitTerms,
             dictionaryCorrectedTerms: dictionaryCorrectedTerms,

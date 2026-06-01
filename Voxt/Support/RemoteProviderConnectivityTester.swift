@@ -164,11 +164,9 @@ struct RemoteProviderConnectivityTester {
             action: "run-task",
             taskID: taskID,
             model: model,
-            parameters: [
-                "sample_rate": 16000,
-                "format": "pcm",
-                "language_hints": ["zh", "en"]
-            ]
+            parameters: AliyunFunRealtimePayloadSupport.parameters(
+                hintPayload: ResolvedASRHintPayload(languageHints: ["zh", "en"])
+            )
         )
         let finishPayload = AliyunRemoteASRConfiguration.funRealtimeControlPayload(
             action: "finish-task",

@@ -76,6 +76,29 @@ final class RemoteASRSupportTests: XCTestCase {
         XCTAssertFalse(StepFunPayloadSupport.supportsSSEPrompt(model: "stepaudio-2.5-asr"))
     }
 
+    func testAliyunFunRealtimeParametersIncludeLanguageHintsAndHotwords() {
+        let parameters = AliyunFunRealtimePayloadSupport.parameters(
+            hintPayload: ResolvedASRHintPayload(
+                languageHints: ["zh", "en"],
+                contextualPhrases: ["Voxt", "FireRed"]
+            )
+        )
+
+        XCTAssertEqual(parameters["sample_rate"] as? Int, 16000)
+        XCTAssertEqual(parameters["format"] as? String, "pcm")
+        XCTAssertEqual(parameters["language_hints"] as? [String], ["zh", "en"])
+        XCTAssertEqual(parameters["hotwords"] as? [String], ["Voxt", "FireRed"])
+    }
+
+    func testAliyunFunRealtimeParametersOmitEmptyHotwords() {
+        let parameters = AliyunFunRealtimePayloadSupport.parameters(
+            hintPayload: ResolvedASRHintPayload(languageHints: ["zh"])
+        )
+
+        XCTAssertEqual(parameters["language_hints"] as? [String], ["zh"])
+        XCTAssertNil(parameters["hotwords"])
+    }
+
     func testStepFunProTranscriptionPayloadCanIncludePrompt() {
         let payload = StepFunPayloadSupport.transcriptionPayload(
             model: "stepaudio-2-asr-pro",

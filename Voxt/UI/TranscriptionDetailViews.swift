@@ -157,6 +157,9 @@ struct TranscriptionDetailContentView: View {
                     optionalDetailLine(label: localized("Remote LLM Provider"), value: viewModel.entry.remoteLLMProvider)
                     optionalDetailLine(label: localized("Remote LLM Model"), value: viewModel.entry.remoteLLMModel)
                     optionalDetailLine(label: localized("Remote LLM Endpoint"), value: viewModel.entry.remoteLLMEndpoint)
+                    optionalDetailLine(label: localized("SenseVoice Language"), value: viewModel.entry.senseVoiceMetadata?.language)
+                    optionalDetailLine(label: localized("SenseVoice Emotion"), value: viewModel.entry.senseVoiceMetadata?.emotion)
+                    optionalDetailLine(label: localized("SenseVoice Event"), value: viewModel.entry.senseVoiceMetadata?.event)
                     optionalDetailLine(label: localized("Focused App"), value: viewModel.entry.focusedAppName)
                     optionalDetailLine(label: localized("Focused App Bundle ID"), value: viewModel.entry.focusedAppBundleID)
                     optionalDetailLine(label: localized("Matched Group"), value: viewModel.entry.matchedGroupName)
@@ -180,6 +183,32 @@ struct TranscriptionDetailContentView: View {
                             detailLine(
                                 label: timeRangeLabel(for: timing),
                                 value: timing.word
+                            )
+                        }
+                    }
+                }
+
+                if let senseVoiceMetadata = viewModel.entry.senseVoiceMetadata,
+                   !senseVoiceMetadata.segments.isEmpty {
+                    detailSection(title: localized("SenseVoice Segments")) {
+                        detailLine(
+                            label: localized("Segmentation"),
+                            value: senseVoiceMetadata.usedVADSegmentation
+                                ? localized("VAD Segmented")
+                                : localized("Single Pass")
+                        )
+                        ForEach(senseVoiceMetadata.segments) { segment in
+                            let start = TranscriptFormatter.timestampString(for: segment.startSeconds)
+                            let end = TranscriptFormatter.timestampString(for: segment.endSeconds)
+                            let labels = [segment.language, segment.emotion, segment.event]
+                                .compactMap { value -> String? in
+                                    let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                    return trimmed.isEmpty ? nil : trimmed
+                                }
+                                .joined(separator: " / ")
+                            detailLine(
+                                label: labels.isEmpty ? "\(start) - \(end)" : "\(start) - \(end) · \(labels)",
+                                value: segment.text
                             )
                         }
                     }

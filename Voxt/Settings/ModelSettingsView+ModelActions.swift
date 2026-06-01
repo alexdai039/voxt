@@ -1,6 +1,30 @@
 import AppKit
 import SwiftUI
 
+enum MLXConfigurationSummarySupport {
+    static func summary(for repo: String, tuning: MLXLocalTuningSettings) -> String {
+        let family = MLXModelFamily.family(for: repo)
+        switch family {
+        case .qwen3ASR:
+            let hasContext = tuning.qwenContextBias.isEmpty
+                ? AppLocalization.localizedString("Context Off")
+                : AppLocalization.localizedString("Context On")
+            return AppLocalization.format("%@ · %@", tuning.preset.title, hasContext)
+        case .graniteSpeech:
+            let hasPrompt = tuning.granitePromptBias.isEmpty
+                ? AppLocalization.localizedString("Prompt Off")
+                : AppLocalization.localizedString("Prompt On")
+            return AppLocalization.format("%@ · %@", tuning.preset.title, hasPrompt)
+        case .senseVoice:
+            return AppLocalization.localizedString(tuning.senseVoiceUseITN ? "ITN On" : "ITN Off")
+        case .cohereTranscribe:
+            return tuning.preset.title
+        case .generic:
+            return tuning.preset.title
+        }
+    }
+}
+
 extension ModelSettingsView {
     func promptBinding(for storage: Binding<String>, kind: AppPromptKind) -> Binding<String> {
         Binding(
@@ -532,26 +556,7 @@ extension ModelSettingsView {
 
     var mlxConfigurationSummary: String {
         let tuning = resolvedMLXLocalTuningSettings(for: modelRepo)
-        let family = MLXModelFamily.family(for: modelRepo)
-        switch family {
-        case .qwen3ASR:
-            let hasContext = tuning.qwenContextBias.isEmpty
-                ? AppLocalization.localizedString("Context Off")
-                : AppLocalization.localizedString("Context On")
-            return AppLocalization.format("%@ · %@", tuning.preset.title, hasContext)
-        case .graniteSpeech:
-            let hasPrompt = tuning.granitePromptBias.isEmpty
-                ? AppLocalization.localizedString("Prompt Off")
-                : AppLocalization.localizedString("Prompt On")
-            return AppLocalization.format("%@ · %@", tuning.preset.title, hasPrompt)
-        case .senseVoice:
-            let itn = AppLocalization.localizedString(tuning.senseVoiceUseITN ? "ITN On" : "ITN Off")
-            return AppLocalization.format("%@ · %@", tuning.preset.title, itn)
-        case .cohereTranscribe:
-            return tuning.preset.title
-        case .generic:
-            return tuning.preset.title
-        }
+        return MLXConfigurationSummarySupport.summary(for: modelRepo, tuning: tuning)
     }
 
     var customLLMGenerationSummary: String {

@@ -337,16 +337,19 @@ extension AppDelegate {
         let remoteASRProviderInfo: String?
         let remoteASRModelInfo: String?
         let remoteASREndpointInfo: String?
+        let senseVoiceMetadata: SenseVoiceTranscriptMetadata?
         if transcriptionEngine == .remote {
             let provider = remoteASRSelectedProvider
             let config = remoteASRConfigurations[provider.rawValue]
             remoteASRProviderInfo = provider.title
             remoteASRModelInfo = config?.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? config?.model : nil
             remoteASREndpointInfo = historyDisplayEndpoint(config?.endpoint)
+            senseVoiceMetadata = nil
         } else {
             remoteASRProviderInfo = nil
             remoteASRModelInfo = nil
             remoteASREndpointInfo = nil
+            senseVoiceMetadata = transcriptionEngine == .mlxAudio ? mlxTranscriber?.latestSenseVoiceMetadata : nil
         }
 
         if historyKind == .rewrite,
@@ -360,6 +363,7 @@ extension AppDelegate {
                 whisperWordTimings: transcriptionEngine == .whisperKit && whisperTimestampsEnabled
                     ? whisperTranscriber?.latestWordTimings
                     : nil,
+                senseVoiceMetadata: senseVoiceMetadata,
                 dictionaryHitTerms: dictionaryHitTerms,
                 dictionaryCorrectedTerms: dictionaryCorrectedTerms,
                 dictionaryCorrectionSnapshots: dictionaryCorrectionSnapshots,
@@ -405,6 +409,7 @@ extension AppDelegate {
             whisperWordTimings: transcriptionEngine == .whisperKit && whisperTimestampsEnabled
                 ? whisperTranscriber?.latestWordTimings
                 : nil,
+            senseVoiceMetadata: senseVoiceMetadata,
             displayTitle: trimmedDisplayTitle?.isEmpty == false ? trimmedDisplayTitle : nil,
             transcriptionChatMessages: historyKind == .rewrite
                 ? TranscriptionHistoryConversationSupport.initialChatMessages(
@@ -452,6 +457,7 @@ extension AppDelegate {
         llmDurationSeconds: TimeInterval?,
         pendingAudioArchiveURL: URL?,
         whisperWordTimings: [WhisperHistoryWordTiming]?,
+        senseVoiceMetadata: SenseVoiceTranscriptMetadata?,
         dictionaryHitTerms: [String],
         dictionaryCorrectedTerms: [String],
         dictionaryCorrectionSnapshots: [DictionaryCorrectionSnapshot],
@@ -499,6 +505,7 @@ extension AppDelegate {
                 incoming: llmDurationSeconds
             ),
             whisperWordTimings: whisperWordTimings ?? existingEntry.whisperWordTimings,
+            senseVoiceMetadata: senseVoiceMetadata ?? existingEntry.senseVoiceMetadata,
             transcriptionChatMessages: rewriteConversationMessages.isEmpty
                 ? TranscriptionHistoryConversationSupport.bootstrapChatMessages(for: existingEntry)
                 : rewriteConversationMessages,

@@ -3,7 +3,7 @@ import CFNetwork
 import HuggingFace
 
 enum MLXModelDownloadSupport {
-    private static let modelEntryAllowedExtensions: Set<String> = ["safetensors", "json", "txt", "wav", "jinja"]
+    private static let modelEntryAllowedExtensions: Set<String> = ["safetensors", "json", "txt", "wav", "jinja", "model", "mvn"]
     private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB]
@@ -266,6 +266,7 @@ enum MLXModelDownloadSupport {
 
     static func validateDownloadedModel(
         at url: URL,
+        repo: String? = nil,
         sizeState: MLXModelManager.ModelSizeState,
         downloadSizeTolerance: Double,
         fileManager: FileManager
@@ -283,6 +284,10 @@ enum MLXModelDownloadSupport {
         }
 
         guard hasWeights, configValid else {
+            throw DownloadValidationError.missingFiles
+        }
+
+        if !hasRequiredAuxiliaryFiles(at: url, repo: repo, files: files, fileManager: fileManager) {
             throw DownloadValidationError.missingFiles
         }
 
@@ -311,7 +316,11 @@ enum MLXModelDownloadSupport {
         }
     }
 
-    static func isModelDirectoryValid(_ directory: URL, fileManager: FileManager) -> Bool {
+    static func isModelDirectoryValid(
+        _ directory: URL,
+        repo: String? = nil,
+        fileManager: FileManager
+    ) -> Bool {
         guard fileManager.fileExists(atPath: directory.path) else { return false }
 
         if let topLevelItems = try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey]) {
@@ -340,7 +349,38 @@ enum MLXModelDownloadSupport {
             return false
         }
 
-        return hasWeights
+        return hasWeights && hasRequiredAuxiliaryFiles(
+            at: directory,
+            repo: repo,
+            files: files,
+            fileManager: fileManager
+        )
+    }
+
+    static func missingRequiredRepairEntries(
+        at directory: URL,
+        repo: String,
+        availableEntries: [ModelFileEntry],
+        fileManager: FileManager
+    ) -> [ModelFileEntry] {
+        guard resolvedModelType(at: directory, repo: repo, fileManager: fileManager) == "sensevoice" else {
+            return []
+        }
+
+        let hasTokenizerAsset = hasSenseVoiceTokenizerAssets(at: directory, fileManager: fileManager)
+        let hasCMVNAsset = fileManager.fileExists(atPath: directory.appendingPathComponent("am.mvn").path)
+        guard !hasTokenizerAsset || !hasCMVNAsset else { return [] }
+
+        return availableEntries.filter { entry in
+            let path = entry.path.lowercased()
+            if !hasTokenizerAsset, path.hasSuffix(".model") || path.hasSuffix("/tokenizer.json") || path.hasSuffix("/tokens.json") {
+                return true
+            }
+            if !hasCMVNAsset, path.hasSuffix("/am.mvn") || path == "am.mvn" {
+                return true
+            }
+            return false
+        }
     }
 
     static func isMirrorHost(_ url: URL) -> Bool {
@@ -364,6 +404,59 @@ enum MLXModelDownloadSupport {
             }
         }
         return files
+    }
+
+    private static func hasRequiredAuxiliaryFiles(
+        at directory: URL,
+        repo: String?,
+        files _: [URL],
+        fileManager: FileManager
+    ) -> Bool {
+        switch resolvedModelType(at: directory, repo: repo, fileManager: fileManager) {
+        case "sensevoice":
+            return hasSenseVoiceTokenizerAssets(at: directory, fileManager: fileManager)
+                && fileManager.fileExists(atPath: directory.appendingPathComponent("am.mvn").path)
+        default:
+            return true
+        }
+    }
+
+    private static func resolvedModelType(
+        at directory: URL,
+        repo: String?,
+        fileManager: FileManager
+    ) -> String? {
+        let configURL = directory.appendingPathComponent("config.json")
+        if fileManager.fileExists(atPath: configURL.path),
+           let data = try? Data(contentsOf: configURL),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let modelType = object["model_type"] as? String,
+           !modelType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return modelType.lowercased()
+        }
+        return repo?.lowercased().contains("sensevoice") == true ? "sensevoice" : nil
+    }
+
+    private static func hasSenseVoiceTokenizerAssets(at directory: URL, fileManager: FileManager) -> Bool {
+        if fileManager.fileExists(atPath: directory.appendingPathComponent("tokenizer.json").path) {
+            return true
+        }
+        if fileManager.fileExists(atPath: directory.appendingPathComponent("tokens.json").path) {
+            return true
+        }
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+        for case let fileURL as URL in enumerator {
+            if fileURL.pathExtension.lowercased() == "model" {
+                return true
+            }
+        }
+        return false
     }
 }
 

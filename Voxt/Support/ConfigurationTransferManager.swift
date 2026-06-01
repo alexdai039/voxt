@@ -995,7 +995,7 @@ enum ConfigurationTransferManager {
         )
 
         let appBranch = AppBranchSettings(
-            appEnhancementEnabled: defaults.bool(forKey: AppPreferenceKey.appEnhancementEnabled),
+            appEnhancementEnabled: true,
             groups: loadAppBranchGroups(defaults: defaults),
             urls: loadBranchURLs(defaults: defaults),
             customBrowsersJSON: defaults.string(forKey: AppPreferenceKey.appBranchCustomBrowsers) ?? "[]"
@@ -1161,7 +1161,7 @@ enum ConfigurationTransferManager {
             persistDictionarySuggestions(dictionary.suggestions, environment: environment)
         }
 
-        defaults.set(appBranch.appEnhancementEnabled, forKey: AppPreferenceKey.appEnhancementEnabled)
+        defaults.set(true, forKey: AppPreferenceKey.appEnhancementEnabled)
         if let groupsData = try? JSONEncoder().encode(appBranch.groups.map {
             AppBranchGroup(
                 id: $0.id,

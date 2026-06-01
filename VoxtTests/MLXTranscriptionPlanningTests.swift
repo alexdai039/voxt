@@ -2,6 +2,106 @@ import XCTest
 @testable import Voxt
 
 final class MLXTranscriptionPlanningTests: XCTestCase {
+    func testSenseVoiceUsesDirectPassForShortAudio() {
+        let shouldUseVAD = MLXTranscriptionPlanning.shouldUseSenseVoiceVAD(
+            sampleCount: 16000 * 12,
+            sampleRate: 16000,
+            directPassMaximumDurationSeconds: 30
+        )
+
+        XCTAssertFalse(shouldUseVAD)
+    }
+
+    func testSenseVoiceUsesVADForLongAudio() {
+        let shouldUseVAD = MLXTranscriptionPlanning.shouldUseSenseVoiceVAD(
+            sampleCount: 16000 * 40,
+            sampleRate: 16000,
+            directPassMaximumDurationSeconds: 30
+        )
+
+        XCTAssertTrue(shouldUseVAD)
+    }
+
+    func testSenseVoiceSplitRangeReturnsOriginalRangeWhenChunkingIsNotNeeded() {
+        let ranges = MLXTranscriptionPlanning.splitSenseVoiceRange(
+            start: 100,
+            end: 1000,
+            maxChunkSamples: 5000,
+            overlapSamples: 320
+        )
+
+        XCTAssertEqual(ranges, [100..<1000])
+    }
+
+    func testSenseVoiceSplitRangeProducesOverlappingChunksForLongSegments() {
+        let sampleCount = 16000 * 61
+        let ranges = MLXTranscriptionPlanning.splitSenseVoiceRange(
+            start: 0,
+            end: sampleCount,
+            maxChunkSamples: 16000 * 24,
+            overlapSamples: Int(0.35 * 16000)
+        )
+
+        XCTAssertGreaterThan(ranges.count, 1)
+        XCTAssertEqual(ranges.first?.lowerBound, 0)
+        XCTAssertEqual(ranges.last?.upperBound, sampleCount)
+        XCTAssertEqual(ranges[0].upperBound - ranges[1].lowerBound, Int(0.35 * 16000))
+    }
+
+    func testSenseVoiceVisibleRealtimeCorrectionCadenceIsMoreAggressive() {
+        let cadence = MLXTranscriptionPlanning.correctionCadence(
+            for: "mlx-community/SenseVoiceSmall",
+            sessionAllowsRealtimeTextDisplay: true
+        )
+
+        XCTAssertEqual(cadence.correctionIntervalSeconds, 4.0, accuracy: 0.0001)
+        XCTAssertEqual(cadence.firstCorrectionMinimumSeconds, 2.2, accuracy: 0.0001)
+        XCTAssertEqual(cadence.intermediateContextWindowSeconds, 14.0, accuracy: 0.0001)
+        XCTAssertEqual(cadence.quickPassContextWindowSeconds, 24.0, accuracy: 0.0001)
+    }
+
+    func testDefaultVisibleRealtimeCorrectionCadenceRemainsUnchanged() {
+        let cadence = MLXTranscriptionPlanning.correctionCadence(
+            for: "mlx-community/Qwen3-ASR-0.6B-4bit",
+            sessionAllowsRealtimeTextDisplay: true
+        )
+
+        XCTAssertEqual(cadence.correctionIntervalSeconds, 6.0, accuracy: 0.0001)
+        XCTAssertEqual(cadence.firstCorrectionMinimumSeconds, 3.5, accuracy: 0.0001)
+        XCTAssertEqual(cadence.intermediateContextWindowSeconds, 18.0, accuracy: 0.0001)
+        XCTAssertEqual(cadence.quickPassContextWindowSeconds, 30.0, accuracy: 0.0001)
+    }
+
+    func testSenseVoiceHiddenRealtimeCorrectionCadenceUsesShorterIntervals() {
+        let cadence = MLXTranscriptionPlanning.correctionCadence(
+            for: "mlx-community/SenseVoiceSmall",
+            sessionAllowsRealtimeTextDisplay: false
+        )
+
+        XCTAssertEqual(cadence.correctionIntervalSeconds, 2.6, accuracy: 0.0001)
+        XCTAssertEqual(cadence.firstCorrectionMinimumSeconds, 1.8, accuracy: 0.0001)
+        XCTAssertEqual(cadence.intermediateContextWindowSeconds, 18.0, accuracy: 0.0001)
+        XCTAssertEqual(cadence.quickPassContextWindowSeconds, 18.0, accuracy: 0.0001)
+    }
+
+    func testSenseVoiceSequentialMergeRemovesChunkBoundaryOverlap() {
+        let merged = MLXTranscriptionPlanning.mergeSequentialTranscript(
+            base: "hello world",
+            next: "world again"
+        )
+
+        XCTAssertEqual(merged, "hello world again")
+    }
+
+    func testSenseVoiceSequentialMergeHandlesChineseBoundaryOverlap() {
+        let merged = MLXTranscriptionPlanning.mergeSequentialTranscript(
+            base: "我们正在测试长音频切分",
+            next: "音频切分和合并效果"
+        )
+
+        XCTAssertEqual(merged, "我们正在测试长音频切分和合并效果")
+    }
+
     func testIntermediateSchedulingSkipsWhenAnotherPassIsInFlight() {
         let decision = MLXTranscriptionPlanning.correctionPassSchedulingDecision(
             requestedPass: .intermediate,

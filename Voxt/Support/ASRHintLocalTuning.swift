@@ -71,6 +71,7 @@ enum MLXModelFamily: String, CaseIterable, Codable, Identifiable {
     var supportsContextBias: Bool { self == .qwen3ASR }
     var supportsPromptBias: Bool { self == .graniteSpeech }
     var supportsITN: Bool { self == .senseVoice }
+    var supportsRecognitionPreset: Bool { self != .senseVoice }
 }
 
 struct WhisperLocalTuningSettings: Codable, Equatable {

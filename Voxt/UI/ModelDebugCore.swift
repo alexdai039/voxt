@@ -460,7 +460,12 @@ final class ASRDebugViewModel: ObservableObject {
         switch option.selection {
         case .mlx(let repo):
             mlxModelManager.updateModel(repo: repo)
-            return try await mlxTranscriber.transcribeAudioFile(clip.fileURL)
+            let transcript = try await mlxTranscriber.transcribeAudioFile(clip.fileURL)
+            if MLXModelFamily.family(for: repo) == .senseVoice,
+               let metadata = mlxTranscriber.latestSenseVoiceMetadata {
+                return metadata.formattedDebugSummary(appendingTranscript: transcript)
+            }
+            return transcript
         case .whisper(let modelID):
             whisperModelManager.updateModel(id: modelID)
             return try await whisperTranscriber.transcribeAudioFile(clip.fileURL)

@@ -48,7 +48,7 @@ enum OnboardingStep: String, CaseIterable, Identifiable {
         case .rewrite:
             return AppLocalization.localizedString("Understand voice rewrite mode for selected text and prompt-style generation.")
         case .appEnhancement:
-            return AppLocalization.localizedString("Optionally enable app-aware prompt switching.")
+            return AppLocalization.localizedString("Review how app-aware prompt switching works across apps and pages.")
         case .finish:
             return AppLocalization.localizedString("Review your setup, then start using Voxt.")
         }
@@ -133,7 +133,7 @@ enum OnboardingStepStatusResolver {
         case .rewrite:
             return snapshot.hasRewriteIssues ? .needsSetup : .ready
         case .appEnhancement:
-            return snapshot.appEnhancementEnabled ? .ready : .optional
+            return .ready
         case .finish:
             return .done
         }

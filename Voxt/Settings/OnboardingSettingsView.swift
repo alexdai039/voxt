@@ -27,7 +27,6 @@ struct OnboardingSettingsView: View {
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
     @AppStorage(AppPreferenceKey.translateSelectedTextOnTranslationHotkey) var translateSelectedTextOnTranslationHotkey = true
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) var autoCopyWhenNoFocusedInput = false
-    @AppStorage(AppPreferenceKey.appEnhancementEnabled) var appEnhancementEnabled = true
     @AppStorage(AppPreferenceKey.modelStorageRootPath) var modelStorageRootPath = ""
     @AppStorage(AppPreferenceKey.useHfMirror) var useHfMirror = false
     @AppStorage(AppPreferenceKey.transcriptionEngine) var engineRaw = TranscriptionEngine.mlxAudio.rawValue
@@ -292,10 +291,7 @@ struct OnboardingSettingsView: View {
         let translationSelectionObserved = AnyView(targetLanguageObserved.onChange(of: translateSelectedTextOnTranslationHotkey) { _, _ in
                 syncOnboardingFeatureSelections()
             })
-        let appEnhancementObserved = AnyView(translationSelectionObserved.onChange(of: appEnhancementEnabled) { _, _ in
-                syncOnboardingFeatureSelections()
-            })
-        let stepObserved = AnyView(appEnhancementObserved.onChange(of: currentStep) { _, newValue in
+        let stepObserved = AnyView(translationSelectionObserved.onChange(of: currentStep) { _, newValue in
                 OnboardingPreferenceManager.saveLastStep(newValue)
                 prepareDemoPlayerIfNeeded(for: newValue)
             })

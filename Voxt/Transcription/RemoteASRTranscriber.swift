@@ -1101,20 +1101,12 @@ class RemoteASRTranscriber: NSObject, ObservableObject, TranscriberProtocol {
             "Aliyun fun streaming socket ready. taskID=\(taskID), model=\(model), endpoint=\(endpoint), language=\(hintPayload.language ?? "auto"), languageHints=\(hintPayload.languageHints.joined(separator: ","))"
         )
 
-        var parameters: [String: Any] = [
-            "sample_rate": 16000,
-            "format": "pcm"
-        ]
-        if !hintPayload.languageHints.isEmpty {
-            parameters["language_hints"] = hintPayload.languageHints
-        }
-
         sendAliyunFunControl(
             action: "run-task",
             through: ws,
             taskID: taskID,
             model: model,
-            parameters: parameters
+            parameters: AliyunFunRealtimePayloadSupport.parameters(hintPayload: hintPayload)
         ) { error in
             Task { [responseState] in
                 if let error {

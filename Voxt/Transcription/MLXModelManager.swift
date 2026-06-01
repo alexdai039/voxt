@@ -168,7 +168,11 @@ class MLXModelManager: ObservableObject {
             return cached
         }
         guard let modelDir = readableCacheDirectory(for: canonicalRepo, requireValid: true) else { return false }
-        let isDownloaded = MLXModelDownloadSupport.isModelDirectoryValid(modelDir, fileManager: .default)
+        let isDownloaded = MLXModelDownloadSupport.isModelDirectoryValid(
+            modelDir,
+            repo: canonicalRepo,
+            fileManager: .default
+        )
         downloadedStateByRepo[canonicalRepo] = isDownloaded
         return isDownloaded
     }
@@ -210,6 +214,14 @@ class MLXModelManager: ObservableObject {
               FileManager.default.fileExists(atPath: modelDir.path)
         else { return nil }
         return modelDir
+    }
+
+    func ensureModelDirectory(repo: String) async throws -> URL {
+        let canonicalRepo = Self.canonicalModelRepo(repo)
+        if let modelDir = readableCacheDirectory(for: canonicalRepo, requireValid: true) {
+            return modelDir
+        }
+        return try await performDownloadWithFallback(for: canonicalRepo)
     }
 
     func deleteModel(repo: String) {
@@ -497,6 +509,7 @@ class MLXModelManager: ObservableObject {
                 try Task.checkCancellation()
                 try MLXModelDownloadSupport.validateDownloadedModel(
                     at: modelDir,
+                    repo: canonicalRepo,
                     sizeState: sizeState,
                     downloadSizeTolerance: downloadSizeTolerance,
                     fileManager: .default
@@ -685,6 +698,7 @@ class MLXModelManager: ObservableObject {
             }
             downloadedStateByRepo[canonicalRepo] = MLXModelDownloadSupport.isModelDirectoryValid(
                 modelDir,
+                repo: canonicalRepo,
                 fileManager: .default
             )
         }
@@ -703,7 +717,26 @@ class MLXModelManager: ObservableObject {
 
     private func loadSTTModel(for repo: String) async throws -> any STTGenerationModel {
         let lower = repo.lowercased()
-        guard let sourceModelDir = readableCacheDirectory(for: repo, requireValid: true) else {
+        let sourceModelDir: URL
+        if let validDirectory = readableCacheDirectory(for: repo, requireValid: true) {
+            sourceModelDir = validDirectory
+        } else if let existingDirectory = readableCacheDirectory(for: repo, requireValid: false) {
+            sourceModelDir = try await repairIncompleteModelDirectoryIfNeeded(
+                for: repo,
+                existingDirectory: existingDirectory
+            )
+            guard MLXModelDownloadSupport.isModelDirectoryValid(
+                sourceModelDir,
+                repo: repo,
+                fileManager: .default
+            ) else {
+                throw NSError(
+                    domain: "MLXModelManager",
+                    code: 1004,
+                    userInfo: [NSLocalizedDescriptionKey: "MLX model is installed incompletely. Please download it again."]
+                )
+            }
+        } else {
             throw NSError(
                 domain: "MLXModelManager",
                 code: 1004,
@@ -783,7 +816,11 @@ class MLXModelManager: ObservableObject {
                   FileManager.default.fileExists(atPath: modelDir.path) else {
                 return nil
             }
-            if requireValid && !MLXModelDownloadSupport.isModelDirectoryValid(modelDir, fileManager: .default) {
+            if requireValid && !MLXModelDownloadSupport.isModelDirectoryValid(
+                modelDir,
+                repo: repo,
+                fileManager: .default
+            ) {
                 return nil
             }
             return modelDir
@@ -1194,7 +1231,7 @@ class MLXModelManager: ObservableObject {
         let modelDir = baseDir.appendingPathComponent(modelSubdir)
         let tempDir = baseDir.appendingPathComponent("\(modelSubdir)-download")
 
-        if MLXModelDownloadSupport.isModelDirectoryValid(modelDir, fileManager: .default) {
+        if MLXModelDownloadSupport.isModelDirectoryValid(modelDir, repo: repo, fileManager: .default) {
             return modelDir
         }
 
@@ -1318,6 +1355,7 @@ class MLXModelManager: ObservableObject {
         VoxtLog.info("Validating downloaded files...", verbose: true)
         try MLXModelDownloadSupport.validateDownloadedModel(
             at: tempDir,
+            repo: repo,
             sizeState: sizeState,
             downloadSizeTolerance: downloadSizeTolerance,
             fileManager: .default
@@ -1476,6 +1514,99 @@ class MLXModelManager: ObservableObject {
             for: repoID,
             rootDirectory: rootDirectory
         )
+    }
+
+    private func repairIncompleteModelDirectoryIfNeeded(
+        for repo: String,
+        existingDirectory: URL
+    ) async throws -> URL {
+        guard repo.lowercased().contains("sensevoice") else {
+            return existingDirectory
+        }
+        guard !MLXModelDownloadSupport.isModelDirectoryValid(
+            existingDirectory,
+            repo: repo,
+            fileManager: .default
+        ) else {
+            return existingDirectory
+        }
+
+        let token = ProcessInfo.processInfo.environment["HF_TOKEN"]
+            ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
+
+        try await repairIncompleteModelDirectoryIfNeeded(
+            for: repo,
+            existingDirectory: existingDirectory,
+            baseURL: hubBaseURL,
+            bearerToken: token
+        )
+        return existingDirectory
+    }
+
+    private func repairIncompleteModelDirectoryIfNeeded(
+        for repo: String,
+        existingDirectory: URL,
+        baseURL: URL,
+        bearerToken: String?
+    ) async throws {
+        do {
+            try await repairIncompleteModelDirectory(
+                for: repo,
+                existingDirectory: existingDirectory,
+                baseURL: baseURL,
+                bearerToken: bearerToken
+            )
+        } catch {
+            guard let fallbackBaseURL = fallbackHubBaseURL(from: baseURL) else {
+                throw error
+            }
+            VoxtLog.warning(
+                "Primary model repair endpoint failed. Retrying with mirror. repo=\(repo), baseURL=\(baseURL.absoluteString), error=\(error.localizedDescription)"
+            )
+            try await repairIncompleteModelDirectory(
+                for: repo,
+                existingDirectory: existingDirectory,
+                baseURL: fallbackBaseURL,
+                bearerToken: bearerToken
+            )
+        }
+    }
+
+    private func repairIncompleteModelDirectory(
+        for repo: String,
+        existingDirectory: URL,
+        baseURL: URL,
+        bearerToken: String?
+    ) async throws {
+        let session = MLXModelDownloadSupport.makeDownloadSession(for: baseURL)
+        let entries = try await MLXModelDownloadSupport.fetchModelEntries(
+            repo: repo,
+            baseURL: baseURL,
+            session: session,
+            userAgent: Self.hubUserAgent
+        )
+        let missingEntries = MLXModelDownloadSupport.missingRequiredRepairEntries(
+            at: existingDirectory,
+            repo: repo,
+            availableEntries: entries,
+            fileManager: .default
+        )
+        guard !missingEntries.isEmpty else { return }
+
+        VoxtLog.info(
+            "Repairing incomplete MLX model directory. repo=\(repo), files=\(missingEntries.map(\.path).joined(separator: ", "))"
+        )
+        for entry in missingEntries {
+            let progress = Progress(totalUnitCount: max(entry.size ?? 0, 1))
+            try await downloadEntryWithRetry(
+                repo: repo,
+                entryPath: entry.path,
+                tempDir: existingDirectory,
+                progress: progress,
+                baseURL: baseURL,
+                bearerToken: bearerToken
+            )
+        }
     }
 }
 

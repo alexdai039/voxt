@@ -53,6 +53,25 @@ enum AliyunQwenRealtimePayloadSupport {
     }
 }
 
+enum AliyunFunRealtimePayloadSupport {
+    static func parameters(
+        hintPayload: ResolvedASRHintPayload,
+        includeHotwords: Bool = true
+    ) -> [String: Any] {
+        var parameters: [String: Any] = [
+            "sample_rate": 16000,
+            "format": "pcm"
+        ]
+        if !hintPayload.languageHints.isEmpty {
+            parameters["language_hints"] = hintPayload.languageHints
+        }
+        if includeHotwords, !hintPayload.contextualPhrases.isEmpty {
+            parameters["hotwords"] = hintPayload.contextualPhrases
+        }
+        return parameters
+    }
+}
+
 enum RemoteASRTextSupport {
     static func openAITranscriptionMultipartFields(
         model: String,

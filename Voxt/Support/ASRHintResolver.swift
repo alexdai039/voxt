@@ -91,11 +91,16 @@ enum ASRHintResolver {
             )
         case .aliyunBailianASR:
             let hints = settings.followsUserMainLanguage ? resolvedAliyunLanguageHints(options: selectedOptions) : []
+            let terms = resolvedAliyunFunTerms(
+                contextualPhrases: contextualPhrases,
+                dictionaryTerms: dictionaryTerms
+            )
             return ResolvedASRHintPayload(
                 language: hints.first,
                 languageHints: hints,
                 prompt: nil,
-                otherLanguages: otherLanguages
+                otherLanguages: otherLanguages,
+                contextualPhrases: terms
             )
         case .stepFunASR:
             let terms = resolvedStepFunTerms(
@@ -255,6 +260,15 @@ enum ASRHintResolver {
         )
     }
 
+    private static func resolvedAliyunFunTerms(
+        contextualPhrases: [String],
+        dictionaryTerms: String
+    ) -> [String] {
+        mergedTermLines(
+            contextualPhrases + dictionaryTerms.components(separatedBy: .newlines)
+        )
+    }
+
     private static func resolvedStepFunPrompt(
         terms: [String]
     ) -> String? {
@@ -336,6 +350,22 @@ enum ASRHintResolver {
         guard let modelRepo else { return nil }
         if modelRepo.localizedCaseInsensitiveContains("granite-4.0-1b-speech") {
             return nil
+        }
+        if modelRepo.localizedCaseInsensitiveContains("sensevoice") {
+            switch mainLanguage.baseLanguageCode {
+            case "zh":
+                return "zh"
+            case "en":
+                return "en"
+            case "yue":
+                return "yue"
+            case "ja":
+                return "ja"
+            case "ko":
+                return "ko"
+            default:
+                return nil
+            }
         }
         if modelRepo.localizedCaseInsensitiveContains("cohere-transcribe") || modelRepo.localizedCaseInsensitiveContains("cohere") {
             switch mainLanguage.baseLanguageCode {

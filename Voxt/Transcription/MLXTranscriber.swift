@@ -4,11 +4,19 @@ import Combine
 @preconcurrency import MLX
 import MLXAudioCore
 import MLXAudioSTT
+import MLXAudioVAD
 import AudioToolbox
 
 struct MLXIntermediateCorrectionDecision: Equatable {
     let elapsedSeconds: Double
     let contextSampleCount: Int
+}
+
+struct MLXCorrectionCadence: Equatable {
+    let correctionIntervalSeconds: Double
+    let firstCorrectionMinimumSeconds: Double
+    let intermediateContextWindowSeconds: Double
+    let quickPassContextWindowSeconds: Double
 }
 
 struct MLXRealtimeReplayEvent: Equatable {
@@ -21,6 +29,11 @@ struct MLXRealtimeReplayEvent: Equatable {
 struct MLXRealtimeReplayDiagnostics: Equatable {
     let events: [MLXRealtimeReplayEvent]
     let trace: [String]
+}
+
+private struct SenseVoiceInferenceResult {
+    let output: STTOutput
+    let metadata: SenseVoiceTranscriptMetadata?
 }
 
 struct MLXFinalizationPlan: Equatable {
@@ -46,6 +59,114 @@ enum MLXCorrectionPassSchedulingDecision: Equatable {
 }
 
 enum MLXTranscriptionPlanning {
+    static func shouldUseSenseVoiceVAD(
+        sampleCount: Int,
+        sampleRate: Int,
+        directPassMaximumDurationSeconds: Double
+    ) -> Bool {
+        let safeSampleRate = max(sampleRate, 1)
+        let durationSeconds = Double(sampleCount) / Double(safeSampleRate)
+        return durationSeconds > directPassMaximumDurationSeconds
+    }
+
+    static func splitSenseVoiceRange(
+        start: Int,
+        end: Int,
+        maxChunkSamples: Int,
+        overlapSamples: Int
+    ) -> [Range<Int>] {
+        guard maxChunkSamples > 0, end - start > maxChunkSamples else {
+            return start < end ? [start..<end] : []
+        }
+
+        var ranges: [Range<Int>] = []
+        var cursor = start
+        while cursor < end {
+            let upperBound = min(cursor + maxChunkSamples, end)
+            ranges.append(cursor..<upperBound)
+            guard upperBound < end else { break }
+            cursor = max(start, upperBound - overlapSamples)
+        }
+        return ranges
+    }
+
+    static func correctionCadence(
+        for repo: String,
+        sessionAllowsRealtimeTextDisplay: Bool
+    ) -> MLXCorrectionCadence {
+        if MLXModelFamily.family(for: repo) == .senseVoice {
+            if sessionAllowsRealtimeTextDisplay {
+                return MLXCorrectionCadence(
+                    correctionIntervalSeconds: 4.0,
+                    firstCorrectionMinimumSeconds: 2.2,
+                    intermediateContextWindowSeconds: 14.0,
+                    quickPassContextWindowSeconds: 24.0
+                )
+            }
+            return MLXCorrectionCadence(
+                correctionIntervalSeconds: 2.6,
+                firstCorrectionMinimumSeconds: 1.8,
+                intermediateContextWindowSeconds: 18.0,
+                quickPassContextWindowSeconds: 18.0
+            )
+        }
+
+        if sessionAllowsRealtimeTextDisplay {
+            return MLXCorrectionCadence(
+                correctionIntervalSeconds: 6.0,
+                firstCorrectionMinimumSeconds: 3.5,
+                intermediateContextWindowSeconds: 18.0,
+                quickPassContextWindowSeconds: 30.0
+            )
+        }
+        return MLXCorrectionCadence(
+            correctionIntervalSeconds: 3.2,
+            firstCorrectionMinimumSeconds: 2.2,
+            intermediateContextWindowSeconds: 24.0,
+            quickPassContextWindowSeconds: 18.0
+        )
+    }
+
+    static func mergeSequentialTranscript(base: String, next: String) -> String {
+        let left = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = next.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !left.isEmpty else { return right }
+        guard !right.isEmpty else { return left }
+        if left.hasSuffix(right) {
+            return left
+        }
+        if right.hasPrefix(left) {
+            return right
+        }
+
+        let leftLast = left.unicodeScalars.last
+        let rightFirst = right.unicodeScalars.first
+        let minimumOverlapCount: Int
+        if let leftLast, let rightFirst,
+           CharacterSet.alphanumerics.contains(leftLast),
+           CharacterSet.alphanumerics.contains(rightFirst) {
+            minimumOverlapCount = 3
+        } else {
+            minimumOverlapCount = 2
+        }
+
+        let overlapCount = suffixPrefixOverlapCount(left, right)
+        if overlapCount >= minimumOverlapCount {
+            let rightChars = Array(right)
+            return left + String(rightChars.dropFirst(overlapCount))
+        }
+
+        let shouldInsertSpace: Bool
+        if let leftLast, let rightFirst {
+            shouldInsertSpace =
+                CharacterSet.alphanumerics.contains(leftLast) &&
+                CharacterSet.alphanumerics.contains(rightFirst)
+        } else {
+            shouldInsertSpace = true
+        }
+        return shouldInsertSpace ? "\(left) \(right)" : left + right
+    }
+
     static func intermediateCorrectionDecision(
         sampleCount: Int,
         sampleRate: Double,
@@ -441,18 +562,18 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private var preferredInputDeviceID: AudioDeviceID?
     private let targetSampleRate = 16000
 
-    private let liveCorrectionIntervalSeconds: Double = 6.0
-    private let hiddenCorrectionIntervalSeconds: Double = 3.2
-    private let liveFirstCorrectionMinimumSeconds: Double = 3.5
-    private let hiddenFirstCorrectionMinimumSeconds: Double = 2.2
     private let correctionPollInterval: Duration = .milliseconds(600)
-    private let liveIntermediateContextWindowSeconds: Double = 18.0
-    private let hiddenIntermediateContextWindowSeconds: Double = 24.0
-    private let liveQuickPassContextWindowSeconds: Double = 30.0
-    private let hiddenQuickPassContextWindowSeconds: Double = 18.0
     private let quickPassMinimumDurationSeconds: Double = 14.0
     private let qwenLiveFeedPollInterval: Duration = .milliseconds(100)
     private let qwenLiveEndedTimeoutSeconds: Double = 0.35
+    private let senseVoiceVADRepo = "mlx-community/silero-vad"
+    private let senseVoiceDirectPassMaximumDurationSeconds: Double = 30.0
+    private let senseVoiceChunkMaximumDurationSeconds: Double = 24.0
+    private let senseVoiceChunkOverlapSeconds: Double = 0.35
+    private let senseVoiceVADThreshold: Float = 0.5
+    private let senseVoiceVADMinSpeechDurationMs = 220
+    private let senseVoiceVADMinSilenceDurationMs = 420
+    private let senseVoiceVADSpeechPadMs = 180
 
     private var sessionRevision = 0
     private var correctionLoopTask: Task<Void, Never>?
@@ -485,6 +606,8 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private var internalTranscribedText = ""
     private var nextCorrectionAtSeconds: Double = 6.0
     private(set) var lastCaptureMetrics: TranscriptionCaptureMetrics?
+    @Published private(set) var latestSenseVoiceMetadata: SenseVoiceTranscriptMetadata?
+    private var senseVoiceVADModel: SileroVAD?
 
     init(modelManager: MLXModelManager) {
         self.modelManager = modelManager
@@ -826,7 +949,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             let audioSamples = try prepareInputSamples(rawSamples, sampleRate: sampleRate)
             let inferenceConfiguration = resolvedInferenceConfiguration(for: stage)
             let inferenceStartedAt = Date()
-            let (streamedText, finalOutput) = try await runStreamingInference(
+            let (streamedText, finalOutput, senseVoiceMetadata) = try await runStreamingInference(
                 model: model,
                 audioSamples: audioSamples,
                 inferenceConfiguration: inferenceConfiguration
@@ -842,6 +965,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 )
             }
             guard !candidate.isEmpty else { return nil }
+            latestSenseVoiceMetadata = senseVoiceMetadata
             applyCandidate(candidate, stage: stage)
             let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
             VoxtLog.info(
@@ -882,6 +1006,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         nextCorrectionAtSeconds = currentCorrectionIntervalSeconds
         loggedSampleExtractionFailure = false
         lastCaptureMetrics = nil
+        latestSenseVoiceMetadata = nil
         qwenFeedCursor = 0
         latestNativeLiveConfirmedText = ""
         latestNativeLivePreviewText = ""
@@ -889,19 +1014,26 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     }
 
     private var currentCorrectionIntervalSeconds: Double {
-        sessionAllowsRealtimeTextDisplay ? liveCorrectionIntervalSeconds : hiddenCorrectionIntervalSeconds
+        currentCorrectionCadence.correctionIntervalSeconds
     }
 
     private var currentFirstCorrectionMinimumSeconds: Double {
-        sessionAllowsRealtimeTextDisplay ? liveFirstCorrectionMinimumSeconds : hiddenFirstCorrectionMinimumSeconds
+        currentCorrectionCadence.firstCorrectionMinimumSeconds
     }
 
     private var currentIntermediateContextWindowSeconds: Double {
-        sessionAllowsRealtimeTextDisplay ? liveIntermediateContextWindowSeconds : hiddenIntermediateContextWindowSeconds
+        currentCorrectionCadence.intermediateContextWindowSeconds
     }
 
     private var currentQuickPassContextWindowSeconds: Double {
-        sessionAllowsRealtimeTextDisplay ? liveQuickPassContextWindowSeconds : hiddenQuickPassContextWindowSeconds
+        currentCorrectionCadence.quickPassContextWindowSeconds
+    }
+
+    private var currentCorrectionCadence: MLXCorrectionCadence {
+        MLXTranscriptionPlanning.correctionCadence(
+            for: modelManager.currentModelRepo,
+            sessionAllowsRealtimeTextDisplay: sessionAllowsRealtimeTextDisplay
+        )
     }
 
     private func stopAudioEngine() {
@@ -1561,11 +1693,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         model: any STTGenerationModel,
         audioSamples: [Float],
         inferenceConfiguration: ResolvedInferenceConfiguration
-    ) async throws -> (streamedText: String, finalOutput: STTOutput?) {
+    ) async throws -> (streamedText: String, finalOutput: STTOutput?, senseVoiceMetadata: SenseVoiceTranscriptMetadata?) {
         try Task.checkCancellation()
         let audioArray = MLXArray(audioSamples)
         var streamedText = ""
         var finalOutput: STTOutput?
+        var senseVoiceMetadata: SenseVoiceTranscriptMetadata?
 
         let stream: AsyncThrowingStream<STTGeneration, Error>
         let generationParameters = inferenceConfiguration.generationParameters
@@ -1588,12 +1721,15 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 language: nil
             )
         } else if let senseVoiceModel = model as? SenseVoiceModel {
-            let output = senseVoiceModel.generate(
-                audio: audioArray,
-                language: inferenceConfiguration.languageHint ?? "auto",
+            let result = try await runSenseVoiceInference(
+                model: senseVoiceModel,
+                audioSamples: audioSamples,
+                languageHint: inferenceConfiguration.languageHint,
                 useITN: inferenceConfiguration.senseVoiceUseITN,
                 verbose: generationParameters.verbose
             )
+            let output = result.output
+            senseVoiceMetadata = result.metadata
             stream = AsyncThrowingStream { continuation in
                 continuation.yield(.result(output))
                 continuation.finish()
@@ -1615,7 +1751,182 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             }
         }
 
-        return (streamedText, finalOutput)
+        return (streamedText, finalOutput, senseVoiceMetadata)
+    }
+
+    private func runSenseVoiceInference(
+        model: SenseVoiceModel,
+        audioSamples: [Float],
+        languageHint: String?,
+        useITN: Bool,
+        verbose: Bool
+    ) async throws -> SenseVoiceInferenceResult {
+        let durationSeconds = Double(audioSamples.count) / Double(targetSampleRate)
+        let resolvedLanguage = normalizedSenseVoiceLanguageHint(languageHint)
+
+        guard MLXTranscriptionPlanning.shouldUseSenseVoiceVAD(
+            sampleCount: audioSamples.count,
+            sampleRate: targetSampleRate,
+            directPassMaximumDurationSeconds: senseVoiceDirectPassMaximumDurationSeconds
+        ) else {
+            let output = model.generate(
+                audio: MLXArray(audioSamples),
+                language: resolvedLanguage,
+                useITN: useITN,
+                verbose: verbose
+            )
+            return SenseVoiceInferenceResult(
+                output: output,
+                metadata: SenseVoiceTranscriptMetadata.fromOutput(
+                    output,
+                    startSeconds: 0,
+                    endSeconds: durationSeconds,
+                    usedVADSegmentation: false
+                )
+            )
+        }
+
+        let ranges: [Range<Int>]
+        do {
+            ranges = try await resolvedSenseVoiceSegmentRanges(for: audioSamples)
+        } catch {
+            VoxtLog.warning(
+                "SenseVoice long-form VAD unavailable. Using direct inference for diagnosis. error=\(error.localizedDescription)"
+            )
+            let output = model.generate(
+                audio: MLXArray(audioSamples),
+                language: resolvedLanguage,
+                useITN: useITN,
+                verbose: verbose
+            )
+            return SenseVoiceInferenceResult(
+                output: output,
+                metadata: SenseVoiceTranscriptMetadata.fromOutput(
+                    output,
+                    startSeconds: 0,
+                    endSeconds: durationSeconds,
+                    usedVADSegmentation: false
+                )
+            )
+        }
+
+        guard !ranges.isEmpty else {
+            VoxtLog.warning(
+                "SenseVoice long-form VAD produced no speech segments. Using direct inference for diagnosis. durationSec=\(String(format: "%.2f", durationSeconds))"
+            )
+            let output = model.generate(
+                audio: MLXArray(audioSamples),
+                language: resolvedLanguage,
+                useITN: useITN,
+                verbose: verbose
+            )
+            return SenseVoiceInferenceResult(
+                output: output,
+                metadata: SenseVoiceTranscriptMetadata.fromOutput(
+                    output,
+                    startSeconds: 0,
+                    endSeconds: durationSeconds,
+                    usedVADSegmentation: false
+                )
+            )
+        }
+
+        var mergedText = ""
+        var metadataSegments: [SenseVoiceSegmentMetadata] = []
+
+        for range in ranges {
+            try Task.checkCancellation()
+            let chunkSamples = Array(audioSamples[range])
+            guard !chunkSamples.isEmpty else { continue }
+            let output = model.generate(
+                audio: MLXArray(chunkSamples),
+                language: resolvedLanguage,
+                useITN: useITN,
+                verbose: verbose
+            )
+            let chunkText = normalizeText(output.text)
+            mergedText = MLXTranscriptionPlanning.mergeSequentialTranscript(base: mergedText, next: chunkText)
+            if let metadata = SenseVoiceTranscriptMetadata.fromOutput(
+                output,
+                startSeconds: Double(range.lowerBound) / Double(targetSampleRate),
+                endSeconds: Double(range.upperBound) / Double(targetSampleRate),
+                usedVADSegmentation: true
+            ) {
+                metadataSegments.append(contentsOf: metadata.segments)
+            }
+        }
+
+        let metadata = SenseVoiceTranscriptMetadata.aggregated(
+            segments: metadataSegments,
+            usedVADSegmentation: true
+        )
+        let output = STTOutput(
+            text: mergedText,
+            segments: metadataSegments.map { segment in
+                [
+                    "text": segment.text,
+                    "language": segment.language as Any,
+                    "emotion": segment.emotion as Any,
+                    "event": segment.event as Any,
+                    "startSeconds": segment.startSeconds,
+                    "endSeconds": segment.endSeconds,
+                ]
+            },
+            language: metadata?.language
+        )
+        return SenseVoiceInferenceResult(output: output, metadata: metadata)
+    }
+
+    private func resolvedSenseVoiceSegmentRanges(for audioSamples: [Float]) async throws -> [Range<Int>] {
+        let vad = try await loadSenseVoiceVADModel()
+        let timestamps = try vad.getSpeechTimestamps(
+            MLXArray(audioSamples),
+            sampleRate: targetSampleRate,
+            threshold: senseVoiceVADThreshold,
+            minSpeechDurationMs: senseVoiceVADMinSpeechDurationMs,
+            minSilenceDurationMs: senseVoiceVADMinSilenceDurationMs,
+            speechPadMs: senseVoiceVADSpeechPadMs
+        )
+        let maxChunkSamples = Int(senseVoiceChunkMaximumDurationSeconds * Double(targetSampleRate))
+        let overlapSamples = Int(senseVoiceChunkOverlapSeconds * Double(targetSampleRate))
+        var ranges: [Range<Int>] = []
+
+        for timestamp in timestamps {
+            let start = max(0, min(timestamp.start, audioSamples.count))
+            let end = max(start, min(timestamp.end, audioSamples.count))
+            guard end > start else { continue }
+            ranges.append(
+                contentsOf: MLXTranscriptionPlanning.splitSenseVoiceRange(
+                    start: start,
+                    end: end,
+                    maxChunkSamples: maxChunkSamples,
+                    overlapSamples: overlapSamples
+                )
+            )
+        }
+        return ranges
+    }
+
+    private func loadSenseVoiceVADModel() async throws -> SileroVAD {
+        if let senseVoiceVADModel {
+            return senseVoiceVADModel
+        }
+        let modelDirectory = try await modelManager.ensureModelDirectory(repo: senseVoiceVADRepo)
+        let model = try SileroVAD.fromModelDirectory(modelDirectory)
+        senseVoiceVADModel = model
+        return model
+    }
+
+    private func normalizedSenseVoiceLanguageHint(_ languageHint: String?) -> String {
+        let normalized = languageHint?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? "auto"
+        switch normalized {
+        case "zh", "en", "yue", "ja", "ko", "nospeech":
+            return normalized
+        default:
+            return "auto"
+        }
     }
 
     func transcribeBufferedChunk(samples: [Float], sampleRate: Double) async -> String? {
@@ -1628,11 +1939,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             isModelInitializing = false
             let audioSamples = try prepareInputSamples(samples, sampleRate: sampleRate)
             let inferenceConfiguration = resolvedInferenceConfiguration(for: .postStopFinal)
-            let (streamedText, finalOutput) = try await runStreamingInference(
+            let (streamedText, finalOutput, senseVoiceMetadata) = try await runStreamingInference(
                 model: model,
                 audioSamples: audioSamples,
                 inferenceConfiguration: inferenceConfiguration
             )
+            latestSenseVoiceMetadata = senseVoiceMetadata
             let rawCandidate = normalizeText(finalOutput?.text ?? streamedText)
             let candidate = normalizeText(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: rawCandidate))
             if candidate != rawCandidate {

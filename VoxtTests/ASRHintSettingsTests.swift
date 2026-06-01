@@ -122,6 +122,18 @@ final class ASRHintSettingsTests: XCTestCase {
         XCTAssertEqual(payload.language, "zh")
     }
 
+    func testResolveAliyunBuildsHotwordsFromContextAndDictionaryTerms() {
+        let payload = ASRHintResolver.resolve(
+            target: .aliyunBailianASR,
+            settings: ASRHintSettings(contextualPhrasesText: "Voxt\nFireRed\nVoxt"),
+            userLanguageCodes: ["zh-Hans"],
+            dictionaryTerms: "Codex\nFireRed"
+        )
+
+        XCTAssertEqual(payload.language, "zh")
+        XCTAssertEqual(payload.contextualPhrases, ["Voxt", "FireRed", "Codex"])
+    }
+
     func testResolveStepFunBuildsPromptFromTerms() {
         let payload = ASRHintResolver.resolve(
             target: .stepFunASR,
@@ -150,6 +162,32 @@ final class ASRHintSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(payload.language, "Traditional Chinese")
+    }
+
+    func testResolveMLXUsesSenseVoiceLanguageRoutingOnlyForSupportedLocales() {
+        let cantonesePayload = ASRHintResolver.resolve(
+            target: .mlxAudio,
+            settings: ASRHintSettings(),
+            userLanguageCodes: ["yue"],
+            mlxModelRepo: "mlx-community/SenseVoiceSmall"
+        )
+        XCTAssertEqual(cantonesePayload.language, "yue")
+
+        let chinesePayload = ASRHintResolver.resolve(
+            target: .mlxAudio,
+            settings: ASRHintSettings(),
+            userLanguageCodes: ["zh-Hant"],
+            mlxModelRepo: "mlx-community/SenseVoiceSmall"
+        )
+        XCTAssertEqual(chinesePayload.language, "zh")
+
+        let unsupportedPayload = ASRHintResolver.resolve(
+            target: .mlxAudio,
+            settings: ASRHintSettings(),
+            userLanguageCodes: ["fr"],
+            mlxModelRepo: "mlx-community/SenseVoiceSmall"
+        )
+        XCTAssertNil(unsupportedPayload.language)
     }
 
     func testQwenLocalTuningDefaultsToDictionaryTermsOnly() {

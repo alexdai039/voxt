@@ -593,7 +593,6 @@ extension OnboardingSettingsView {
     var appEnhancementStep: some View {
         VStack(alignment: .leading, spacing: 16) {
             GeneralSettingsCard(title: "App Enhancement") {
-                Toggle(localized("Enable App Enhancement"), isOn: $appEnhancementEnabled)
                 Text(localized("App Enhancement lets Voxt switch prompts based on the current app or browser tab, so translation, rewrite, and cleanup can behave differently across contexts."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
