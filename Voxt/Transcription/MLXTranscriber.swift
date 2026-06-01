@@ -1084,18 +1084,18 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
         qwenStreamingEventTask = Task { [weak self, session] in
             for await event in session.events {
-                await self?.handleNativeQwenLiveEvent(event, revision: revision)
+                self?.handleNativeQwenLiveEvent(event, revision: revision)
             }
         }
 
         qwenStreamingFeedTask = Task { [weak self, session] in
             while true {
-                let chunk = await self?.drainPendingSamplesForQwenLiveFeed(revision: revision) ?? []
+                let chunk = self?.drainPendingSamplesForQwenLiveFeed(revision: revision) ?? []
                 if !chunk.isEmpty {
                     session.feedAudio(samples: chunk)
                 }
 
-                let shouldContinue = await self?.shouldContinueQwenLiveFeed(revision: revision) ?? false
+                let shouldContinue = self?.shouldContinueQwenLiveFeed(revision: revision) ?? false
                 if !shouldContinue {
                     return
                 }

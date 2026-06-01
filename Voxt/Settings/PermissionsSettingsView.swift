@@ -576,6 +576,7 @@ struct PermissionsSettingsView: View {
         guard !isBrowserAutomationOperationInFlight else { return }
         browserAutomationRefreshTask?.cancel()
         browserAutomationRefreshTask = nil
+        let unsupportedBrowserReadMessage = AppLocalization.localizedString("This app does not support browser URL reading.")
 
         browserAutomationRequestsInFlight.insert(target.bundleID)
 
@@ -632,7 +633,7 @@ struct PermissionsSettingsView: View {
                             ? nil
                             : permissionProbe.permissionDenied
                                 ? nil
-                            : AppLocalization.localizedString("This app does not support browser URL reading.")
+                            : unsupportedBrowserReadMessage
                     )
                 }
             }
@@ -884,12 +885,16 @@ struct PermissionsSettingsView: View {
         let appURL = URL(fileURLWithPath: appPath)
         let createStatus = SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode)
         guard createStatus == errSecSuccess, let staticCode else {
-            return AppLocalization.localizedString("Browser app signature could not be verified. Reinstall or update the browser, then request authorization again.")
+            return MainActorSync.run {
+                AppLocalization.localizedString("Browser app signature could not be verified. Reinstall or update the browser, then request authorization again.")
+            }
         }
 
         let checkStatus = SecStaticCodeCheckValidity(staticCode, SecCSFlags(rawValue: kSecCSStrictValidate), nil)
         guard checkStatus == errSecSuccess else {
-            return AppLocalization.localizedString("Browser app signature is invalid. Reinstall or update the browser, then request authorization again.")
+            return MainActorSync.run {
+                AppLocalization.localizedString("Browser app signature is invalid. Reinstall or update the browser, then request authorization again.")
+            }
         }
 
         return nil

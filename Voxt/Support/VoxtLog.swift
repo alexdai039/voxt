@@ -65,23 +65,17 @@ enum VoxtLog {
     }
 
     nonisolated static func latestLogExportPayload(limit: Int = 1000) -> ExportPayload {
-        lock.lock()
-        defer { lock.unlock() }
-        loadCacheIfNeeded()
-
-        let content = composedLogContent(limit: limit)
+        let selectedLines = latestLogLines(limit: limit)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         let filename = "voxt-log-\(formatter.string(from: Date())).txt"
+        let content = composedLogContent(selectedLines: selectedLines)
         return ExportPayload(filename: filename, content: content)
     }
 
     nonisolated static func latestLogDisplayText(limit: Int = 1000) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        loadCacheIfNeeded()
-        return composedLogContent(limit: limit)
+        composedLogContent(selectedLines: latestLogLines(limit: limit))
     }
 
     nonisolated static func exportLatestLogs(limit: Int = 1000) throws -> URL {
@@ -167,20 +161,35 @@ enum VoxtLog {
         }
     }
 
-    private nonisolated static func composedLogContent(limit: Int) -> String {
-        let resolvedLimit = max(1, limit)
-        let selectedLines = Array(logLines.suffix(resolvedLimit))
+    private nonisolated static func latestLogLines(limit: Int) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        loadCacheIfNeeded()
+        return Array(logLines.suffix(max(1, limit)))
+    }
+
+    private nonisolated static func composedLogContent(selectedLines: [String]) -> String {
+        let unavailableText = MainActorSync.run {
+            AppLocalization.localizedString("No logs available")
+        }
         let logText = selectedLines.isEmpty
-            ? "[Voxt] <\(AppLocalization.localizedString("No logs available"))>"
+            ? "[Voxt] <\(unavailableText)>"
             : selectedLines.joined(separator: "\n")
+        let appMetaTitle = MainActorSync.run {
+            AppLocalization.localizedString("App Meta")
+        }
+        let metadataText = MainActorSync.run {
+            diagnosticsMetadataText()
+        }
         return [
             logText,
-            "========== \(AppLocalization.localizedString("App Meta")) ==========",
-            diagnosticsMetadataText()
+            "========== \(appMetaTitle) ==========",
+            metadataText
         ].joined(separator: "\n\n")
     }
 
-    private nonisolated static func diagnosticsMetadataText(defaults: UserDefaults = .standard) -> String {
+    @MainActor
+    private static func diagnosticsMetadataText(defaults: UserDefaults = .standard) -> String {
         let featureSettings = FeatureSettingsStore.load(defaults: defaults)
         let proxySettings = VoxtNetworkSession.currentProxySettings
         let systemProxyStatus = VoxtNetworkSession.currentSystemProxyStatus
@@ -361,7 +370,8 @@ enum VoxtLog {
         return value.isEmpty ? "unknown" : value
     }
 
-    private nonisolated static func proxyRouteSummary(
+    @MainActor
+    private static func proxyRouteSummary(
         settings: VoxtNetworkSession.ProxySettings,
         systemStatus: VoxtNetworkSession.SystemProxyStatus
     ) -> String {
@@ -378,7 +388,8 @@ enum VoxtLog {
         }
     }
 
-    private nonisolated static func remoteASRConfigurationSummary(
+    @MainActor
+    private static func remoteASRConfigurationSummary(
         provider: RemoteASRProvider,
         configuration: RemoteProviderConfiguration
     ) -> String {
@@ -399,7 +410,8 @@ enum VoxtLog {
         return extras.joined(separator: ", ")
     }
 
-    private nonisolated static func remoteLLMConfigurationSummary(
+    @MainActor
+    private static func remoteLLMConfigurationSummary(
         provider: RemoteLLMProvider,
         configuration: RemoteProviderConfiguration
     ) -> String {
@@ -418,7 +430,8 @@ enum VoxtLog {
         return extras.joined(separator: ", ")
     }
 
-    private nonisolated static func aliyunASRRouteSummary(for model: String) -> String {
+    @MainActor
+    private static func aliyunASRRouteSummary(for model: String) -> String {
         if let kind = RemoteASREndpointSupport.aliyunQwenRealtimeSessionKind(for: model) {
             switch kind {
             case .qwenASR:
@@ -436,12 +449,14 @@ enum VoxtLog {
         return "unknown"
     }
 
-    private nonisolated static func resolvedProviderSummary(_ provider: RemoteLLMProvider?) -> String {
+    @MainActor
+    private static func resolvedProviderSummary(_ provider: RemoteLLMProvider?) -> String {
         guard let provider else { return "<unset>" }
         return "\(provider.rawValue) [\(provider.title)]"
     }
 
-    private nonisolated static func shortcutSummary(_ shortcut: FeatureShortcutSettings) -> String {
+    @MainActor
+    private static func shortcutSummary(_ shortcut: FeatureShortcutSettings) -> String {
         "keyCode=\(shortcut.keyCode), modifiers=\(shortcut.modifiers.rawValue), sidedModifiers=\(shortcut.sidedModifiers.rawValue)"
     }
 
