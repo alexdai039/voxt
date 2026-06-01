@@ -1176,6 +1176,7 @@
 "Input Monitoring permission improves global shortcut capture. If fn shortcuts still conflict, change the macOS input source shortcut in Keyboard settings." = "Input Monitoring permission improves global shortcut capture. If fn shortcuts still conflict, change the macOS input source shortcut in Keyboard settings.";
 "ASR" = "ASR";
 "ASR Model" = "ASR Model";
+"Speech to Text Model" = "Speech to Text Model";
 "Audio Model" = "Audio Model";
 "Enhancement Model" = "Enhancement Model";
 "Speech Recognition Model" = "Speech Recognition Model";
@@ -1244,6 +1245,7 @@
 "MLX Audio" = "MLX Audio";
 "Model Pipeline" = "Model Pipeline";
 "Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement.";
+"Choose a speech model, then add text enhancement if needed." = "Choose a speech model, then add text enhancement if needed.";
 "Use different enhancement prompts for different apps or browser pages." = "Use different enhancement prompts for different apps or browser pages.";
 "Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut.";
 "More" = "More";
@@ -1265,6 +1267,7 @@
 "Realtime Target" = "Realtime Target";
 "Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite." = "Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite.";
 "Replace Selected Text" = "Show selected-text translation result in a window";
+"Show Translation Result for Selected Text" = "Show translation result for selected text";
 "When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead." = "After selected-text translation, a result window is shown so you can switch the target language or inject the result into the input field.";
 "Rewrite Flow" = "Rewrite Flow";
 "Rewrite Model" = "Rewrite Model";
@@ -1361,12 +1364,15 @@
 "Notes configuration moved here after transcription-level enablement." = "Notes configuration moved here after transcription-level enablement.";
 "Notes Workflow" = "Notes Workflow";
 "Note Trigger" = "Note Trigger";
+"Trigger Key" = "Trigger Key";
 "Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview." = "Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview.";
 "Title Generation" = "Title Generation";
 "This model generates the short floating-card title for each saved note." = "This model generates the short floating-card title for each saved note.";
 "Note Title Model" = "Note Title Model";
+"Title Model" = "Title Model";
 "Choose Note Title Model" = "Choose Note Title Model";
 "Note Audio" = "Note Audio";
+"Sound" = "Sound";
 "Play a short reminder sound each time the note trigger is pressed during a live transcription session." = "Play a short reminder sound each time the note trigger is pressed during a live transcription session.";
 "Note Sound Preset" = "Note Sound Preset";
 "Choose the reminder sound used when a note is captured, and preview it here." = "Choose the reminder sound used when a note is captured, and preview it here.";

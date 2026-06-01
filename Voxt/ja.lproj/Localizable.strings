@@ -1109,6 +1109,7 @@
 "Input Monitoring permission improves global shortcut capture. If fn shortcuts still conflict, change the macOS input source shortcut in Keyboard settings." = "入力モニタリング権限があるとグローバルショートカットの検出が安定します。fn ショートカットがまだ競合する場合は、キーボード設定で macOS の入力ソース切り替えショートカットを変更してください。";
 "ASR" = "ASR";
 "ASR Model" = "ASR モデル";
+"Speech to Text Model" = "音声テキスト変換モデル";
 "Audio Model" = "音声モデル";
 "Enhancement Model" = "強化モデル";
 "Speech Recognition Model" = "音声認識モデル";
@@ -1155,6 +1156,7 @@
 "MLX Audio" = "MLX Audio";
 "Model Pipeline" = "モデルパイプライン";
 "Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "通常の文字起こしで使う音声モデルを選び、必要に応じて LLM クリーンアップとアプリ強化を追加します。";
+"Choose a speech model, then add text enhancement if needed." = "音声モデルを選び、必要に応じてテキスト補正を追加します。";
 "Use different enhancement prompts for different apps or browser pages." = "アプリやブラウザページごとに異なる強化プロンプトを使います。";
 "Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "書き換えモードで使う ASR とテキストモデルの組み合わせを設定し、書き換え専用プロンプトと続き録音ショートカットを調整します。";
 "More" = "その他";
@@ -1176,6 +1178,7 @@
 "Realtime Target" = "リアルタイム翻訳先";
 "Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite." = "推奨デフォルト: 文字起こしは fn、翻訳は fn+shift、書き換えは fn+control。";
 "Replace Selected Text" = "選択テキスト翻訳結果をウィンドウで表示";
+"Show Translation Result for Selected Text" = "選択テキストの翻訳結果を表示";
 "When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead." = "選択テキスト翻訳の後に結果ウィンドウを表示し、翻訳先の切り替えや入力欄への挿入ができます。";
 "Rewrite Flow" = "書き換えフロー";
 "Rewrite Model" = "書き換えモデル";
@@ -1307,12 +1310,15 @@
 "Notes configuration moved here after transcription-level enablement." = "メモを有効にすると、関連設定はここに表示されます。";
 "Notes Workflow" = "メモワークフロー";
 "Note Trigger" = "メモトリガー";
+"Trigger Key" = "トリガーキー";
 "Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview." = "リアルタイム文字起こしの録音中にこのキーを押すと、現在の文字起こし末尾をメモとして保存し、OverLazy プレビューにメモマーカーを挿入します。";
 "Title Generation" = "タイトル生成";
 "This model generates the short floating-card title for each saved note." = "このモデルは、保存した各メモに表示する短いフローティングカード用タイトルを生成します。";
 "Note Title Model" = "メモタイトルモデル";
+"Title Model" = "タイトルモデル";
 "Choose Note Title Model" = "メモタイトルモデルを選択";
 "Note Audio" = "メモ通知音";
+"Sound" = "通知音";
 "Play a short reminder sound each time the note trigger is pressed during a live transcription session." = "リアルタイム文字起こし中にメモトリガーを押すたび、短い通知音を再生します。";
 "Note Sound Preset" = "メモ通知音プリセット";
 "Choose the reminder sound used when a note is captured, and preview it here." = "メモ記録時に使う通知音を選び、ここで試聴できます。";

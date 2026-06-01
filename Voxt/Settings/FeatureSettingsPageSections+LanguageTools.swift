@@ -6,18 +6,19 @@ extension FeatureSettingsView {
             title: featureSettingsLocalized("Translation"),
             subtitle: featureSettingsLocalized("Configure the speech path, translation engine, target language, and prompt behavior for translation mode."),
             iconKind: .translation,
-            pills: translationPills
+            pills: translationPills,
+            showsHeroHeader: false
         ) {
-            FeatureSettingsCard(title: featureSettingsLocalized("Translation Flow")) {
-                FeatureSettingSection(title: featureSettingsLocalized("Speech Recognition"), detail: featureSettingsLocalized("Choose the ASR model that feeds the translation pipeline.")) {
+            FeatureSettingsCard(title: "") {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
-                        title: featureSettingsLocalized("ASR Model"),
+                        title: featureSettingsLocalized("Speech Model"),
                         value: asrSelectionSummary(featureSettings.translation.asrSelectionID),
                         action: { selectorSheet = .translationASR }
                     )
                 }
 
-                FeatureSettingSection(title: featureSettingsLocalized("Translation Model"), detail: featureSettingsLocalized("Select an LLM or use Whisper direct translation when the ASR path supports it.")) {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
                         title: featureSettingsLocalized("Translation Model"),
                         value: translationSelectionSummary(featureSettings.translation.modelSelectionID),
@@ -25,7 +26,7 @@ extension FeatureSettingsView {
                     )
                 }
 
-                FeatureInlinePickerRow(title: featureSettingsLocalized("Target Language"), detail: featureSettingsLocalized("Move the shared translation language setting here so the behavior stays feature-local.")) {
+                FeatureInlinePickerRow(title: featureSettingsLocalized("Target Language"), detail: "") {
                     SettingsMenuPicker(
                         selection: binding(
                             get: { featureSettings.translation.targetLanguage },
@@ -41,28 +42,17 @@ extension FeatureSettingsView {
 
                 FeatureEmbeddedFieldGroup {
                     FeatureToggleRow(
-                        title: featureSettingsLocalized("Translate selected text with translation shortcut"),
-                        detail: featureSettingsLocalized("If text is selected, the translation shortcut translates the selection directly instead of starting a recording."),
+                        title: featureSettingsLocalized("Show Translation Result for Selected Text"),
+                        detail: "",
                         isOn: binding(
-                            get: { featureSettings.translation.replaceSelectedText },
-                            set: { featureSettings.translation.replaceSelectedText = $0 }
+                            get: { featureSettings.translation.showResultWindow },
+                            set: { featureSettings.translation.showResultWindow = $0 }
                         )
                     )
-
-                    if featureSettings.translation.replaceSelectedText {
-                        FeatureToggleRow(
-                            title: featureSettingsLocalized("Replace Selected Text"),
-                            detail: featureSettingsLocalized("When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead."),
-                            isOn: binding(
-                                get: { !featureSettings.translation.showResultWindow },
-                                set: { featureSettings.translation.showResultWindow = !$0 }
-                            )
-                        )
-                    }
                 }
 
                 if featureSettings.translation.modelSelectionID.translationSelection != .whisperDirectTranslate {
-                    FeatureSettingSection(title: featureSettingsLocalized("Prompt"), detail: featureSettingsLocalized("Prompt controls are shown only when the selected translation model supports prompt-based generation.")) {
+                    FeatureSettingSection(title: "", detail: "") {
                         FeaturePromptSection(
                             title: featureSettingsLocalized("Translation Prompt"),
                             text: promptBinding(
@@ -72,7 +62,7 @@ extension FeatureSettingsView {
                             ),
                             defaultText: AppPromptDefaults.text(for: .translation),
                             variables: ModelSettingsPromptVariables.translation,
-                            guidance: PromptAuthoringGuidance.translation,
+                            guidance: "",
                             persistChanges: { prompt in
                                 FeatureSettingsStore.saveTranslationPrompt(prompt)
                             }
@@ -93,26 +83,27 @@ extension FeatureSettingsView {
             title: featureSettingsLocalized("Rewrite"),
             subtitle: featureSettingsLocalized("Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut."),
             iconKind: .rewrite,
-            pills: rewritePills
+            pills: rewritePills,
+            showsHeroHeader: false
         ) {
-            FeatureSettingsCard(title: featureSettingsLocalized("Rewrite Flow")) {
-                FeatureSettingSection(title: featureSettingsLocalized("Speech Recognition"), detail: featureSettingsLocalized("Choose the speech model that feeds rewrite mode.")) {
+            FeatureSettingsCard(title: "") {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
-                        title: featureSettingsLocalized("ASR Model"),
+                        title: featureSettingsLocalized("Speech Model"),
                         value: asrSelectionSummary(featureSettings.rewrite.asrSelectionID),
                         action: { selectorSheet = .rewriteASR }
                     )
                 }
 
-                FeatureSettingSection(title: featureSettingsLocalized("Rewrite Model"), detail: featureSettingsLocalized("Pick the text model used to rewrite, rephrase, or clean captured content.")) {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
-                        title: featureSettingsLocalized("LLM Model"),
+                        title: featureSettingsLocalized("Enhancement Model"),
                         value: llmSelectionSummary(featureSettings.rewrite.llmSelectionID),
                         action: { selectorSheet = .rewriteLLM }
                     )
                 }
 
-                FeatureSettingSection(title: featureSettingsLocalized("Prompt"), detail: featureSettingsLocalized("Prompt templates stay local to rewrite mode and no longer live in the shared model page.")) {
+                FeatureSettingSection(title: "", detail: "") {
                     FeaturePromptSection(
                         title: featureSettingsLocalized("Rewrite Prompt"),
                         text: promptBinding(
@@ -122,7 +113,7 @@ extension FeatureSettingsView {
                         ),
                         defaultText: AppPromptDefaults.text(for: .rewrite),
                         variables: ModelSettingsPromptVariables.rewrite,
-                        guidance: PromptAuthoringGuidance.rewrite,
+                        guidance: "",
                         persistChanges: { prompt in
                             FeatureSettingsStore.saveRewritePrompt(prompt)
                         }
@@ -131,7 +122,7 @@ extension FeatureSettingsView {
 
                 FeatureContinueShortcutRow(
                     title: featureSettingsLocalized("Continue Shortcut"),
-                    detail: featureSettingsLocalized("Use this key in rewrite continue mode to start the next follow-up recording from the OverLazy answer view."),
+                    detail: "",
                     shortcut: binding(
                         get: { featureSettings.rewrite.continueShortcut },
                         set: { featureSettings.rewrite.continueShortcut = $0 }

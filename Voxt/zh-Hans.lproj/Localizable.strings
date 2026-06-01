@@ -1176,6 +1176,7 @@
 "Input Monitoring permission improves global shortcut capture. If fn shortcuts still conflict, change the macOS input source shortcut in Keyboard settings." = "输入监控权限可提升全局快捷键捕获稳定性。如果 fn 快捷键仍有冲突，请到键盘设置中调整 macOS 的输入法切换快捷键。";
 "ASR" = "ASR";
 "ASR Model" = "ASR 模型";
+"Speech to Text Model" = "语音转文本模型";
 "Audio Model" = "音频模型";
 "Enhancement Model" = "增强模型";
 "Speech Recognition Model" = "语音识别模型";
@@ -1244,6 +1245,7 @@
 "MLX Audio" = "MLX Audio";
 "Model Pipeline" = "模型流程";
 "Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement." = "选择标准转录使用的语音模型，并按需启用 LLM 清理和应用增强。";
+"Choose a speech model, then add text enhancement if needed." = "选择语音模型，并按需开启文本增强。";
 "Use different enhancement prompts for different apps or browser pages." = "为不同应用或浏览器页面使用不同的增强提示词。";
 "Set the ASR and text model pairing used for rewrite mode, then tune the rewrite-specific prompt and follow-up shortcut." = "设置转写模式使用的 ASR 与文本模型组合，并调整转写专用提示词和连续追问快捷键。";
 "More" = "更多";
@@ -1265,6 +1267,7 @@
 "Realtime Target" = "实时目标语言";
 "Recommended default: fn for transcription, fn+shift for translation, and fn+control for rewrite." = "推荐默认值：fn 用于转录，fn+shift 用于翻译，fn+control 用于改写。";
 "Replace Selected Text" = "选中文本翻译结果用窗口显示";
+"Show Translation Result for Selected Text" = "选中文本显示翻译结果";
 "When enabled, selected-text translation replaces the current selection directly. When disabled, Voxt opens a result window after completion instead." = "选中文本翻译后将显示结果创建，可以切换目标语言和输入框注入";
 "Rewrite Flow" = "转写流程";
 "Rewrite Model" = "转写模型";
@@ -1363,12 +1366,15 @@
 "Notes configuration moved here after transcription-level enablement." = "启用后，笔记相关配置会集中显示在这里。";
 "Notes Workflow" = "笔记流程";
 "Note Trigger" = "笔记触发键";
+"Trigger Key" = "触发键";
 "Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview." = "在实时转录录制过程中按下这个键，会把当前尾部转录保存为一条笔记，并在 OverLazy 预览里插入一个笔记标记。";
 "Title Generation" = "标题生成";
 "This model generates the short floating-card title for each saved note." = "这个模型会为每条保存的笔记生成悬浮卡片上的短标题。";
 "Note Title Model" = "笔记标题模型";
+"Title Model" = "标题模型";
 "Choose Note Title Model" = "选择笔记标题模型";
 "Note Audio" = "笔记提示音";
+"Sound" = "提示音";
 "Play a short reminder sound each time the note trigger is pressed during a live transcription session." = "在实时转录过程中每次按下笔记触发键时，播放一个短提示音。";
 "Note Sound Preset" = "笔记提示音预设";
 "Choose the reminder sound used when a note is captured, and preview it here." = "选择记录笔记时使用的提示音，并可在这里试听。";

@@ -67,8 +67,14 @@ extension FeatureSettingsView {
 
     var rewritePills: [FeatureSummaryPill] {
         [
-            FeatureSummaryPill(title: featureSettingsLocalized("Audio Model"), value: shortSummary(asrSelectionSummary(featureSettings.rewrite.asrSelectionID))),
-            FeatureSummaryPill(title: featureSettingsLocalized("Enhancement Model"), value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID)))
+            FeatureSummaryPill(
+                title: featureSettingsLocalized("Audio Model"),
+                value: shortSummary(asrSelectionSummary(featureSettings.rewrite.asrSelectionID), maxLength: 52)
+            ),
+            FeatureSummaryPill(
+                title: featureSettingsLocalized("Enhancement Model"),
+                value: shortSummary(llmSelectionSummary(featureSettings.rewrite.llmSelectionID), maxLength: 52)
+            )
         ]
     }
 
@@ -85,17 +91,20 @@ extension FeatureSettingsView {
         iconKind: SettingsSidebarIconKind? = nil,
         systemImageName: String? = nil,
         pills: [FeatureSummaryPill],
+        showsHeroHeader: Bool = true,
         @ViewBuilder content: () -> Content
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                FeatureHeroCard(
-                    title: title,
-                    subtitle: subtitle,
-                    iconKind: iconKind,
-                    systemImageName: systemImageName,
-                    pills: pills
-                )
+                if showsHeroHeader || !pills.isEmpty {
+                    FeatureHeroCard(
+                        title: showsHeroHeader ? title : "",
+                        subtitle: showsHeroHeader ? subtitle : "",
+                        iconKind: showsHeroHeader ? iconKind : nil,
+                        systemImageName: showsHeroHeader ? systemImageName : nil,
+                        pills: pills
+                    )
+                }
 
                 content()
             }

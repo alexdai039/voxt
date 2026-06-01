@@ -17,7 +17,7 @@ struct FeatureShortcutCaptureRow: View {
     @State private var pendingCapturedHotkey: HotkeyPreference.Hotkey?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: showsHeader ? 12 : 0) {
             if showsHeader {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -141,12 +141,14 @@ struct FeatureNoteShortcutRow: View {
 struct FeatureContinueShortcutRow: View {
     let title: String
     let detail: String
+    var showsHeader = false
     @Binding var shortcut: TranscriptionContinueShortcutSettings
 
     var body: some View {
         FeatureShortcutCaptureRow(
             title: title,
             detail: detail,
+            showsHeader: showsHeader,
             hotkey: Binding(
                 get: { shortcut.hotkey },
                 set: { capturedHotkey in

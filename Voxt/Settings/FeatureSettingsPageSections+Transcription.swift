@@ -4,47 +4,30 @@ extension FeatureSettingsView {
     var transcriptionContent: some View {
         featurePage(
             title: featureSettingsLocalized("Transcription"),
-            subtitle: featureSettingsLocalized("Choose the speech model for standard transcription, then optionally add LLM cleanup and app-aware enhancement."),
+            subtitle: featureSettingsLocalized("Choose a speech model, then add text enhancement if needed."),
             iconKind: .transcription,
-            pills: transcriptionPills
+            pills: transcriptionPills,
+            showsHeroHeader: false
         ) {
-            FeatureSettingsCard(title: featureSettingsLocalized("Model Pipeline")) {
-                FeatureSettingSection(title: featureSettingsLocalized("Speech Recognition"), detail: featureSettingsLocalized("This model handles the first-pass transcript.")) {
+            FeatureSettingsCard(title: "") {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
-                        title: featureSettingsLocalized("ASR Model"),
+                        title: featureSettingsLocalized("Speech Model"),
                         value: asrSelectionSummary(featureSettings.transcription.asrSelectionID),
                         action: { selectorSheet = .transcriptionASR }
                     )
                 }
 
                 FeatureToggleRow(
-                    title: featureSettingsLocalized("Enable LLM Enhancement"),
-                    detail: featureSettingsLocalized("Use a second language model pass to clean punctuation, structure, and readability."),
+                    title: featureSettingsLocalized("Text Enhancement"),
+                    detail: "",
                     isOn: transcriptionLLMEnabledBinding
                 )
 
-                FeatureToggleRow(
-                    title: featureSettingsLocalized("Enable App Enhancement"),
-                    detail: featureSettingsLocalized("Use different enhancement prompts for different apps or browser pages."),
-                    isOn: binding(
-                        get: { featureSettings.rewrite.appEnhancementEnabled },
-                        set: { featureSettings.rewrite.appEnhancementEnabled = $0 }
-                    )
-                )
-
-                FeatureToggleRow(
-                    title: featureSettingsLocalized("Enable Notes"),
-                    detail: featureSettingsLocalized("Add segmented notes during transcription. Once enabled, Notes appears in the Feature menu and supports a dedicated trigger key."),
-                    isOn: binding(
-                        get: { featureSettings.transcription.notes.enabled },
-                        set: { featureSettings.transcription.notes.enabled = $0 }
-                    )
-                )
-
                 if featureSettings.transcription.llmEnabled {
-                    FeatureSettingSection(title: featureSettingsLocalized("Text Enhancement"), detail: featureSettingsLocalized("Only configured and installed models can be selected here.")) {
+                    FeatureSettingSection(title: "", detail: "") {
                         FeatureSelectorRow(
-                            title: featureSettingsLocalized("LLM Model"),
+                            title: featureSettingsLocalized("Enhancement Model"),
                             value: llmSelectionSummary(featureSettings.transcription.llmSelectionID),
                             action: { selectorSheet = .transcriptionLLM }
                         )
@@ -57,13 +40,22 @@ extension FeatureSettingsView {
                             ),
                             defaultText: AppPromptDefaults.text(for: .enhancement),
                             variables: ModelSettingsPromptVariables.enhancement,
-                            guidance: PromptAuthoringGuidance.enhancement,
+                            guidance: "",
                             persistChanges: { prompt in
                                 FeatureSettingsStore.saveTranscriptionPrompt(prompt)
                             }
                         )
                     }
                 }
+
+                FeatureToggleRow(
+                    title: featureSettingsLocalized("Notes"),
+                    detail: "",
+                    isOn: binding(
+                        get: { featureSettings.transcription.notes.enabled },
+                        set: { featureSettings.transcription.notes.enabled = $0 }
+                    )
+                )
             }
         }
     }
@@ -73,11 +65,12 @@ extension FeatureSettingsView {
             title: featureSettingsLocalized("Notes"),
             subtitle: featureSettingsLocalized("Capture key points during recording. Notes stay separate and get short AI titles."),
             iconKind: .note,
-            pills: notePills
+            pills: notePills,
+            showsHeroHeader: false
         ) {
-            FeatureSettingsCard(title: featureSettingsLocalized("Notes Workflow")) {
+            FeatureSettingsCard(title: "") {
                 FeatureNoteShortcutRow(
-                    title: featureSettingsLocalized("Note Trigger"),
+                    title: featureSettingsLocalized("Trigger Key"),
                     detail: featureSettingsLocalized("Use this key while a live transcription session is recording to save the current transcript tail as a note and insert a note marker into the OverLazy preview."),
                     shortcut: binding(
                         get: { featureSettings.transcription.notes.triggerShortcut },
@@ -85,17 +78,17 @@ extension FeatureSettingsView {
                     )
                 )
 
-                FeatureSettingSection(title: featureSettingsLocalized("Title Generation"), detail: featureSettingsLocalized("This model generates the short floating-card title for each saved note.")) {
+                FeatureSettingSection(title: "", detail: "") {
                     FeatureSelectorRow(
-                        title: featureSettingsLocalized("Note Title Model"),
+                        title: featureSettingsLocalized("Title Model"),
                         value: llmSelectionSummary(featureSettings.transcription.notes.titleModelSelectionID),
                         action: { selectorSheet = .transcriptionNoteTitle }
                     )
                 }
 
                 FeatureToggleRow(
-                    title: featureSettingsLocalized("Note Audio"),
-                    detail: featureSettingsLocalized("Play a short reminder sound each time the note trigger is pressed during a live transcription session."),
+                    title: featureSettingsLocalized("Sound"),
+                    detail: "",
                     isOn: binding(
                         get: { featureSettings.transcription.notes.soundEnabled },
                         set: { featureSettings.transcription.notes.soundEnabled = $0 }
@@ -104,8 +97,8 @@ extension FeatureSettingsView {
 
                 if featureSettings.transcription.notes.soundEnabled {
                     FeatureNoteSoundPresetRow(
-                        title: featureSettingsLocalized("Note Sound Preset"),
-                        detail: featureSettingsLocalized("Choose the reminder sound used when a note is captured, and preview it here."),
+                        title: featureSettingsLocalized("Sound Preset"),
+                        detail: "",
                         picker: {
                             SettingsMenuPicker(
                                 selection: binding(
@@ -126,14 +119,14 @@ extension FeatureSettingsView {
                 }
 
                 FeatureSettingSection(
-                    title: featureSettingsLocalized("Obsidian Sync"),
+                    title: "",
                     detail: ""
                 ) {
                     noteObsidianSyncSection
                 }
 
                 FeatureSettingSection(
-                    title: featureSettingsLocalized("Reminders Sync"),
+                    title: "",
                     detail: ""
                 ) {
                     noteRemindersSyncSection
