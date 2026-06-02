@@ -3,6 +3,7 @@ import Foundation
 enum FeatureSettingsStore {
     static func migrateIfNeeded(defaults: UserDefaults = .standard) {
         removeObsoleteLatencyProfileKeys(defaults: defaults)
+        enforceAlwaysOnLegacyFlags(defaults: defaults)
         guard loadRaw(defaults: defaults) == nil else {
             return
         }
@@ -11,6 +12,7 @@ enum FeatureSettingsStore {
 
     static func load(defaults: UserDefaults = .standard) -> FeatureSettings {
         removeObsoleteLatencyProfileKeys(defaults: defaults)
+        enforceAlwaysOnLegacyFlags(defaults: defaults)
         if let raw = loadRaw(defaults: defaults),
            let data = raw.data(using: .utf8),
            let decoded = try? JSONDecoder().decode(FeatureSettings.self, from: data) {
@@ -23,6 +25,7 @@ enum FeatureSettingsStore {
 
     static func save(_ settings: FeatureSettings, defaults: UserDefaults = .standard) {
         removeObsoleteLatencyProfileKeys(defaults: defaults)
+        enforceAlwaysOnLegacyFlags(defaults: defaults)
         let sanitized = sanitize(settings, defaults: defaults)
         let storageReady = storageRepresentation(for: sanitized)
         if let data = try? JSONEncoder().encode(storageReady),
@@ -67,6 +70,11 @@ enum FeatureSettingsStore {
         defaults.removeObject(forKey: "rewriteLatencyProfile")
     }
 
+    private static func enforceAlwaysOnLegacyFlags(defaults: UserDefaults) {
+        defaults.set(true, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+        defaults.set(true, forKey: AppPreferenceKey.appEnhancementEnabled)
+    }
+
     static func deriveFromLegacy(defaults: UserDefaults = .standard) -> FeatureSettings {
         let transcriptionASR = legacyASRSelection(defaults: defaults)
         let transcriptionText = legacyTranscriptionTextSelection(defaults: defaults)
@@ -100,7 +108,6 @@ enum FeatureSettingsStore {
                     kind: .translation,
                     defaults: defaults
                 ),
-                replaceSelectedText: true,
                 showResultWindow: defaults.object(forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow) as? Bool ?? true
             ),
             rewrite: RewriteFeatureSettings(
@@ -189,7 +196,7 @@ enum FeatureSettingsStore {
             forKey: AppPreferenceKey.translationSystemPrompt
         )
         defaults.set(settings.targetLanguage.rawValue, forKey: AppPreferenceKey.translationTargetLanguage)
-        defaults.set(settings.replaceSelectedText, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+        defaults.set(true, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
         defaults.set(settings.showResultWindow, forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow)
 
         switch settings.modelSelectionID.translationSelection {
@@ -256,7 +263,6 @@ enum FeatureSettingsStore {
                     kind: .translation,
                     defaults: defaults
                 ),
-                replaceSelectedText: true,
                 showResultWindow: settings.translation.showResultWindow
             ),
             rewrite: RewriteFeatureSettings(
@@ -287,7 +293,6 @@ enum FeatureSettingsStore {
                 modelSelectionID: settings.translation.modelSelectionID,
                 targetLanguageRawValue: settings.translation.targetLanguageRawValue,
                 prompt: AppPromptDefaults.canonicalStoredText(settings.translation.prompt, kind: .translation),
-                replaceSelectedText: true,
                 showResultWindow: settings.translation.showResultWindow
             ),
             rewrite: RewriteFeatureSettings(

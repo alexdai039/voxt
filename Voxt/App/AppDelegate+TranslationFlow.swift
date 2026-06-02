@@ -88,7 +88,6 @@ extension AppDelegate {
     }
 
     func beginSelectedTextTranslationIfPossible() -> Bool {
-        guard translateSelectedTextOnTranslationHotkey else { return false }
         guard !isSessionActive else { return false }
         guard let selectedText = selectedTextFromSystemSelection(),
               !selectedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

@@ -100,4 +100,97 @@ final class SenseVoiceMetadataTests: XCTestCase {
             AppLocalization.localizedString("ITN On")
         )
     }
+
+    func testSequentialSegmentMergeDeduplicatesBoundaryOverlap() {
+        let merged = SenseVoiceTranscriptMetadata.mergeSequentialSegments(
+            base: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 0,
+                    endSeconds: 2.4,
+                    text: "hello world",
+                    language: "en",
+                    emotion: "calm",
+                    event: "speech"
+                )
+            ],
+            next: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 2.2,
+                    endSeconds: 4.0,
+                    text: "world again",
+                    language: "en",
+                    emotion: "calm",
+                    event: "speech"
+                ),
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 4.0,
+                    endSeconds: 5.0,
+                    text: "and again",
+                    language: "en",
+                    emotion: "calm",
+                    event: "speech"
+                )
+            ]
+        )
+
+        XCTAssertEqual(merged.map(\.text), ["hello world again", "and again"])
+        XCTAssertEqual(merged[0].startSeconds, 0, accuracy: 0.0001)
+        XCTAssertEqual(merged[0].endSeconds, 4.0, accuracy: 0.0001)
+    }
+
+    func testSequentialSegmentMergeIgnoresFallbackTimingDriftWhenTextOverlaps() {
+        let merged = SenseVoiceTranscriptMetadata.mergeSequentialSegments(
+            base: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 0,
+                    endSeconds: 2.4,
+                    text: "alpha beta gamma",
+                    language: "en",
+                    emotion: nil,
+                    event: "speech"
+                )
+            ],
+            next: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 3.6,
+                    endSeconds: 5.0,
+                    text: "beta gamma delta",
+                    language: "en",
+                    emotion: nil,
+                    event: "speech"
+                )
+            ]
+        )
+
+        XCTAssertEqual(merged.map(\.text), ["alpha beta gamma delta"])
+        XCTAssertEqual(merged[0].startSeconds, 0, accuracy: 0.0001)
+        XCTAssertEqual(merged[0].endSeconds, 5.0, accuracy: 0.0001)
+    }
+
+    func testSequentialSegmentMergeKeepsDisjointBoundarySegments() {
+        let merged = SenseVoiceTranscriptMetadata.mergeSequentialSegments(
+            base: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 0,
+                    endSeconds: 1.0,
+                    text: "first sentence",
+                    language: "en",
+                    emotion: nil,
+                    event: "speech"
+                )
+            ],
+            next: [
+                SenseVoiceSegmentMetadata(
+                    startSeconds: 1.5,
+                    endSeconds: 2.5,
+                    text: "second sentence",
+                    language: "en",
+                    emotion: nil,
+                    event: "speech"
+                )
+            ]
+        )
+
+        XCTAssertEqual(merged.map(\.text), ["first sentence", "second sentence"])
+    }
 }

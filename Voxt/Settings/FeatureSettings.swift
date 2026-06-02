@@ -273,7 +273,6 @@ struct TranslationFeatureSettings: Codable, Hashable, Sendable {
     var modelSelectionID: FeatureModelSelectionID
     var targetLanguageRawValue: String
     var prompt: String
-    var replaceSelectedText: Bool
     var showResultWindow: Bool
 
     init(
@@ -281,14 +280,12 @@ struct TranslationFeatureSettings: Codable, Hashable, Sendable {
         modelSelectionID: FeatureModelSelectionID,
         targetLanguageRawValue: String,
         prompt: String,
-        replaceSelectedText: Bool,
         showResultWindow: Bool = true
     ) {
         self.asrSelectionID = asrSelectionID
         self.modelSelectionID = modelSelectionID
         self.targetLanguageRawValue = targetLanguageRawValue
         self.prompt = prompt
-        self.replaceSelectedText = replaceSelectedText
         self.showResultWindow = showResultWindow
     }
 
@@ -301,7 +298,6 @@ struct TranslationFeatureSettings: Codable, Hashable, Sendable {
         case modelSelectionID
         case targetLanguageRawValue
         case prompt
-        case replaceSelectedText
         case showResultWindow
     }
 
@@ -312,7 +308,6 @@ struct TranslationFeatureSettings: Codable, Hashable, Sendable {
             modelSelectionID: try container.decode(FeatureModelSelectionID.self, forKey: .modelSelectionID),
             targetLanguageRawValue: try container.decode(String.self, forKey: .targetLanguageRawValue),
             prompt: try container.decode(String.self, forKey: .prompt),
-            replaceSelectedText: try container.decode(Bool.self, forKey: .replaceSelectedText),
             showResultWindow: try container.decodeIfPresent(Bool.self, forKey: .showResultWindow) ?? true
         )
     }

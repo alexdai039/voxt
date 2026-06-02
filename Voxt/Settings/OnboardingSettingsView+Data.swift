@@ -274,7 +274,6 @@ extension OnboardingSettingsView {
                 existingSelection: settings.translation.modelSelectionID
             )
             settings.translation.targetLanguageRawValue = translationTargetLanguageRaw
-            settings.translation.replaceSelectedText = translateSelectedTextOnTranslationHotkey
 
             settings.rewrite.asrSelectionID = asrSelection
             settings.rewrite.llmSelectionID = llmSelection

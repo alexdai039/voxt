@@ -373,7 +373,8 @@ enum MLXModelDownloadSupport {
 
         return availableEntries.filter { entry in
             let path = entry.path.lowercased()
-            if !hasTokenizerAsset, path.hasSuffix(".model") || path.hasSuffix("/tokenizer.json") || path.hasSuffix("/tokens.json") {
+            if !hasTokenizerAsset,
+               (path.hasSuffix(".model") || path.hasSuffix("/tokenizer.json") || path.hasSuffix("/tokens.json")) {
                 return true
             }
             if !hasCMVNAsset, path.hasSuffix("/am.mvn") || path == "am.mvn" {

@@ -495,11 +495,6 @@ extension OnboardingSettingsView {
                 Text(localized("When enabled, translated text is kept in the clipboard in addition to being inserted into the current input."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
-                Toggle(localized("Translate selected text with translation shortcut"), isOn: $translateSelectedTextOnTranslationHotkey)
-                Text(localized("If text is selected, the translation shortcut translates the selection directly instead of starting a recording."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             GeneralSettingsCard(title: "Test Translation") {
@@ -857,16 +852,11 @@ extension OnboardingSettingsView {
     }
 
     var translationShortcutTestLines: [String] {
-        var lines = [
+        let lines = [
             AppLocalization.format("Current preset: %@", hotkeyPresetSelection.wrappedValue.title),
-            AppLocalization.format("Translation shortcut: %@", formattedTranslationHotkey)
+            AppLocalization.format("Translation shortcut: %@", formattedTranslationHotkey),
+            AppLocalization.format("Select text in the textarea below, then press %@ to translate the selection directly.", formattedTranslationHotkey)
         ]
-
-        if translateSelectedTextOnTranslationHotkey {
-            lines.append(AppLocalization.format("Select text in the textarea below, then press %@ to translate the selection directly.", formattedTranslationHotkey))
-        } else {
-            lines.append(localized("Enable “Translate selected text with translation shortcut” above if you want the shortcut to act on selected text in this textarea."))
-        }
 
         return lines
     }

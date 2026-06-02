@@ -77,6 +77,18 @@ extension AppDelegate {
         )
         let text = sanitizedFinalTranscriptionText(displayText)
         guard !text.isEmpty else {
+            if let runtimeFailureMessage = consumeActiveRecordingRuntimeFailureMessage() {
+                if isCurrentTranscriptionNoteSessionActive {
+                    _ = captureTrailingVoxtNoteIfNeeded(finalRawText: currentSessionRawTranscribedText())
+                }
+                VoxtLog.warning(
+                    "Transcription result is empty because runtime inference failed. message=\(runtimeFailureMessage)"
+                )
+                showOverlayStatus(runtimeFailureMessage, clearAfter: 2.4)
+                setEnhancingState(false)
+                finishSession(after: 2.4)
+                return
+            }
             if isCurrentTranscriptionNoteSessionActive {
                 _ = captureTrailingVoxtNoteIfNeeded(finalRawText: currentSessionRawTranscribedText())
             } else {

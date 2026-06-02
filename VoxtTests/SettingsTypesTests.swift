@@ -428,8 +428,7 @@ final class SettingsTypesTests: XCTestCase {
                     asrSelectionID: .dictation,
                     modelSelectionID: .localLLM(CustomLLMModelManager.defaultModelRepo),
                     targetLanguageRawValue: TranslationTargetLanguage.english.rawValue,
-                    prompt: AppPreferenceKey.defaultTranslationPrompt,
-                    replaceSelectedText: true
+                    prompt: AppPreferenceKey.defaultTranslationPrompt
                 ),
                 rewrite: .init(
                     asrSelectionID: .mlx(MLXModelManager.defaultModelRepo),

@@ -464,8 +464,7 @@ final class ModelCatalogBuilderTests: XCTestCase {
                 asrSelectionID: .dictation,
                 modelSelectionID: translationModel,
                 targetLanguageRawValue: TranslationTargetLanguage.english.rawValue,
-                prompt: AppPreferenceKey.defaultTranslationPrompt,
-                replaceSelectedText: true
+                prompt: AppPreferenceKey.defaultTranslationPrompt
             ),
             rewrite: .init(
                 asrSelectionID: .dictation,

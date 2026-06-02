@@ -376,6 +376,15 @@ extension AppDelegate {
         }
     }
 
+    func consumeActiveRecordingRuntimeFailureMessage() -> String? {
+        switch transcriptionEngine {
+        case .mlxAudio:
+            return mlxTranscriber?.consumePendingRuntimeFailureMessage()
+        case .whisperKit, .remote, .dictation:
+            return nil
+        }
+    }
+
     func setActiveRecordingTranscriberEnhancingState(_ isEnhancing: Bool) {
         switch transcriptionEngine {
         case .mlxAudio:

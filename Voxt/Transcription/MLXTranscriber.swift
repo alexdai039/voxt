@@ -19,6 +19,11 @@ struct MLXCorrectionCadence: Equatable {
     let quickPassContextWindowSeconds: Double
 }
 
+struct MLXSequentialTranscriptMergeResult: Equatable {
+    let text: String
+    let overlapCount: Int
+}
+
 struct MLXRealtimeReplayEvent: Equatable {
     let elapsedSeconds: Double
     let text: String
@@ -34,6 +39,42 @@ struct MLXRealtimeReplayDiagnostics: Equatable {
 private struct SenseVoiceInferenceResult {
     let output: STTOutput
     let metadata: SenseVoiceTranscriptMetadata?
+}
+
+private struct MLXCorrectionPassResult {
+    let text: String?
+    let error: Error?
+
+    static func success(_ text: String?) -> MLXCorrectionPassResult {
+        MLXCorrectionPassResult(text: text, error: nil)
+    }
+
+    static func failure(_ error: Error) -> MLXCorrectionPassResult {
+        MLXCorrectionPassResult(text: nil, error: error)
+    }
+}
+
+private enum MLXStructuredTranscriptionError: LocalizedError {
+    case senseVoiceLongFormVADUnavailable(String)
+    case senseVoiceLongFormNoSpeechSegments(Double)
+
+    var errorDescription: String? {
+        switch self {
+        case .senseVoiceLongFormVADUnavailable:
+            return String(localized: "SenseVoice long audio processing is unavailable because the VAD model could not be prepared.")
+        case .senseVoiceLongFormNoSpeechSegments:
+            return String(localized: "SenseVoice could not detect any speech segments in this long audio clip.")
+        }
+    }
+
+    var diagnosticDescription: String {
+        switch self {
+        case .senseVoiceLongFormVADUnavailable(let detail):
+            return "SenseVoice long-form VAD unavailable. detail=\(detail)"
+        case .senseVoiceLongFormNoSpeechSegments(let durationSeconds):
+            return "SenseVoice long-form VAD produced no speech segments. durationSec=\(String(format: "%.2f", durationSeconds))"
+        }
+    }
 }
 
 struct MLXFinalizationPlan: Equatable {
@@ -128,15 +169,23 @@ enum MLXTranscriptionPlanning {
     }
 
     static func mergeSequentialTranscript(base: String, next: String) -> String {
+        sequentialTranscriptMergeResult(base: base, next: next).text
+    }
+
+    static func sequentialTranscriptMergeResult(base: String, next: String) -> MLXSequentialTranscriptMergeResult {
         let left = base.trimmingCharacters(in: .whitespacesAndNewlines)
         let right = next.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !left.isEmpty else { return right }
-        guard !right.isEmpty else { return left }
+        guard !left.isEmpty else {
+            return MLXSequentialTranscriptMergeResult(text: right, overlapCount: 0)
+        }
+        guard !right.isEmpty else {
+            return MLXSequentialTranscriptMergeResult(text: left, overlapCount: 0)
+        }
         if left.hasSuffix(right) {
-            return left
+            return MLXSequentialTranscriptMergeResult(text: left, overlapCount: right.count)
         }
         if right.hasPrefix(left) {
-            return right
+            return MLXSequentialTranscriptMergeResult(text: right, overlapCount: left.count)
         }
 
         let leftLast = left.unicodeScalars.last
@@ -153,7 +202,10 @@ enum MLXTranscriptionPlanning {
         let overlapCount = suffixPrefixOverlapCount(left, right)
         if overlapCount >= minimumOverlapCount {
             let rightChars = Array(right)
-            return left + String(rightChars.dropFirst(overlapCount))
+            return MLXSequentialTranscriptMergeResult(
+                text: left + String(rightChars.dropFirst(overlapCount)),
+                overlapCount: overlapCount
+            )
         }
 
         let shouldInsertSpace: Bool
@@ -164,7 +216,10 @@ enum MLXTranscriptionPlanning {
         } else {
             shouldInsertSpace = true
         }
-        return shouldInsertSpace ? "\(left) \(right)" : left + right
+        return MLXSequentialTranscriptMergeResult(
+            text: shouldInsertSpace ? "\(left) \(right)" : left + right,
+            overlapCount: 0
+        )
     }
 
     static func intermediateCorrectionDecision(
@@ -582,7 +637,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private var captureWatchdogTask: Task<Void, Never>?
     private var liveSessionSetupTask: Task<Void, Never>?
     private var activeCorrectionPassID: UUID?
-    private var activeCorrectionPassTask: Task<String?, Never>?
+    private var activeCorrectionPassTask: Task<MLXCorrectionPassResult, Never>?
     private var activeCorrectionPassKind: MLXCorrectionPassKind?
     private var activeLiveMode = MLXModelManager.liveMode(for: MLXModelManager.defaultModelRepo)
     private var qwenStreamingSession: StreamingInferenceSession?
@@ -608,6 +663,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
     private(set) var lastCaptureMetrics: TranscriptionCaptureMetrics?
     @Published private(set) var latestSenseVoiceMetadata: SenseVoiceTranscriptMetadata?
     private var senseVoiceVADModel: SileroVAD?
+    private var pendingRuntimeFailureMessage: String?
 
     init(modelManager: MLXModelManager) {
         self.modelManager = modelManager
@@ -630,6 +686,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
 
     func discardCompletedAudioArchive() {
         removeCompletedAudioArchiveIfNeeded()
+    }
+
+    func consumePendingRuntimeFailureMessage() -> String? {
+        let message = pendingRuntimeFailureMessage
+        pendingRuntimeFailureMessage = nil
+        return message
     }
 
     func startRecording() {
@@ -784,6 +846,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 isFinalizingTranscription = false
             }
         }
+        pendingRuntimeFailureMessage = nil
 
         let snapshot = sampleStore.snapshot()
         guard !snapshot.isEmpty else {
@@ -819,19 +882,19 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             quickSource = nil
         }
 
-        let quickText: String?
+        let quickResult: MLXCorrectionPassResult
         if let quickSource {
-            quickText = await runManagedCorrectionPass(
+            quickResult = await runManagedCorrectionPass(
                 stage: .postStopQuick,
                 revision: revision,
                 explicitSamples: quickSource,
                 sampleRate: sampleRate
             )
         } else {
-            quickText = nil
+            quickResult = .success(nil)
         }
 
-        let finalText = await runManagedCorrectionPass(
+        let finalResult = await runManagedCorrectionPass(
             stage: .postStopFinal,
             revision: revision,
             explicitSamples: snapshot,
@@ -848,7 +911,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         } else {
             fallbackText = transcribedText
         }
-        let resolved = normalizeText(finalText ?? quickText ?? fallbackText)
+        let resolved = normalizeText(finalResult.text ?? quickResult.text ?? fallbackText)
+        if resolved.isEmpty, let error = finalResult.error ?? quickResult.error {
+            let failureMessage = runtimeFailureMessage(for: error)
+            pendingRuntimeFailureMessage = failureMessage
+            VoxtLog.error(
+                "MLX finalization produced no transcript because inference failed. repo=\(modelManager.currentModelRepo), error=\(failureMessage)"
+            )
+        }
         transcribedText = resolved
         publishPartial(resolved)
         onTranscriptionFinished?(resolved)
@@ -865,7 +935,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         revision: Int,
         explicitSamples: [Float]?,
         sampleRate: Double
-    ) async -> String? {
+    ) async -> MLXCorrectionPassResult {
         switch MLXTranscriptionPlanning.correctionPassSchedulingDecision(
             requestedPass: stage,
             inFlightPass: activeCorrectionPassKind
@@ -876,7 +946,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             break
         case .skipRequestedPass:
             VoxtLog.info("MLX intermediate correction skipped because inference is still busy.", verbose: true)
-            return nil
+            return .success(nil)
         case .interruptInFlightPass:
             if let activeCorrectionPassKind {
                 VoxtLog.info(
@@ -895,12 +965,12 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             }
         }
         if stage == .intermediate {
-            guard isRecording, revision == sessionRevision else { return nil }
+            guard isRecording, revision == sessionRevision else { return .success(nil) }
         }
 
         let passID = UUID()
-        let passTask = Task<String?, Never> { [weak self] in
-            guard let self else { return nil }
+        let passTask = Task<MLXCorrectionPassResult, Never> { [weak self] in
+            guard let self else { return .success(nil) }
             return await self.executeCorrectionPass(
                 stage: stage,
                 revision: revision,
@@ -929,10 +999,10 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         revision: Int,
         explicitSamples: [Float]?,
         sampleRate: Double
-    ) async -> String? {
-        guard revision == sessionRevision else { return nil }
+    ) async -> MLXCorrectionPassResult {
+        guard revision == sessionRevision else { return .success(nil) }
         let rawSamples = explicitSamples ?? sampleStore.snapshot()
-        guard !rawSamples.isEmpty else { return nil }
+        guard !rawSamples.isEmpty else { return .success(nil) }
         let audioSeconds = Double(rawSamples.count) / safeSampleRate(sampleRate)
         let repo = modelManager.currentModelRepo
         let passStartedAt = Date()
@@ -964,7 +1034,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                     "MLX ASR context leakage removed. repo=\(repo), stage=\(stageLabel(for: stage)), rawChars=\(rawCandidate.count), outputChars=\(candidate.count)"
                 )
             }
-            guard !candidate.isEmpty else { return nil }
+            guard !candidate.isEmpty else { return .success(nil) }
             latestSenseVoiceMetadata = senseVoiceMetadata
             applyCandidate(candidate, stage: stage)
             let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
@@ -972,14 +1042,14 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 "MLX correction pass completed. repo=\(repo), stage=\(stageLabel(for: stage)), audioSec=\(String(format: "%.2f", audioSeconds)), elapsedMs=\(elapsedMs), inferenceMs=\(inferenceElapsedMs), textChars=\(candidate.count)",
                 verbose: true
             )
-            return candidate
+            return .success(candidate)
         } catch is CancellationError {
             let elapsedMs = Int(Date().timeIntervalSince(passStartedAt) * 1000)
             VoxtLog.info(
                 "MLX correction pass cancelled. repo=\(repo), stage=\(stageLabel(for: stage)), audioSec=\(String(format: "%.2f", audioSeconds)), elapsedMs=\(elapsedMs)",
                 verbose: true
             )
-            return nil
+            return .success(nil)
         } catch {
             await MainActor.run {
                 self.isModelInitializing = false
@@ -988,7 +1058,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             VoxtLog.error(
                 "MLXTranscriber \(stageLabel(for: stage)) pass failed. repo=\(repo), audioSec=\(String(format: "%.2f", audioSeconds)), elapsedMs=\(elapsedMs), error=\(error.localizedDescription)"
             )
-            return nil
+            return .failure(error)
         }
     }
 
@@ -1007,6 +1077,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         loggedSampleExtractionFailure = false
         lastCaptureMetrics = nil
         latestSenseVoiceMetadata = nil
+        pendingRuntimeFailureMessage = nil
         qwenFeedCursor = 0
         latestNativeLiveConfirmedText = ""
         latestNativeLivePreviewText = ""
@@ -1790,45 +1861,19 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         do {
             ranges = try await resolvedSenseVoiceSegmentRanges(for: audioSamples)
         } catch {
-            VoxtLog.warning(
-                "SenseVoice long-form VAD unavailable. Using direct inference for diagnosis. error=\(error.localizedDescription)"
+            let structuredError = MLXStructuredTranscriptionError.senseVoiceLongFormVADUnavailable(
+                error.localizedDescription
             )
-            let output = model.generate(
-                audio: MLXArray(audioSamples),
-                language: resolvedLanguage,
-                useITN: useITN,
-                verbose: verbose
-            )
-            return SenseVoiceInferenceResult(
-                output: output,
-                metadata: SenseVoiceTranscriptMetadata.fromOutput(
-                    output,
-                    startSeconds: 0,
-                    endSeconds: durationSeconds,
-                    usedVADSegmentation: false
-                )
-            )
+            VoxtLog.error(structuredError.diagnosticDescription)
+            throw structuredError
         }
 
         guard !ranges.isEmpty else {
-            VoxtLog.warning(
-                "SenseVoice long-form VAD produced no speech segments. Using direct inference for diagnosis. durationSec=\(String(format: "%.2f", durationSeconds))"
+            let structuredError = MLXStructuredTranscriptionError.senseVoiceLongFormNoSpeechSegments(
+                durationSeconds
             )
-            let output = model.generate(
-                audio: MLXArray(audioSamples),
-                language: resolvedLanguage,
-                useITN: useITN,
-                verbose: verbose
-            )
-            return SenseVoiceInferenceResult(
-                output: output,
-                metadata: SenseVoiceTranscriptMetadata.fromOutput(
-                    output,
-                    startSeconds: 0,
-                    endSeconds: durationSeconds,
-                    usedVADSegmentation: false
-                )
-            )
+            VoxtLog.error(structuredError.diagnosticDescription)
+            throw structuredError
         }
 
         var mergedText = ""
@@ -1852,7 +1897,10 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                 endSeconds: Double(range.upperBound) / Double(targetSampleRate),
                 usedVADSegmentation: true
             ) {
-                metadataSegments.append(contentsOf: metadata.segments)
+                metadataSegments = SenseVoiceTranscriptMetadata.mergeSequentialSegments(
+                    base: metadataSegments,
+                    next: metadata.segments
+                )
             }
         }
 
@@ -1929,40 +1977,47 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         }
     }
 
-    func transcribeBufferedChunk(samples: [Float], sampleRate: Double) async -> String? {
+    private func runtimeFailureMessage(for error: Error) -> String {
+        if let structuredError = error as? MLXStructuredTranscriptionError,
+           let description = structuredError.errorDescription {
+            return description
+        }
+        return error.localizedDescription
+    }
+
+    func transcribeBufferedChunk(samples: [Float], sampleRate: Double) async throws -> String? {
         guard !samples.isEmpty else { return nil }
 
-        do {
-            modelManager.beginActiveUse()
-            defer { modelManager.endActiveUse() }
-            let model = try await modelManager.loadModel()
-            isModelInitializing = false
-            let audioSamples = try prepareInputSamples(samples, sampleRate: sampleRate)
-            let inferenceConfiguration = resolvedInferenceConfiguration(for: .postStopFinal)
-            let (streamedText, finalOutput, senseVoiceMetadata) = try await runStreamingInference(
-                model: model,
-                audioSamples: audioSamples,
-                inferenceConfiguration: inferenceConfiguration
+        latestSenseVoiceMetadata = nil
+        modelManager.beginActiveUse()
+        defer { modelManager.endActiveUse() }
+        defer { isModelInitializing = false }
+        let model = try await modelManager.loadModel()
+        let audioSamples = try prepareInputSamples(samples, sampleRate: sampleRate)
+        let inferenceConfiguration = resolvedInferenceConfiguration(for: .postStopFinal)
+        let (streamedText, finalOutput, senseVoiceMetadata) = try await runStreamingInference(
+            model: model,
+            audioSamples: audioSamples,
+            inferenceConfiguration: inferenceConfiguration
+        )
+        latestSenseVoiceMetadata = senseVoiceMetadata
+        let rawCandidate = normalizeText(finalOutput?.text ?? streamedText)
+        let candidate = normalizeText(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: rawCandidate))
+        if candidate != rawCandidate {
+            VoxtLog.warning(
+                "MLX ASR context leakage removed. repo=\(modelManager.currentModelRepo), stage=structured, rawChars=\(rawCandidate.count), outputChars=\(candidate.count)"
             )
-            latestSenseVoiceMetadata = senseVoiceMetadata
-            let rawCandidate = normalizeText(finalOutput?.text ?? streamedText)
-            let candidate = normalizeText(MLXTranscriptionPlanning.removingKnownASRContextLeakage(from: rawCandidate))
-            if candidate != rawCandidate {
-                VoxtLog.warning(
-                    "MLX ASR context leakage removed. repo=\(modelManager.currentModelRepo), stage=structured, rawChars=\(rawCandidate.count), outputChars=\(candidate.count)"
-                )
-            }
-            return candidate.isEmpty ? nil : candidate
-        } catch {
-            isModelInitializing = false
-            VoxtLog.error("MLX structured transcription failed: \(error)")
+        }
+        guard !candidate.isEmpty else {
+            latestSenseVoiceMetadata = nil
             return nil
         }
+        return candidate
     }
 
     func transcribeAudioFile(_ fileURL: URL) async throws -> String {
         let loaded = try DebugAudioClipIO.loadMonoSamples(from: fileURL)
-        return await transcribeBufferedChunk(
+        return try await transcribeBufferedChunk(
             samples: loaded.samples,
             sampleRate: loaded.sampleRate
         ) ?? ""
@@ -2011,7 +2066,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
                     String(
                         format: "[%.1fs] intermediate candidate=%@ published=%@",
                         Double(endSample) / safeSampleRate,
-                        Self.traceQuoted(normalizeText(candidate ?? "")),
+                        Self.traceQuoted(normalizeText(candidate.text ?? "")),
                         Self.traceQuoted(publishedAfter)
                     )
                 )
@@ -2041,21 +2096,21 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
         if shouldRunQuickPass, let quickPassSampleCount = plan.quickPassSampleCount {
             let quickSource = latestWindow(from: snapshot, maxCount: quickPassSampleCount)
             let publishedBefore = transcribedText
-            let candidate = await runManagedCorrectionPass(
-                stage: .postStopQuick,
-                revision: revision,
-                explicitSamples: quickSource,
-                sampleRate: loaded.sampleRate
-            )
+                let candidate = await runManagedCorrectionPass(
+                    stage: .postStopQuick,
+                    revision: revision,
+                    explicitSamples: quickSource,
+                    sampleRate: loaded.sampleRate
+                )
             let publishedAfter = normalizeText(transcribedText)
             trace.append(
-                String(
-                    format: "[%.1fs] post-stop-quick candidate=%@ published=%@",
-                    plan.durationSeconds,
-                    Self.traceQuoted(normalizeText(candidate ?? "")),
-                    Self.traceQuoted(publishedAfter)
+                    String(
+                        format: "[%.1fs] post-stop-quick candidate=%@ published=%@",
+                        plan.durationSeconds,
+                        Self.traceQuoted(normalizeText(candidate.text ?? "")),
+                        Self.traceQuoted(publishedAfter)
+                    )
                 )
-            )
             if !publishedAfter.isEmpty, publishedAfter != normalizeText(publishedBefore) {
                 events.append(
                     MLXRealtimeReplayEvent(
@@ -2074,7 +2129,7 @@ class MLXTranscriber: ObservableObject, TranscriberProtocol {
             explicitSamples: snapshot,
             sampleRate: loaded.sampleRate
         )
-        let resolvedFinal = normalizeText(finalText ?? transcribedText)
+        let resolvedFinal = normalizeText(finalText.text ?? transcribedText)
         trace.append(
             String(
                 format: "[%.1fs] final text=%@",

@@ -25,15 +25,33 @@ final class SenseVoiceOfficialFixtureIntegrationTests: XCTestCase {
 
     private func makeTranscriber() throws -> MLXTranscriber {
         let defaults = UserDefaults.standard
-        defaults.set("/Users/guanwei/x/models", forKey: AppPreferenceKey.modelStorageRootPath)
-        defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+        let previousModelRoot = defaults.object(forKey: AppPreferenceKey.modelStorageRootPath)
+        let previousModelRootBookmark = defaults.object(forKey: AppPreferenceKey.modelStorageRootBookmark)
+        addTeardownBlock {
+            if let previousModelRoot {
+                defaults.set(previousModelRoot, forKey: AppPreferenceKey.modelStorageRootPath)
+            } else {
+                defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootPath)
+            }
+            if let previousModelRootBookmark {
+                defaults.set(previousModelRootBookmark, forKey: AppPreferenceKey.modelStorageRootBookmark)
+            } else {
+                defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+            }
+        }
+        if let modelRoot = ProcessInfo.processInfo.environment["VOXT_MODEL_STORAGE_ROOT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !modelRoot.isEmpty {
+            defaults.set(modelRoot, forKey: AppPreferenceKey.modelStorageRootPath)
+            defaults.removeObject(forKey: AppPreferenceKey.modelStorageRootBookmark)
+        }
         let hubURL = defaults.bool(forKey: AppPreferenceKey.useHfMirror)
             ? MLXModelManager.mirrorHubBaseURL
             : MLXModelManager.defaultHubBaseURL
 
         let manager = MLXModelManager(modelRepo: repo, hubBaseURL: hubURL)
         guard manager.modelDirectoryURL(repo: repo) != nil else {
-            throw XCTSkip("SenseVoiceSmall is not available locally for regression testing.")
+            throw XCTSkip("SenseVoiceSmall is not available locally for regression testing. Set VOXT_MODEL_STORAGE_ROOT if needed.")
         }
         return MLXTranscriber(modelManager: manager)
     }

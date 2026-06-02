@@ -293,8 +293,7 @@ final class FeatureModelCatalogBuilderTests: XCTestCase {
                 asrSelectionID: translationASR,
                 modelSelectionID: translationModel,
                 targetLanguageRawValue: translationTarget.rawValue,
-                prompt: AppPreferenceKey.defaultTranslationPrompt,
-                replaceSelectedText: true
+                prompt: AppPreferenceKey.defaultTranslationPrompt
             ),
             rewrite: .init(
                 asrSelectionID: rewriteASR,

@@ -25,7 +25,6 @@ struct OnboardingSettingsView: View {
     @AppStorage(AppPreferenceKey.featureSettings) var featureSettingsRaw = ""
     @AppStorage(AppPreferenceKey.translationTargetLanguage) var translationTargetLanguageRaw = TranslationTargetLanguage.english.rawValue
     @AppStorage(AppPreferenceKey.userMainLanguageCodes) var userMainLanguageCodesRaw = UserMainLanguageOption.defaultStoredSelectionValue
-    @AppStorage(AppPreferenceKey.translateSelectedTextOnTranslationHotkey) var translateSelectedTextOnTranslationHotkey = true
     @AppStorage(AppPreferenceKey.autoCopyWhenNoFocusedInput) var autoCopyWhenNoFocusedInput = false
     @AppStorage(AppPreferenceKey.modelStorageRootPath) var modelStorageRootPath = ""
     @AppStorage(AppPreferenceKey.useHfMirror) var useHfMirror = false
@@ -288,10 +287,7 @@ struct OnboardingSettingsView: View {
         let targetLanguageObserved = AnyView(remoteLLMObserved.onChange(of: translationTargetLanguageRaw) { _, _ in
                 syncOnboardingFeatureSelections()
             })
-        let translationSelectionObserved = AnyView(targetLanguageObserved.onChange(of: translateSelectedTextOnTranslationHotkey) { _, _ in
-                syncOnboardingFeatureSelections()
-            })
-        let stepObserved = AnyView(translationSelectionObserved.onChange(of: currentStep) { _, newValue in
+        let stepObserved = AnyView(targetLanguageObserved.onChange(of: currentStep) { _, newValue in
                 OnboardingPreferenceManager.saveLastStep(newValue)
                 prepareDemoPlayerIfNeeded(for: newValue)
             })

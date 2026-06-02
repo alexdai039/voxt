@@ -301,7 +301,6 @@ enum VoxtLog {
         lines.append("feature.translation.asrSelectionID: \(featureSettings.translation.asrSelectionID.rawValue)")
         lines.append("feature.translation.modelSelectionID: \(featureSettings.translation.modelSelectionID.rawValue)")
         lines.append("feature.translation.targetLanguage: \(featureSettings.translation.targetLanguage.rawValue)")
-        lines.append("feature.translation.replaceSelectedText: \(featureSettings.translation.replaceSelectedText)")
         lines.append("feature.translation.showResultWindow: \(featureSettings.translation.showResultWindow)")
         lines.append("feature.rewrite.asrSelectionID: \(featureSettings.rewrite.asrSelectionID.rawValue)")
         lines.append("feature.rewrite.llmSelectionID: \(featureSettings.rewrite.llmSelectionID.rawValue)")

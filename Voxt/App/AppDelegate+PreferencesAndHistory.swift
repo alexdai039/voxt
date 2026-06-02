@@ -115,10 +115,6 @@ extension AppDelegate {
         )
     }
 
-    var translateSelectedTextOnTranslationHotkey: Bool {
-        defaults.bool(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
-    }
-
     var showSelectedTextTranslationResultWindow: Bool {
         defaults.object(forKey: AppPreferenceKey.showSelectedTextTranslationResultWindow) as? Bool ?? true
     }

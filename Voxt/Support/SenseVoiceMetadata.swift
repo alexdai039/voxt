@@ -101,6 +101,42 @@ extension SenseVoiceTranscriptMetadata {
         )
     }
 
+    static func mergeSequentialSegments(
+        base: [SenseVoiceSegmentMetadata],
+        next: [SenseVoiceSegmentMetadata]
+    ) -> [SenseVoiceSegmentMetadata] {
+        let left = base.filter { !normalizedText($0.text).isEmpty }
+        let right = next.filter { !normalizedText($0.text).isEmpty }
+        guard !left.isEmpty else { return right }
+        guard !right.isEmpty else { return left }
+
+        var merged = left
+        var pending = right[...]
+
+        while let last = merged.last,
+              let first = pending.first,
+              shouldMergeBoundarySegments(last, first) {
+            let mergeResult = MLXTranscriptionPlanning.sequentialTranscriptMergeResult(
+                base: last.text,
+                next: first.text
+            )
+            let combined = SenseVoiceSegmentMetadata(
+                id: last.id,
+                startSeconds: min(last.startSeconds, first.startSeconds),
+                endSeconds: max(last.endSeconds, first.endSeconds),
+                text: mergeResult.text,
+                language: mergedMetadataValue(primary: last.language, secondary: first.language),
+                emotion: mergedMetadataValue(primary: last.emotion, secondary: first.emotion),
+                event: mergedMetadataValue(primary: last.event, secondary: first.event)
+            )
+            merged[merged.count - 1] = combined
+            pending = pending.dropFirst()
+        }
+
+        merged.append(contentsOf: pending)
+        return merged
+    }
+
     private static func segments(
         from output: STTOutput,
         startSeconds: TimeInterval,
@@ -188,8 +224,23 @@ extension SenseVoiceTranscriptMetadata {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private static func mergedMetadataValue(primary: String?, secondary: String?) -> String? {
+        normalizedMetadataValue(primary) ?? normalizedMetadataValue(secondary)
+    }
+
     private static func normalizedText(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func shouldMergeBoundarySegments(
+        _ left: SenseVoiceSegmentMetadata,
+        _ right: SenseVoiceSegmentMetadata
+    ) -> Bool {
+        let mergeResult = MLXTranscriptionPlanning.sequentialTranscriptMergeResult(
+            base: left.text,
+            next: right.text
+        )
+        return mergeResult.overlapCount > 0
     }
 
     private static func parsedTimeInterval(_ value: Any?) -> TimeInterval? {

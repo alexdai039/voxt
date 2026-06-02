@@ -43,7 +43,7 @@ struct VoiceEndCommandSettingsSection: View {
                         Text("Instruction")
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.primary.opacity(0.92))
-                        Text("Say this phrase at the end, then pause briefly to stop voice input automatically.")
+                        Text("Say this command at the end to end automatically.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

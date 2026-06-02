@@ -246,7 +246,7 @@ enum ConfigurationTransferManager {
                 try container.decodeIfPresent([String].self, forKey: .userMainLanguageCodes)
                     ?? UserMainLanguageOption.defaultSelectionCodes()
             )
-            translateSelectedTextOnTranslationHotkey = try container.decode(Bool.self, forKey: .translateSelectedTextOnTranslationHotkey)
+            translateSelectedTextOnTranslationHotkey = try container.decodeIfPresent(Bool.self, forKey: .translateSelectedTextOnTranslationHotkey) ?? true
             voiceEndCommandEnabled = try container.decodeIfPresent(Bool.self, forKey: .voiceEndCommandEnabled) ?? false
             voiceEndCommandPreset = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue
             voiceEndCommandText = try container.decodeIfPresent(String.self, forKey: .voiceEndCommandText) ?? ""
@@ -900,7 +900,7 @@ enum ConfigurationTransferManager {
             userMainLanguageCodes: UserMainLanguageOption.storedSelection(
                 from: defaults.string(forKey: AppPreferenceKey.userMainLanguageCodes)
             ),
-            translateSelectedTextOnTranslationHotkey: defaults.object(forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey) as? Bool ?? true,
+            translateSelectedTextOnTranslationHotkey: true,
             voiceEndCommandEnabled: defaults.object(forKey: AppPreferenceKey.voiceEndCommandEnabled) as? Bool ?? false,
             voiceEndCommandPreset: defaults.string(forKey: AppPreferenceKey.voiceEndCommandPreset) ?? VoiceEndCommandPreset.over.rawValue,
             voiceEndCommandText: defaults.string(forKey: AppPreferenceKey.voiceEndCommandText) ?? "",
@@ -1074,7 +1074,7 @@ enum ConfigurationTransferManager {
             UserMainLanguageOption.storageValue(for: general.userMainLanguageCodes),
             forKey: AppPreferenceKey.userMainLanguageCodes
         )
-        defaults.set(general.translateSelectedTextOnTranslationHotkey, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
+        defaults.set(true, forKey: AppPreferenceKey.translateSelectedTextOnTranslationHotkey)
         defaults.set(general.voiceEndCommandEnabled, forKey: AppPreferenceKey.voiceEndCommandEnabled)
         defaults.set(general.voiceEndCommandPreset, forKey: AppPreferenceKey.voiceEndCommandPreset)
         defaults.set(general.voiceEndCommandText, forKey: AppPreferenceKey.voiceEndCommandText)

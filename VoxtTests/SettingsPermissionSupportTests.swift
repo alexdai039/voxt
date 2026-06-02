@@ -24,8 +24,7 @@ final class SettingsPermissionSupportTests: XCTestCase {
                 asrSelectionID: translationASR,
                 modelSelectionID: .localLLM(CustomLLMModelManager.defaultModelRepo),
                 targetLanguageRawValue: TranslationTargetLanguage.english.rawValue,
-                prompt: AppPreferenceKey.defaultTranslationPrompt,
-                replaceSelectedText: true
+                prompt: AppPreferenceKey.defaultTranslationPrompt
             ),
             rewrite: .init(
                 asrSelectionID: rewriteASR,
